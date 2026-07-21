@@ -1,0 +1,100 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    name: Build and Test (CI)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 25
+      uses: actions/setup-java@v3
+      with:
+        java-version: '25'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Ensure mvnw is executable
+      run: chmod +x mvnw
+
+    - name: Build with Maven
+      run: ./mvnw clean verify
+
+  deploy:
+    name: Deploy to EC2 (CD)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Generate ECR Password
+      id: generate-password
+      run: |
+        echo "password=$(aws ecr get-login-password --region ${{ secrets.AWS_REGION }})" >> $GITHUB_OUTPUT
+
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@master
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        ECR_PASSWORD: ${{ steps.generate-password.outputs.password }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        RDS_URL: ${{ secrets.RDS_URL }}
+        RDS_USERNAME: ${{ secrets.RDS_USERNAME }}
+        RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+        S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        envs: ECR_REGISTRY,ECR_REPOSITORY,ECR_PASSWORD,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,RDS_URL,RDS_USERNAME,RDS_PASSWORD,S3_BUCKET_NAME
+        script: |
+          echo $ECR_PASSWORD | docker login --username AWS --password-stdin $ECR_REGISTRY
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker stop backend-app || true
+          docker rm backend-app || true
+          docker run -d --name backend-app \
+            -p 8080:8080 \
+            -e AWS_REGION="$AWS_REGION" \
+            -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+            -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+            -e RDS_URL="$RDS_URL" \
+            -e RDS_USERNAME="$RDS_USERNAME" \
+            -e RDS_PASSWORD="$RDS_PASSWORD" \
+            -e S3_BUCKET_NAME="$S3_BUCKET_NAME" \
+            $ECR_REGISTRY/$ECR_REPOSITORY:latest
