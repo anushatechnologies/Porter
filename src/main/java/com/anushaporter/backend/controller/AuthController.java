@@ -136,13 +136,13 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-    // Send OTP endpoint (for phone login/signup)
-    @PostMapping("/api/auth/send-otp")
+    // Helper method
     private String maskPhone(String phone) {
         if (phone == null || phone.length() < 10) return phone;
         return "+91******" + phone.substring(phone.length() - 4);
     }
 
+    // Send OTP endpoint (for phone login/signup)
     @PostMapping("/api/auth/send-otp")
     public ResponseEntity<Map<String, Object>> sendOtp(@RequestBody Map<String, String> body) {
         Map<String, Object> response = new HashMap<>();
