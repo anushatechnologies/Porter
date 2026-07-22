@@ -41,10 +41,29 @@ public class AuthController {
     @PostMapping("/api/auth/login")
     public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> body) {
         Map<String, Object> response = new HashMap<>();
-        String email = body.get("username");
+        
+        // Support 'username', 'email', or 'phone' fields
+        String identifier = body.get("username");
+        if (identifier == null) identifier = body.get("phone");
+        if (identifier == null) identifier = body.get("email");
+        
         String password = body.get("password");
 
-        Optional<AppUser> userOpt = userRepository.findByEmail(email);
+        if (identifier == null || password == null) {
+            response.put("success", false);
+            response.put("message", "Phone/Email and password are required");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        Optional<AppUser> userOpt;
+        if (identifier.contains("@")) {
+            userOpt = userRepository.findByEmail(identifier);
+        } else {
+            userOpt = userRepository.findByPhone(identifier);
+            if (userOpt.isEmpty()) {
+                userOpt = userRepository.findByEmail(identifier); // fallback
+            }
+        }
 
         if (userOpt.isPresent()) {
             AppUser user = userOpt.get();
@@ -60,7 +79,7 @@ public class AuthController {
                 userProfile.put("role", user.getRole());
                 userProfile.put("email", user.getEmail());
                 userProfile.put("phone", user.getPhone());
-                userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed=" + (user.getName() != null ? user.getName() : "Admin"));
+                userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed=" + (user.getName() != null ? user.getName() : "User"));
 
                 String token = jwtUtil.generateToken(user.getEmail());
 
@@ -72,7 +91,7 @@ public class AuthController {
         }
 
         response.put("success", false);
-        response.put("message", "Invalid email or password");
+        response.put("message", "Invalid credentials");
         return ResponseEntity.ok(response);
     }
 
