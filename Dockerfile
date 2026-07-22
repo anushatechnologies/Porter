@@ -1,10 +1,12 @@
 # Build stage
-FROM maven:3.9.4-eclipse-temurin-25 AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 WORKDIR /app
-COPY pom.xml .
+COPY .mvn/ .mvn
+COPY mvnw pom.xml ./
+RUN chmod +x mvnw
 COPY src ./src
 # Build the application, skipping tests to speed up the docker build
-RUN mvn clean package -DskipTests
+RUN ./mvnw clean package -DskipTests
 
 # Runtime stage
 FROM eclipse-temurin:25-jre-alpine
