@@ -138,15 +138,21 @@ public class AuthController {
 
     // Send OTP endpoint (for phone login/signup)
     @PostMapping("/api/auth/send-otp")
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() < 10) return phone;
+        return "+91******" + phone.substring(phone.length() - 4);
+    }
+
+    @PostMapping("/api/auth/send-otp")
     public ResponseEntity<Map<String, Object>> sendOtp(@RequestBody Map<String, String> body) {
         Map<String, Object> response = new HashMap<>();
-        String phone = body.getOrDefault("phone", body.get("mobile"));
-        String mode = body.getOrDefault("mode", "login"); // default to login for drivers
-        String name = body.get("name"); // optional for signup
+        String phone = body.get("phone");
+        String mode = body.get("mode");
+        String name = body.get("name");
 
-        if (phone == null || phone.isEmpty()) {
+        if (phone == null || phone.length() != 10 || !phone.matches("\\d+")) {
             response.put("success", false);
-            response.put("message", "Phone number is required.");
+            response.put("message", "Invalid phone number");
             return ResponseEntity.badRequest().body(response);
         }
 
@@ -156,24 +162,22 @@ public class AuthController {
         if ("login".equalsIgnoreCase(mode)) {
             if (!userOpt.isPresent()) {
                 response.put("success", false);
-                response.put("message", "User not found. Please create an account.");
-                return ResponseEntity.ok(response);
+                response.put("message", "No account found with this number");
+                return ResponseEntity.status(404).body(response);
             }
             user = userOpt.get();
         } else if ("signup".equalsIgnoreCase(mode)) {
             if (userOpt.isPresent()) {
                 response.put("success", false);
-                response.put("message", "User already exists. Please login instead.");
-                return ResponseEntity.ok(response);
+                response.put("message", "Account already exists. Please login.");
+                return ResponseEntity.status(409).body(response);
             }
             user = new AppUser();
             user.setPhone(phone);
             user.setName(name);
-            user.setEmail(phone + "@porterapp.com"); // Dummy email for compatibility
-            
-            String requestedRole = body.getOrDefault("role", "customer");
-            user.setRole(requestedRole);
-            user.setStatus("Active");
+            user.setEmail(phone + "@porterapp.com"); // Dummy email
+            user.setRole("customer");
+            user.setStatus("Pending"); // Activate on verify
         } else {
             response.put("success", false);
             response.put("message", "Invalid mode.");
@@ -181,111 +185,135 @@ public class AuthController {
         }
 
         String otp = String.format("%04d", new Random().nextInt(10000));
+        String requestId = "otp_req_" + java.util.UUID.randomUUID().toString().replace("-", "");
+        
         user.setOtp(otp);
-        user.setOtpExpiry(LocalDateTime.now().plusMinutes(10));
+        user.setOtpExpiry(LocalDateTime.now().plusSeconds(60));
+        user.setOtpRequestId(requestId);
+        user.setOtpResendAttempts(0);
         userRepository.save(user);
 
-        System.out.println("=================================================");
-        System.out.println("OTP for phone " + phone + " is: " + otp);
-        System.out.println("=================================================");
+        System.out.println("=== OTP for " + phone + " is " + otp + " ===");
 
         response.put("success", true);
-        response.put("message", "OTP sent successfully.");
+        response.put("requestId", requestId);
+        response.put("expiresInSeconds", 60);
+        response.put("maskedPhone", maskPhone(phone));
+        
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/api/auth/verify-otp")
     public ResponseEntity<Map<String, Object>> verifyOtp(@RequestBody Map<String, String> body) {
         Map<String, Object> response = new HashMap<>();
-        String email = body.get("email");
-        String phone = body.getOrDefault("phone", body.get("mobile"));
+        String phone = body.get("phone");
         String otp = body.get("otp");
+        String requestId = body.get("requestId");
 
-        Optional<AppUser> userOpt;
-        if (phone != null && !phone.isEmpty()) {
-            userOpt = userRepository.findByPhone(phone);
-        } else {
-            userOpt = userRepository.findByEmail(email);
+        if (phone == null || otp == null || requestId == null) {
+            response.put("success", false);
+            response.put("message", "Invalid request parameters");
+            return ResponseEntity.badRequest().body(response);
         }
 
-        if (userOpt.isPresent()) {
-            AppUser user = userOpt.get();
-            if (user.getOtp() != null && user.getOtp().equals(otp)) {
-                if (LocalDateTime.now().isBefore(user.getOtpExpiry())) {
-                    user.setStatus("Active");
-                    user.setOtp(null);
-                    user.setOtpExpiry(null);
-                    userRepository.save(user);
-
-                    Map<String, Object> userProfile = new HashMap<>();
-                    userProfile.put("name", user.getName());
-                    userProfile.put("role", user.getRole());
-                    userProfile.put("email", user.getEmail());
-                    userProfile.put("phone", user.getPhone());
-                    userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed=" + (user.getName() != null ? user.getName() : "User"));
-                    
-                    // Driver Specific ID and KYC
-                    Optional<Driver> driverOpt = driverRepository.findByPhone(user.getPhone());
-                    if (driverOpt.isPresent()) {
-                        userProfile.put("id", driverOpt.get().getId().toString());
-                        userProfile.put("kycStatus", driverOpt.get().getKyc() != null ? driverOpt.get().getKyc() : "pending");
-                    } else {
-                        userProfile.put("id", user.getId().toString());
-                        userProfile.put("kycStatus", "unregistered");
-                    }
-
-                    String token = jwtUtil.generateToken(user.getEmail());
-
-                    response.put("success", true);
-                    response.put("message", "Account activated successfully.");
-                    response.put("user", userProfile);
-                    response.put("token", token);
-                    return ResponseEntity.ok(response);
-                } else {
-                    response.put("success", false);
-                    response.put("message", "OTP has expired.");
-                    return ResponseEntity.ok(response);
-                }
-            }
+        if (otp.length() != 4 || !otp.matches("\\d+")) {
+            response.put("success", false);
+            response.put("message", "Invalid OTP format");
+            return ResponseEntity.badRequest().body(response);
         }
 
-        response.put("success", false);
-        response.put("message", "Invalid OTP.");
+        Optional<AppUser> userOpt = userRepository.findByOtpRequestId(requestId);
+
+        if (!userOpt.isPresent() || !phone.equals(userOpt.get().getPhone())) {
+            response.put("success", false);
+            response.put("message", "OTP session not found");
+            return ResponseEntity.status(404).body(response);
+        }
+
+        AppUser user = userOpt.get();
+
+        if (user.getOtp() == null || !user.getOtp().equals(otp)) {
+            response.put("success", false);
+            response.put("message", "Incorrect OTP. Please try again.");
+            return ResponseEntity.status(401).body(response);
+        }
+
+        if (LocalDateTime.now().isAfter(user.getOtpExpiry())) {
+            response.put("success", false);
+            response.put("message", "OTP has expired. Please request a new one.");
+            return ResponseEntity.status(410).body(response);
+        }
+
+        // Success
+        user.setStatus("Active");
+        user.setOtp(null);
+        user.setOtpExpiry(null);
+        user.setOtpRequestId(null);
+        user.setOtpResendAttempts(0);
+        userRepository.save(user);
+
+        String accessToken = jwtUtil.generateToken(user.getEmail());
+        String refreshToken = jwtUtil.generateToken(user.getEmail()); // Reuse generateToken for now
+
+        Map<String, Object> userProfile = new HashMap<>();
+        userProfile.put("id", user.getId().toString());
+        userProfile.put("name", user.getName());
+        userProfile.put("phone", user.getPhone());
+        userProfile.put("email", user.getEmail() != null && user.getEmail().contains("@porterapp.com") ? null : user.getEmail());
+        userProfile.put("isPhoneVerified", true);
+
+        response.put("success", true);
+        response.put("accessToken", accessToken);
+        response.put("refreshToken", refreshToken);
+        response.put("user", userProfile);
+        
         return ResponseEntity.ok(response);
     }
 
-    // Resend OTP endpoint
     @PostMapping("/api/auth/resend-otp")
     public ResponseEntity<Map<String, Object>> resendOtp(@RequestBody Map<String, String> body) {
         Map<String, Object> response = new HashMap<>();
-        String phone = body.get("phone");
-        String email = body.get("email");
+        String requestId = body.get("requestId");
 
-        Optional<AppUser> userOpt;
-        if (phone != null && !phone.isEmpty()) {
-            userOpt = userRepository.findByPhone(phone);
-        } else {
-            userOpt = userRepository.findByEmail(email);
+        if (requestId == null) {
+            response.put("success", false);
+            response.put("message", "requestId is required");
+            return ResponseEntity.badRequest().body(response);
         }
 
-        if (userOpt.isPresent()) {
-            AppUser user = userOpt.get();
-            String otp = String.format("%04d", new Random().nextInt(10000));
-            user.setOtp(otp);
-            user.setOtpExpiry(LocalDateTime.now().plusMinutes(10));
-            userRepository.save(user);
+        Optional<AppUser> userOpt = userRepository.findByOtpRequestId(requestId);
 
-            System.out.println("=================================================");
-            System.out.println("Resent OTP for " + (phone != null ? phone : email) + " is: " + otp);
-            System.out.println("=================================================");
-
-            response.put("success", true);
-            response.put("message", "OTP resent successfully.");
-            return ResponseEntity.ok(response);
+        if (!userOpt.isPresent()) {
+            response.put("success", false);
+            response.put("message", "OTP session not found");
+            return ResponseEntity.status(404).body(response);
         }
 
-        response.put("success", false);
-        response.put("message", "User not found.");
+        AppUser user = userOpt.get();
+        
+        int attempts = user.getOtpResendAttempts() != null ? user.getOtpResendAttempts() : 0;
+        if (attempts >= 5) {
+            response.put("success", false);
+            response.put("message", "Maximum resend limit reached. Try again later.");
+            return ResponseEntity.status(429).body(response);
+        }
+
+        String otp = String.format("%04d", new Random().nextInt(10000));
+        String newRequestId = "otp_req_" + java.util.UUID.randomUUID().toString().replace("-", "");
+        
+        user.setOtp(otp);
+        user.setOtpExpiry(LocalDateTime.now().plusSeconds(60));
+        user.setOtpRequestId(newRequestId);
+        user.setOtpResendAttempts(attempts + 1);
+        userRepository.save(user);
+
+        System.out.println("=== Resent OTP for " + user.getPhone() + " is " + otp + " ===");
+
+        response.put("success", true);
+        response.put("requestId", newRequestId);
+        response.put("expiresInSeconds", 60);
+        response.put("maskedPhone", maskPhone(user.getPhone()));
+        
         return ResponseEntity.ok(response);
     }
     // Forgot Password endpoint

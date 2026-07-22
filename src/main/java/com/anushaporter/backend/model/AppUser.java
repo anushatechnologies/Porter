@@ -21,6 +21,8 @@ public class AppUser {
     private String otp;
     private java.time.LocalDateTime otpExpiry;
     private Double walletBalance;
+    private String otpRequestId;
+    private Integer otpResendAttempts = 0;
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
@@ -43,4 +45,8 @@ public class AppUser {
     public void setOtpExpiry(java.time.LocalDateTime otpExpiry) { this.otpExpiry = otpExpiry; }
     public Double getWalletBalance() { return walletBalance; }
     public void setWalletBalance(Double walletBalance) { this.walletBalance = walletBalance; }
+    public String getOtpRequestId() { return otpRequestId; }
+    public void setOtpRequestId(String otpRequestId) { this.otpRequestId = otpRequestId; }
+    public Integer getOtpResendAttempts() { return otpResendAttempts; }
+    public void setOtpResendAttempts(Integer otpResendAttempts) { this.otpResendAttempts = otpResendAttempts; }
 }
