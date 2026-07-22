@@ -49,7 +49,7 @@ public class AdminAPIController {
                     .collect(Collectors.toList());
         }
         
-        List<Map<String, Object>> response = drivers.stream().map(d -> Map.of(
+        List<Map<String, Object>> response = drivers.stream().map(d -> Map.<String, Object>of(
                 "driverId", d.getId().toString(),
                 "name", d.getName() != null ? d.getName() : "Unknown",
                 "kycStatus", d.getKyc() != null ? d.getKyc() : "pending"
