@@ -14,11 +14,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
-import com.anushaporter.backend.repository.DriverRepository;
-import com.anushaporter.backend.model.Driver;
-import java.util.Map;
-import java.util.Optional;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseToken;
 import java.util.Random;
 
 @RestController
@@ -27,9 +24,6 @@ public class AuthController {
 
     @Autowired
     private AppUserRepository userRepository;
-
-    @Autowired
-    private DriverRepository driverRepository;
 
     @Autowired
     private EmailService emailService;
@@ -146,175 +140,99 @@ public class AuthController {
     @PostMapping("/api/auth/send-otp")
     public ResponseEntity<Map<String, Object>> sendOtp(@RequestBody Map<String, String> body) {
         Map<String, Object> response = new HashMap<>();
-        String phone = body.get("phone");
-        String mode = body.get("mode");
-        String name = body.get("name");
-
-        if (phone == null || phone.length() != 10 || !phone.matches("\\d+")) {
-            response.put("success", false);
-            response.put("message", "Invalid phone number");
-            return ResponseEntity.badRequest().body(response);
-        }
-
-        Optional<AppUser> userOpt = userRepository.findByPhone(phone);
-        AppUser user;
-
-        if ("login".equalsIgnoreCase(mode)) {
-            if (!userOpt.isPresent()) {
-                response.put("success", false);
-                response.put("message", "No account found with this number");
-                return ResponseEntity.status(404).body(response);
-            }
-            user = userOpt.get();
-        } else if ("signup".equalsIgnoreCase(mode)) {
-            if (userOpt.isPresent()) {
-                response.put("success", false);
-                response.put("message", "Account already exists. Please login.");
-                return ResponseEntity.status(409).body(response);
-            }
-            user = new AppUser();
-            user.setPhone(phone);
-            user.setName(name);
-            user.setEmail(phone + "@porterapp.com"); // Dummy email
-            user.setRole("customer");
-            user.setStatus("Pending"); // Activate on verify
-        } else {
-            response.put("success", false);
-            response.put("message", "Invalid mode.");
-            return ResponseEntity.badRequest().body(response);
-        }
-
-        String otp = String.format("%04d", new Random().nextInt(10000));
-        String requestId = "otp_req_" + java.util.UUID.randomUUID().toString().replace("-", "");
-        
-        user.setOtp(otp);
-        user.setOtpExpiry(LocalDateTime.now().plusSeconds(60));
-        user.setOtpRequestId(requestId);
-        user.setOtpResendAttempts(0);
-        userRepository.save(user);
-
-        System.out.println("=== OTP for " + phone + " is " + otp + " ===");
-
-        response.put("success", true);
-        response.put("requestId", requestId);
-        response.put("expiresInSeconds", 60);
-        response.put("maskedPhone", maskPhone(phone));
-        
-        return ResponseEntity.ok(response);
+        response.put("success", false);
+        response.put("message", "This endpoint is deprecated. Please use Firebase SDK on the client to send OTPs.");
+        return ResponseEntity.status(410).body(response);
     }
 
     @PostMapping("/api/auth/verify-otp")
     public ResponseEntity<Map<String, Object>> verifyOtp(@RequestBody Map<String, String> body) {
         Map<String, Object> response = new HashMap<>();
-        String phone = body.get("phone");
-        String otp = body.get("otp");
-        String requestId = body.get("requestId");
+        String firebaseIdToken = body.get("firebaseIdToken");
+        String mode = body.get("mode"); // "login" or "signup"
+        String name = body.get("name"); // only for signup
 
-        if (phone == null || otp == null || requestId == null) {
+        if (firebaseIdToken == null || firebaseIdToken.isEmpty()) {
             response.put("success", false);
-            response.put("message", "Invalid request parameters");
+            response.put("message", "firebaseIdToken is required");
             return ResponseEntity.badRequest().body(response);
         }
 
-        if (otp.length() != 4 || !otp.matches("\\d+")) {
+        try {
+            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(firebaseIdToken);
+            String phone = decodedToken.getPhoneNumber();
+            
+            if (phone == null || phone.isEmpty()) {
+                response.put("success", false);
+                response.put("message", "No phone number attached to this Firebase credential.");
+                return ResponseEntity.status(400).body(response);
+            }
+
+            String localPhone = phone.replaceAll("\\D+", "");
+            if (localPhone.length() > 10) {
+                localPhone = localPhone.substring(localPhone.length() - 10);
+            }
+
+            Optional<AppUser> userOpt = userRepository.findByPhone(localPhone);
+            AppUser user;
+
+            if ("signup".equalsIgnoreCase(mode)) {
+                if (userOpt.isPresent()) {
+                    response.put("success", false);
+                    response.put("message", "Account already exists. Please login.");
+                    return ResponseEntity.status(409).body(response);
+                }
+                user = new AppUser();
+                user.setPhone(localPhone);
+                user.setName(name != null ? name : "User");
+                user.setEmail(localPhone + "@porterapp.com"); // Dummy email
+                user.setRole("customer");
+                user.setStatus("Active");
+                userRepository.save(user);
+            } else {
+                // login
+                if (!userOpt.isPresent()) {
+                    response.put("success", false);
+                    response.put("message", "No account found with this number.");
+                    return ResponseEntity.status(404).body(response);
+                }
+                user = userOpt.get();
+                if ("Pending".equals(user.getStatus())) {
+                    user.setStatus("Active");
+                    userRepository.save(user);
+                }
+            }
+
+            String accessToken = jwtUtil.generateToken(user.getEmail());
+            String refreshToken = jwtUtil.generateToken(user.getEmail());
+
+            Map<String, Object> userProfile = new HashMap<>();
+            userProfile.put("id", user.getId().toString());
+            userProfile.put("name", user.getName());
+            userProfile.put("phone", user.getPhone());
+            userProfile.put("email", user.getEmail() != null && user.getEmail().contains("@porterapp.com") ? null : user.getEmail());
+            userProfile.put("isPhoneVerified", true);
+
+            response.put("success", true);
+            response.put("accessToken", accessToken);
+            response.put("refreshToken", refreshToken);
+            response.put("user", userProfile);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
             response.put("success", false);
-            response.put("message", "Invalid OTP format");
-            return ResponseEntity.badRequest().body(response);
-        }
-
-        Optional<AppUser> userOpt = userRepository.findByOtpRequestId(requestId);
-
-        if (!userOpt.isPresent() || !phone.equals(userOpt.get().getPhone())) {
-            response.put("success", false);
-            response.put("message", "OTP session not found");
-            return ResponseEntity.status(404).body(response);
-        }
-
-        AppUser user = userOpt.get();
-
-        if (user.getOtp() == null || !user.getOtp().equals(otp)) {
-            response.put("success", false);
-            response.put("message", "Incorrect OTP. Please try again.");
+            response.put("message", "Invalid Firebase ID Token: " + e.getMessage());
             return ResponseEntity.status(401).body(response);
         }
-
-        if (LocalDateTime.now().isAfter(user.getOtpExpiry())) {
-            response.put("success", false);
-            response.put("message", "OTP has expired. Please request a new one.");
-            return ResponseEntity.status(410).body(response);
-        }
-
-        // Success
-        user.setStatus("Active");
-        user.setOtp(null);
-        user.setOtpExpiry(null);
-        user.setOtpRequestId(null);
-        user.setOtpResendAttempts(0);
-        userRepository.save(user);
-
-        String accessToken = jwtUtil.generateToken(user.getEmail());
-        String refreshToken = jwtUtil.generateToken(user.getEmail()); // Reuse generateToken for now
-
-        Map<String, Object> userProfile = new HashMap<>();
-        userProfile.put("id", user.getId().toString());
-        userProfile.put("name", user.getName());
-        userProfile.put("phone", user.getPhone());
-        userProfile.put("email", user.getEmail() != null && user.getEmail().contains("@porterapp.com") ? null : user.getEmail());
-        userProfile.put("isPhoneVerified", true);
-
-        response.put("success", true);
-        response.put("accessToken", accessToken);
-        response.put("refreshToken", refreshToken);
-        response.put("user", userProfile);
-        
-        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/api/auth/resend-otp")
     public ResponseEntity<Map<String, Object>> resendOtp(@RequestBody Map<String, String> body) {
         Map<String, Object> response = new HashMap<>();
-        String requestId = body.get("requestId");
-
-        if (requestId == null) {
-            response.put("success", false);
-            response.put("message", "requestId is required");
-            return ResponseEntity.badRequest().body(response);
-        }
-
-        Optional<AppUser> userOpt = userRepository.findByOtpRequestId(requestId);
-
-        if (!userOpt.isPresent()) {
-            response.put("success", false);
-            response.put("message", "OTP session not found");
-            return ResponseEntity.status(404).body(response);
-        }
-
-        AppUser user = userOpt.get();
-        
-        int attempts = user.getOtpResendAttempts() != null ? user.getOtpResendAttempts() : 0;
-        if (attempts >= 5) {
-            response.put("success", false);
-            response.put("message", "Maximum resend limit reached. Try again later.");
-            return ResponseEntity.status(429).body(response);
-        }
-
-        String otp = String.format("%04d", new Random().nextInt(10000));
-        String newRequestId = "otp_req_" + java.util.UUID.randomUUID().toString().replace("-", "");
-        
-        user.setOtp(otp);
-        user.setOtpExpiry(LocalDateTime.now().plusSeconds(60));
-        user.setOtpRequestId(newRequestId);
-        user.setOtpResendAttempts(attempts + 1);
-        userRepository.save(user);
-
-        System.out.println("=== Resent OTP for " + user.getPhone() + " is " + otp + " ===");
-
-        response.put("success", true);
-        response.put("requestId", newRequestId);
-        response.put("expiresInSeconds", 60);
-        response.put("maskedPhone", maskPhone(user.getPhone()));
-        
-        return ResponseEntity.ok(response);
+        response.put("success", false);
+        response.put("message", "This endpoint is deprecated. Please use Firebase SDK on the client to resend OTPs.");
+        return ResponseEntity.status(410).body(response);
     }
     // Forgot Password endpoint
     @PostMapping("/api/auth/forgot-password")

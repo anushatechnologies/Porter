@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
-import java.util.HashMap;
 import jakarta.servlet.http.HttpServletRequest;
 import com.anushaporter.backend.model.AppUser;
 import com.anushaporter.backend.repository.AppUserRepository;

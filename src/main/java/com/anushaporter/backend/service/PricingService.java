@@ -3,7 +3,6 @@ package com.anushaporter.backend.service;
 import com.anushaporter.backend.dto.PricingRequest;
 import com.anushaporter.backend.dto.PricingResponse;
 import com.anushaporter.backend.model.DistanceSlab;
-import com.anushaporter.backend.model.GlobalSettings;
 import com.anushaporter.backend.model.PricingVehicle;
 import com.anushaporter.backend.model.WeightSlab;
 import com.anushaporter.backend.repository.DistanceSlabRepository;

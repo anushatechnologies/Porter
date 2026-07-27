@@ -114,6 +114,7 @@ public class DriverAPIController {
         driver.setKyc("pending");
         driver.setStatus("offline"); // initial status
 
+        @SuppressWarnings("unchecked")
         Map<String, String> docs = (Map<String, String>) payload.get("documents");
         if (docs != null) {
             driver.setProfilePhotoUri(docs.get("profilePhotoUrl"));
