@@ -1,0 +1,57 @@
+===================================================
+BACKEND UPDATE: FIREBASE PHONE AUTHENTICATION
+===================================================
+
+Hello Frontend Team!
+
+The backend OTP flow has been updated. We are no longer generating or sending SMS messages from the backend mock server. Instead, we have integrated Firebase Phone Authentication. 
+
+Here is what you need to know and change on the frontend:
+
+1. DEPRECATED ENDPOINTS
+-----------------------
+- POST `/api/auth/send-otp` -> This endpoint will now return a `410 Gone` error. Do not call this anymore.
+- POST `/api/auth/resend-otp` -> This endpoint will also return a `410 Gone` error.
+
+2. NEW FLOW (Client-Side Firebase)
+----------------------------------
+You must now use the Firebase Client SDK (`firebase/auth` or `@react-native-firebase/auth`) in the frontend to trigger the SMS.
+- Call `signInWithPhoneNumber(phone)` to send the SMS.
+- Once the user types the OTP into your app, call `confirm(code)` on the Firebase confirmation result.
+- If successful, retrieve the Firebase ID Token by calling `user.getIdToken()`.
+
+3. UPDATED ENDPOINT
+-------------------
+- POST `/api/auth/verify-otp`
+
+This endpoint no longer accepts a 4-digit OTP. It now expects the Firebase ID Token you retrieved in the previous step.
+
+Request Body:
+{
+  "firebaseIdToken": "eyJhbGciOiJSUzI1...", // The token from Firebase user.getIdToken()
+  "mode": "login", // or "signup"
+  "name": "John Doe" // (Optional) only required if mode is "signup"
+}
+
+Response (Success):
+{
+  "success": true,
+  "accessToken": "...",
+  "refreshToken": "...",
+  "user": {
+    "id": "1",
+    "name": "John Doe",
+    "phone": "9876543210",
+    "email": "...",
+    "isPhoneVerified": true
+  }
+}
+
+The backend will verify the cryptographically signed `firebaseIdToken` using the Firebase Admin SDK, extract the phone number, and automatically log the user in or register them.
+
+4. SUMMARY OF ACTION ITEMS FOR FRONTEND
+---------------------------------------
+[ ] Install Firebase SDK in the React Native / Expo app.
+[ ] Setup Firebase config on the client.
+[ ] Replace the `/api/auth/send-otp` API call with Firebase's `signInWithPhoneNumber()`.
+[ ] Update the OTP verification screen to call `confirm(code)` on the Firebase object, then send the resulting `firebaseIdToken` to the `/api/auth/verify-otp` endpoint.
