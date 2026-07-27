@@ -160,7 +160,7 @@ public class AuthController {
 
         try {
             FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(firebaseIdToken);
-            String phone = decodedToken.getPhoneNumber();
+            String phone = (String) decodedToken.getClaims().get("phone_number");
             
             if (phone == null || phone.isEmpty()) {
                 response.put("success", false);
