@@ -1,0 +1,346 @@
+================================================================================
+  PORTER USER APP — COMPLETE API DOCUMENTATION (END TO END)
+================================================================================
+Base URL: https://api.anushaporter.com
+Headers : { "Authorization": "Bearer <your_token>", "Content-Type": "application/json" }
+Image S3: https://poteranusha.s3.ap-south-2.amazonaws.com
+
+================================================================================
+  1. AUTHENTICATION & ONBOARDING
+================================================================================
+
+1.1 SIGNUP
+----------
+POST /api/auth/signup
+Body:
+{
+  "fullName": "John Doe",
+  "email": "johndoe@example.com",
+  "phone": "9876543210",
+  "password": "securepassword",
+  "role": "Customer"
+}
+Response (Success): 
+{
+  "success": true,
+  "message": "Account created successfully. You can now login."
+}
+
+1.2 LOGIN
+---------
+POST /api/auth/login
+Body:
+{
+  "username": "johndoe@example.com", // can be email or phone
+  "password": "securepassword"
+}
+Response (Success): 
+{
+  "success": true,
+  "token": "eyJhbGciOi...",
+  "user": { 
+    "name": "John Doe", 
+    "email": "johndoe@example.com", 
+    "phone": "9876543210", 
+    "role": "Customer",
+    "avatar": "https://..."
+  }
+}
+
+1.3 FIREBASE OTP LOGIN / SIGNUP (Modern approach)
+-------------------------------------------------
+POST /api/auth/verify-otp
+Body:
+{
+  "firebaseIdToken": "<firebase_token>",
+  "mode": "login" // or "signup"
+  // "name": "John Doe" (Only if mode is "signup")
+}
+Response (Success): 
+{
+  "success": true,
+  "accessToken": "eyJhbGciOi...",
+  "refreshToken": "eyJhbGciOi...",
+  "user": {
+    "id": "1",
+    "name": "John Doe",
+    "phone": "9876543210",
+    "email": "johndoe@example.com",
+    "isPhoneVerified": true
+  }
+}
+
+1.4 FORGOT PASSWORD
+-------------------
+POST /api/auth/forgot-password
+Body:
+{
+  "email": "johndoe@example.com"
+}
+Response (Success):
+{
+  "success": true,
+  "message": "If an account with that email exists, a reset code has been sent."
+}
+
+1.5 RESET PASSWORD
+------------------
+POST /api/auth/reset-password
+Body:
+{
+  "email": "johndoe@example.com",
+  "otp": "1234",
+  "newPassword": "newsecurepassword"
+}
+Response (Success):
+{
+  "success": true,
+  "message": "Password reset successfully. You can now log in."
+}
+
+================================================================================
+  2. PROFILE
+================================================================================
+
+2.1 UPDATE PROFILE
+------------------
+PUT /api/users/profile
+Headers: { "Authorization": "Bearer <token>" }
+Body (Optional fields):
+{
+  "name": "John Updated",
+  "phone": "9998887776"
+}
+Response:
+{
+  "success": true,
+  "message": "Profile updated successfully."
+}
+
+================================================================================
+  3. PRICING & ESTIMATES
+================================================================================
+
+3.1 GET ACTIVE VEHICLES
+-----------------------
+GET /api/pricing/vehicles
+Response:
+[
+  {
+    "id": 1,
+    "name": "2 Wheeler",
+    "basePrice": 40.0,
+    "pricePerKm": 10.0,
+    "capacityWeight": "20 kg",
+    "iconUrl": "https://..."
+  }, ...
+]
+
+3.2 ESTIMATE PRICING (ALL VEHICLES)
+-----------------------------------
+POST /api/pricing/estimate-all
+Body:
+{
+  "pickupLat": 17.4483,
+  "pickupLng": 78.3915,
+  "dropLat": 17.4560,
+  "dropLng": 78.4000,
+  "distanceKm": 5.2
+}
+Response:
+{
+  "estimates": [
+    {
+      "vehicleId": 1,
+      "vehicleName": "2 Wheeler",
+      "estimatedPrice": 92.0
+    }, ...
+  ]
+}
+
+================================================================================
+  4. BOOKINGS / ORDERS
+================================================================================
+
+4.1 CREATE BOOKING
+------------------
+POST /api/bookings
+Headers: { "Authorization": "Bearer <token>" }
+Body:
+{
+  "serviceName": "2 Wheeler",
+  "pickupAddress": "Koramangala, Bangalore",
+  "dropAddress": "Indira Nagar, Bangalore",
+  "amount": 150.5,
+  "paymentMethod": "Cash",
+  "scheduledDate": "2026-07-28",
+  "scheduledSlot": "Immediate",
+  "receiverName": "Jane Doe",
+  "receiverPhone": "9998887776",
+  "pickupLat": 17.4483,
+  "pickupLng": 78.3915,
+  "dropLat": 17.4560,
+  "dropLng": 78.4000,
+  "distanceKm": 5.2,
+  "houseSize": "1 BHK", // Optional (For Packers & Movers)
+  "heavyItems": "Sofa", // Optional
+  "loadAssist": "Yes" // Optional
+}
+Response (Success):
+{
+  "success": true,
+  "bookingId": "BK_1234567890",
+  "status": "searching",
+  "amount": 150.5,
+  "currency": "INR"
+}
+
+4.2 GET MY BOOKINGS
+-------------------
+GET /api/bookings
+GET /api/bookings?status=active // Optional filter
+Headers: { "Authorization": "Bearer <token>" }
+Response:
+{
+  "success": true,
+  "items": [
+    {
+      "bookingId": "BK_1234567890",
+      "serviceName": "2 Wheeler",
+      "amount": 150.5,
+      "status": "searching",
+      "dateLabel": "Recently",
+      "trackable": true
+    }
+  ],
+  "page": 1,
+  "pageSize": 1,
+  "hasMore": false
+}
+
+4.3 GET BOOKING DETAIL
+----------------------
+GET /api/bookings/{bookingId}
+Headers: { "Authorization": "Bearer <token>" }
+Response:
+{
+  "success": true,
+  "bookingId": "BK_1234567890",
+  "status": "searching",
+  "serviceName": "2 Wheeler",
+  "amount": 150.5,
+  "pickup": { "addressLine": "Koramangala, Bangalore" },
+  "drop": { "addressLine": "Indira Nagar, Bangalore" },
+  "schedule": { "date": "2026-07-28", "slotLabel": "Immediate" }
+}
+
+4.4 GET BOOKING TRACKING
+------------------------
+GET /api/bookings/{bookingId}/tracking
+Headers: { "Authorization": "Bearer <token>" }
+Response:
+{
+  "success": true,
+  "bookingId": "BK_1234567890",
+  "status": "driver_assigned",
+  "timeline": [
+    { "code": "booking_confirmed", "label": "Booking Confirmed", "completed": true, "timestamp": "2026-07-28T10:00:00" },
+    { "code": "driver_assigned", "label": "Driver Assigned", "completed": true, "timestamp": "2026-07-28T10:05:00" },
+    { "code": "pickup_started", "label": "Pickup Started", "completed": false, "timestamp": null },
+    ...
+  ],
+  "driver": {
+    "id": "drv_001",
+    "name": "Rajesh Kumar",
+    "phone": "9876543210",
+    "vehicleNumber": "KA01EF1234",
+    "vehicleLabel": "2 Wheeler"
+  },
+  "location": {
+    "lat": 17.4483,
+    "lng": 78.3915,
+    "updatedAt": "2026-07-28T10:05:00"
+  },
+  "pickup": { "addressLine": "Koramangala, Bangalore" },
+  "drop": { "addressLine": "Indira Nagar, Bangalore" }
+}
+
+4.5 CANCEL BOOKING
+------------------
+PUT /api/bookings/{bookingId}/cancel
+Headers: { "Authorization": "Bearer <token>" }
+Response:
+{
+  "success": true,
+  "message": "Booking cancelled successfully"
+}
+
+4.6 RESCHEDULE BOOKING
+----------------------
+PUT /api/bookings/{bookingId}/reschedule
+Headers: { "Authorization": "Bearer <token>" }
+Body:
+{
+  "scheduledDate": "2026-07-29",
+  "scheduledSlot": "Morning (9AM - 12PM)"
+}
+Response:
+{
+  "success": true,
+  "message": "Booking rescheduled successfully"
+}
+
+================================================================================
+  5. SAVED ADDRESSES
+================================================================================
+
+5.1 GET ALL SAVED ADDRESSES
+---------------------------
+GET /api/addresses
+Headers: { "Authorization": "Bearer <token>" }
+Response:
+{
+  "success": true,
+  "addresses": [
+    {
+      "id": "addr_1",
+      "label": "Home",
+      "tag": "home",
+      "addressLine": "123, Koramangala",
+      "lat": 12.9279,
+      "lng": 77.6271
+    }
+  ]
+}
+
+5.2 ADD NEW ADDRESS
+-------------------
+POST /api/addresses
+Headers: { "Authorization": "Bearer <token>" }
+Body:
+{
+  "label": "Home",
+  "tag": "home", // home, work, other
+  "addressLine": "123, Koramangala",
+  "lat": 12.9279,
+  "lng": 77.6271
+}
+Response:
+{
+  "success": true,
+  "id": "addr_2",
+  "label": "Home",
+  ...
+}
+
+5.3 UPDATE ADDRESS
+------------------
+PUT /api/addresses/{id}
+Headers: { "Authorization": "Bearer <token>" }
+Body: { ...same as POST }
+
+5.4 DELETE ADDRESS
+------------------
+DELETE /api/addresses/{id}
+Headers: { "Authorization": "Bearer <token>" }
+Response: { "success": true }
