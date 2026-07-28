@@ -46,6 +46,7 @@ public class Driver {
     private String bankPassbookUri;
 
     private String kyc;
+    private String rejectedReason;
     private Integer trips;
     private String tenure;
     public Long getId() { return id; }
@@ -106,6 +107,8 @@ public class Driver {
     public void setBankPassbookUri(String bankPassbookUri) { this.bankPassbookUri = bankPassbookUri; }
     public String getKyc() { return kyc; }
     public void setKyc(String kyc) { this.kyc = kyc; }
+    public String getRejectedReason() { return rejectedReason; }
+    public void setRejectedReason(String rejectedReason) { this.rejectedReason = rejectedReason; }
     public Integer getTrips() { return trips; }
     public void setTrips(Integer trips) { this.trips = trips; }
     public String getTenure() { return tenure; }

@@ -31,13 +31,13 @@ public class DriverController {
     private VehicleRepository vehicleRepository;
 
     @GetMapping("/{email}/orders/active")
-    public ResponseEntity<Order> getActiveOrder(@PathVariable String email) {
+    public ResponseEntity<?> getActiveOrder(@PathVariable String email) {
         List<String> activeStatuses = Arrays.asList("assigned", "accepted", "picked_up", "transit");
         List<Order> orders = orderRepository.findAllByDriverEmailAndStatusInOrderByCreatedAtDesc(email, activeStatuses);
         if (!orders.isEmpty()) {
             return ResponseEntity.ok(orders.get(0));
         }
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        return ResponseEntity.ok(java.util.Map.of());
     }
     
     @GetMapping("/{email}/orders/history")

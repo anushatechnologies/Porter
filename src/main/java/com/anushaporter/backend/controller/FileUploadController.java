@@ -48,7 +48,7 @@ public class FileUploadController {
                     RequestBody.fromBytes(file.getBytes()));
 
             // Assuming the bucket is public or you want to return the S3 URL
-            String fileUrl = "https://" + bucketName + ".s3.amazonaws.com/" + fileName;
+            String fileUrl = "https://" + bucketName + ".s3.ap-south-2.amazonaws.com/" + fileName;
             
             return ResponseEntity.ok(Map.of("url", fileUrl));
 

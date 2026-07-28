@@ -28,14 +28,31 @@ public class AdminAPIController {
         long pendingKyc = driverRepository.findAll().stream()
                 .filter(d -> "pending".equalsIgnoreCase(d.getKyc()))
                 .count();
-        long activeOrders = orderRepository.findAll().stream()
-                .filter(o -> "driver_assigned".equalsIgnoreCase(o.getStatus()) || "picked_up".equalsIgnoreCase(o.getStatus()))
+                
+        List<com.anushaporter.backend.model.Order> allOrders = orderRepository.findAll();
+        
+        long activeOrders = allOrders.stream()
+                .filter(o -> "driver_assigned".equalsIgnoreCase(o.getStatus()) || "picked_up".equalsIgnoreCase(o.getStatus()) || "assigned".equalsIgnoreCase(o.getStatus()) || "accepted".equalsIgnoreCase(o.getStatus()) || "transit".equalsIgnoreCase(o.getStatus()))
                 .count();
+
+        java.time.LocalDate today = java.time.LocalDate.now();
+        
+        long totalOrdersToday = allOrders.stream()
+                .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().toLocalDate().isEqual(today))
+                .count();
+                
+        double revenueToday = allOrders.stream()
+                .filter(o -> "completed".equalsIgnoreCase(o.getStatus()))
+                .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().toLocalDate().isEqual(today))
+                .mapToDouble(o -> o.getAmount() != null ? o.getAmount() : 0.0)
+                .sum();
 
         return ResponseEntity.ok(Map.of(
                 "totalDrivers", totalDrivers,
                 "pendingKyc", pendingKyc,
-                "activeOrders", activeOrders
+                "activeOrders", activeOrders,
+                "totalOrdersToday", totalOrdersToday,
+                "revenueToday", revenueToday
         ));
     }
 
@@ -69,7 +86,9 @@ public class AdminAPIController {
         String status = payload.get("status");
         if (status != null) {
             driver.setKyc(status);
-            // If rejected, there could be a rejectedReason in the actual DB model, but for now we set the status.
+            if ("rejected".equalsIgnoreCase(status)) {
+                driver.setRejectedReason(payload.get("reason"));
+            }
             driverRepository.save(driver);
         }
 
