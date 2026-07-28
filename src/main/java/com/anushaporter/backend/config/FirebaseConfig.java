@@ -19,10 +19,14 @@ public class FirebaseConfig {
     @PostConstruct
     public void initialize() {
         try {
-            ClassPathResource resource = new ClassPathResource("firebase-service-account.json");
+            org.springframework.core.io.Resource resource = new org.springframework.core.io.FileSystemResource("/app/firebase-service-account.json");
             
             if (!resource.exists()) {
-                logger.warn("firebase-service-account.json not found in classpath. Firebase Admin SDK will not be initialized. Please add the file to src/main/resources/.");
+                resource = new org.springframework.core.io.ClassPathResource("firebase-service-account.json");
+            }
+
+            if (!resource.exists()) {
+                logger.warn("firebase-service-account.json not found in /app/ or classpath. Firebase Admin SDK will not be initialized.");
                 return;
             }
             
