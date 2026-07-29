@@ -158,6 +158,12 @@ public class AuthController {
             return ResponseEntity.badRequest().body(response);
         }
 
+        // Clean the token (remove accidentally injected quotes or whitespaces by frontend HTTP clients)
+        firebaseIdToken = firebaseIdToken.replaceAll("\"", "")
+                                         .replaceAll("\\r\\n|\\r|\\n", "")
+                                         .replaceAll("\\s+", "")
+                                         .trim();
+
         try {
             FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(firebaseIdToken);
             String phone = (String) decodedToken.getClaims().get("phone_number");
