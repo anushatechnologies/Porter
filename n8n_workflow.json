@@ -1,0 +1,182 @@
+{
+  "name": "Excel to GoDaddy Email Automation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "fb1249b6-857e-4074-b72e-3dbb72bc0e50",
+      "name": "When clicking \"Execute Workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [ 380, 240 ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "contacts.xlsx"
+      },
+      "id": "e98e4f16-728b-4b10-8b17-7db5c5a8e32c",
+      "name": "Read Binary File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [ 600, 240 ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "binaryPropertyName": "data"
+      },
+      "id": "52697b0a-3c58-4560-a541-11933baee337",
+      "name": "Spreadsheet File",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [ 820, 240 ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "0d635c05-b166-4191-be17-fc8766181f7f",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [ 1040, 240 ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "Subject",
+              "value": "=Hello {{$json.Name}} - Welcome to Anusha Bazaar"
+            },
+            {
+              "name": "Body",
+              "value": "=Hi {{$json.Name}},<br><br>Thank you for registering. We are excited to serve you.<br><br>Click below:<br><a href=\"https://anushabazaar.com\">https://anushabazaar.com</a><br><br>Regards,<br>Anusha Bazaar"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "87c47321-c112-4217-b769-cf36db301b17",
+      "name": "Set Subject & Body",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 1260, 240 ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "support@yourdomain.com",
+        "toEmail": "={{ $json.Email }}",
+        "subject": "={{ $json.Subject }}",
+        "html": "={{ $json.Body }}"
+      },
+      "id": "27b7b134-c361-412e-9d2a-c21d019f6a27",
+      "name": "Send Email (GoDaddy)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [ 1480, 240 ]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "33b2b8e3-05c7-43ad-a169-b362ffb5ff55",
+      "name": "Wait (Rate Limit)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [ 1700, 240 ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking \"Execute Workflow\"": {
+      "main": [
+        [
+          {
+            "node": "Read Binary File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Binary File": {
+      "main": [
+        [
+          {
+            "node": "Spreadsheet File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Spreadsheet File": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Set Subject & Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Subject & Body": {
+      "main": [
+        [
+          {
+            "node": "Send Email (GoDaddy)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email (GoDaddy)": {
+      "main": [
+        [
+          {
+            "node": "Wait (Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait (Rate Limit)": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f7ab0ea2-b6ab-47bc-ad3b-179427b3b754",
+  "meta": {
+    "instanceId": "cbfe484666cfb7f6c6536cc3645b85a3c9e6bb077d247f0e9b6261c16262ab0b"
+  },
+  "id": "1",
+  "tags": []
+}
