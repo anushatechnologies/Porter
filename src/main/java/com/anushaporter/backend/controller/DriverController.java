@@ -89,7 +89,7 @@ public class DriverController {
     }
 
     @PostMapping("/{id}/verify")
-    public ResponseEntity<Driver> verifyDriver(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> verifyDriver(@PathVariable Long id) {
         return repository.findById(id).map(driver -> {
             driver.setKyc("verified");
             
@@ -102,12 +102,13 @@ public class DriverController {
             notif.setReadStatus(false);
             notificationRepository.save(notif);
             
-            return ResponseEntity.ok(repository.save(driver));
+            Driver savedDriver = repository.save(driver);
+            return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "driver", (Object) savedDriver));
         }).orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{id}/reject")
-    public ResponseEntity<Driver> rejectDriver(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> rejectDriver(@PathVariable Long id) {
         return repository.findById(id).map(driver -> {
             driver.setKyc("rejected");
             
@@ -120,7 +121,8 @@ public class DriverController {
             notif.setReadStatus(false);
             notificationRepository.save(notif);
             
-            return ResponseEntity.ok(repository.save(driver));
+            Driver savedDriver = repository.save(driver);
+            return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "driver", (Object) savedDriver));
         }).orElse(ResponseEntity.notFound().build());
     }
 }

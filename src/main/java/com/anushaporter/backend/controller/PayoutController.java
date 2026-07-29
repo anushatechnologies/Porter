@@ -26,10 +26,11 @@ public class PayoutController {
     }
 
     @PostMapping("/{id}/release")
-    public ResponseEntity<Payout> releasePayout(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> releasePayout(@PathVariable Long id) {
         return repository.findById(id).map(payout -> {
-            payout.setStatus("completed");
-            return ResponseEntity.ok(repository.save(payout));
+            payout.setStatus("settled"); // Using "settled" based on spec
+            repository.save(payout);
+            return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "status", (Object) "settled"));
         }).orElse(ResponseEntity.notFound().build());
     }
 }

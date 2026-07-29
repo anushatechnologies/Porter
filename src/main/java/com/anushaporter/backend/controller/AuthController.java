@@ -68,12 +68,13 @@ public class AuthController {
                     return ResponseEntity.ok(response);
                 }
 
-                Map<String, String> userProfile = new HashMap<>();
+                Map<String, Object> userProfile = new HashMap<>();
+                userProfile.put("id", user.getId());
                 userProfile.put("name", user.getName());
                 userProfile.put("role", user.getRole());
                 userProfile.put("email", user.getEmail());
                 userProfile.put("phone", user.getPhone());
-                userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed=" + (user.getName() != null ? user.getName() : "User"));
+                userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed=" + (user.getName() != null ? user.getName().replace(" ", "") : "User"));
 
                 String token = jwtUtil.generateToken(user.getEmail());
 
@@ -110,7 +111,7 @@ public class AuthController {
         }
 
         AppUser newUser = new AppUser();
-        newUser.setName(body.get("fullName"));
+        newUser.setName(body.get("name") != null ? body.get("name") : body.get("fullName"));
         newUser.setEmail(email);
         newUser.setPhone(body.get("phone"));
         newUser.setCompany(body.get("company"));
@@ -121,12 +122,19 @@ public class AuthController {
         String hashedPassword = BCrypt.hashpw(body.get("password"), BCrypt.gensalt());
         newUser.setPassword(hashedPassword);
 
-        userRepository.save(newUser);
+        AppUser savedUser = userRepository.save(newUser);
 
         System.out.println("New user registered: " + email);
+        
+        Map<String, Object> userProfile = new HashMap<>();
+        userProfile.put("id", savedUser.getId());
+        userProfile.put("name", savedUser.getName());
+        userProfile.put("email", savedUser.getEmail());
+        userProfile.put("role", savedUser.getRole());
 
         response.put("success", true);
         response.put("message", "Account created successfully. You can now login.");
+        response.put("user", userProfile);
         return ResponseEntity.ok(response);
     }
 

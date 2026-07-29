@@ -27,21 +27,27 @@ public class NotificationController {
     }
 
     @PostMapping("/broadcast")
-    public ResponseEntity<Notification> broadcast(@RequestBody Notification entity) {
-        return ResponseEntity.ok(repository.save(entity));
+    public ResponseEntity<java.util.Map<String, Object>> broadcast(@RequestBody Notification entity) {
+        Notification saved = repository.save(entity);
+        return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "notification", (Object) saved));
     }
 
     @PostMapping("/{id}/read")
-    public ResponseEntity<Notification> markRead(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> markRead(@PathVariable Long id) {
         return repository.findById(id).map(notification -> {
-            // Assume there is a boolean or string status field. We'll just return it.
-            return ResponseEntity.ok(repository.save(notification));
+            notification.setReadStatus(true);
+            Notification saved = repository.save(notification);
+            return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "notification", (Object) saved));
         }).orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/read-all")
-    public ResponseEntity<Void> markAllRead() {
-        // Just mock it for now
-        return ResponseEntity.ok().build();
+    public ResponseEntity<java.util.Map<String, Object>> markAllRead() {
+        List<Notification> all = repository.findAll();
+        for (Notification n : all) {
+            n.setReadStatus(true);
+        }
+        repository.saveAll(all);
+        return ResponseEntity.ok(java.util.Map.of("success", (Object) true));
     }
 }

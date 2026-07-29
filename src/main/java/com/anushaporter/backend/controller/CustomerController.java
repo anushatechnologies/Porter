@@ -27,7 +27,7 @@ public class CustomerController {
     }
 
     @PostMapping("/{id}/topup")
-    public ResponseEntity<Customer> topupCustomer(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<java.util.Map<String, Object>> topupCustomer(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         return repository.findById(id).map(customer -> {
             if (payload.containsKey("amount")) {
                 try {
@@ -41,7 +41,8 @@ public class CustomerController {
                     // Ignore parsing error
                 }
             }
-            return ResponseEntity.ok(repository.save(customer));
+            Customer saved = repository.save(customer);
+            return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "wallet", (Object) (saved.getWallet() != null ? saved.getWallet() : 0.0)));
         }).orElse(ResponseEntity.notFound().build());
     }
 }

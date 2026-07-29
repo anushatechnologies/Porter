@@ -27,24 +27,28 @@ public class TicketController {
     }
 
     @PostMapping("/{id}/message")
-    public ResponseEntity<Ticket> addMessage(@PathVariable Long id, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<java.util.Map<String, Object>> addMessage(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         // Just mock it by returning the ticket
-        return repository.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+        return repository.findById(id).map(ticket -> {
+            return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "message", (Object) ticket));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
-    @PutMapping("/{id}/status")
-    public ResponseEntity<Ticket> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
+    @PostMapping("/{id}/status")
+    public ResponseEntity<java.util.Map<String, Object>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         return repository.findById(id).map(ticket -> {
             ticket.setStatus(payload.get("status"));
-            return ResponseEntity.ok(repository.save(ticket));
+            repository.save(ticket);
+            return ResponseEntity.ok(java.util.Map.of("success", (Object) true));
         }).orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{id}/resolve")
-    public ResponseEntity<Ticket> resolveTicket(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> resolveTicket(@PathVariable Long id) {
         return repository.findById(id).map(ticket -> {
             ticket.setStatus("resolved");
-            return ResponseEntity.ok(repository.save(ticket));
+            repository.save(ticket);
+            return ResponseEntity.ok(java.util.Map.of("success", (Object) true));
         }).orElse(ResponseEntity.notFound().build());
     }
 }

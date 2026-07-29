@@ -40,7 +40,7 @@ public class OrderController {
     private com.anushaporter.backend.repository.DriverRepository driverRepository;
 
     @PostMapping("/{id}/assign")
-    public ResponseEntity<Order> assignDriver(@PathVariable Long id, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, Object>> assignDriver(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         return repository.findById(id).map(order -> {
             String driverIdStr = payload.get("driverId");
             if (driverIdStr != null) {
@@ -62,15 +62,17 @@ public class OrderController {
                 order.setDriverVehicleNumber(payload.get("driverVehicleNumber"));
             }
             order.setStatus("assigned");
-            return ResponseEntity.ok(repository.save(order));
+            Order savedOrder = repository.save(order);
+            return ResponseEntity.ok(Map.of("success", true, "order", savedOrder));
         }).orElse(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/{id}/status")
-    public ResponseEntity<Order> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, Object>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         return repository.findById(id).map(order -> {
             order.setStatus(payload.get("status"));
-            return ResponseEntity.ok(repository.save(order));
+            Order savedOrder = repository.save(order);
+            return ResponseEntity.ok(Map.of("success", (Object) true, "order", (Object) savedOrder));
         }).orElse(ResponseEntity.notFound().build());
     }
 
