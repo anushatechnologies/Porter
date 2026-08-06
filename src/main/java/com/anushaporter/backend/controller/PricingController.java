@@ -40,9 +40,11 @@ public class PricingController {
     // --- ADMIN CONFIGURATION ENDPOINTS ---
     @GetMapping("/vehicle/{vehicleId}")
     public ResponseEntity<com.anushaporter.backend.model.PricingVehicle> getVehiclePricing(@PathVariable String vehicleId) {
-        return vehicleRepo.findByVehicleId(vehicleId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        com.anushaporter.backend.model.PricingVehicle vehicle = vehicleRepo.findByVehicleId(vehicleId);
+        if (vehicle != null) {
+            return ResponseEntity.ok(vehicle);
+        }
+        return ResponseEntity.notFound().build();
     }
 
     @PostMapping
@@ -53,11 +55,13 @@ public class PricingController {
 
     @PutMapping("/vehicle/{vehicleId}")
     public ResponseEntity<java.util.Map<String, Object>> updateVehiclePricing(@PathVariable String vehicleId, @RequestBody com.anushaporter.backend.model.PricingVehicle vehicle) {
-        return vehicleRepo.findByVehicleId(vehicleId).map(existing -> {
+        com.anushaporter.backend.model.PricingVehicle existing = vehicleRepo.findByVehicleId(vehicleId);
+        if (existing != null) {
             vehicle.setId(existing.getId());
             com.anushaporter.backend.model.PricingVehicle saved = vehicleRepo.save(vehicle);
             return ResponseEntity.ok(java.util.Map.of("success", true, "vehicle", saved));
-        }).orElse(ResponseEntity.notFound().build());
+        }
+        return ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("/{id}")
