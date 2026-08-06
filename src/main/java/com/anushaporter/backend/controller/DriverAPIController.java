@@ -39,7 +39,7 @@ public class DriverAPIController {
 
     private Driver getAuthenticatedDriver(HttpServletRequest request) {
         String email = (String) request.getAttribute("userId");
-        Optional<AppUser> userOpt = appUserRepository.findByEmail(email);
+        Optional<AppUser> userOpt = appUserRepository.findFirstByEmailOrderByIdDesc(email);
         if (userOpt.isPresent()) {
             return driverRepository.findByPhone(userOpt.get().getPhone()).orElse(null);
         }
@@ -48,7 +48,7 @@ public class DriverAPIController {
 
     private AppUser getAuthenticatedAppUser(HttpServletRequest request) {
         String email = (String) request.getAttribute("userId");
-        return appUserRepository.findByEmail(email).orElse(null);
+        return appUserRepository.findFirstByEmailOrderByIdDesc(email).orElse(null);
     }
 
     // A. Upload Documents
@@ -170,7 +170,7 @@ public class DriverAPIController {
                 .mapToDouble(o -> o.getAmount() != null ? o.getAmount() : 0.0)
                 .sum();
         
-        AppUser appUser = appUserRepository.findByPhone(driver.getPhone()).orElse(null);
+        AppUser appUser = appUserRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone()).orElse(null);
         double walletBalance = appUser != null && appUser.getWalletBalance() != null ? appUser.getWalletBalance() : 0.0;
 
         return ResponseEntity.ok(Map.of(

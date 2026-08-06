@@ -84,7 +84,7 @@ public class OrderController {
         }
 
         return repository.findById(id).map(order -> {
-            AppUser user = appUserRepository.findByEmail(email).orElse(null);
+            AppUser user = appUserRepository.findFirstByEmailOrderByIdDesc(email).orElse(null);
             if (user != null) {
                 driverRepository.findByPhone(user.getPhone()).ifPresent(driver -> {
                     order.setDriverId(driver.getId().toString());

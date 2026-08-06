@@ -8,8 +8,9 @@ import java.util.Optional;
 
 @Repository
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
-    Optional<AppUser> findByEmail(String email);
-    Optional<AppUser> findByPhone(String phone);
-    Optional<AppUser> findByOtp(String otp);
+    // Select the newest row while legacy duplicate data is being cleaned up.
+    Optional<AppUser> findFirstByEmailOrderByIdDesc(String email);
+    Optional<AppUser> findFirstByPhoneOrderByIdDesc(String phone);
+    Optional<AppUser> findFirstByOtpOrderByIdDesc(String otp);
     boolean existsByPhone(String phone);
 }
