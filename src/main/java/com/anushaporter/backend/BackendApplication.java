@@ -41,7 +41,7 @@ public class BackendApplication {
 			// Seed Admin User from Environment Variables
 			if (adminEmail != null && !adminEmail.trim().isEmpty() && adminPassword != null && !adminPassword.trim().isEmpty()) {
 				System.out.println("Checking for admin user from environment variables: " + adminEmail);
-				Optional<AppUser> adminOpt = userRepository.findByEmail(adminEmail);
+				Optional<AppUser> adminOpt = userRepository.findFirstByEmailOrderByIdDesc(adminEmail);
 				AppUser adminUser = adminOpt.orElse(new AppUser());
 				adminUser.setName(adminName);
 				adminUser.setEmail(adminEmail);

@@ -36,7 +36,7 @@ public class WalletController {
             return ResponseEntity.status(401).body(response);
         }
 
-        Optional<AppUser> userOpt = userRepository.findByEmail(email);
+        Optional<AppUser> userOpt = userRepository.findFirstByEmailOrderByIdDesc(email);
         if (userOpt.isEmpty()) {
             response.put("success", false);
             response.put("message", "User not found");
@@ -81,7 +81,7 @@ public class WalletController {
             return ResponseEntity.status(401).body(response);
         }
 
-        Optional<AppUser> userOpt = userRepository.findByEmail(email);
+        Optional<AppUser> userOpt = userRepository.findFirstByEmailOrderByIdDesc(email);
         if (userOpt.isEmpty()) {
             response.put("success", false);
             response.put("message", "User not found");

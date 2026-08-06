@@ -51,11 +51,11 @@ public class AuthController {
 
         Optional<AppUser> userOpt;
         if (identifier.contains("@")) {
-            userOpt = userRepository.findByEmail(identifier);
+            userOpt = userRepository.findFirstByEmailOrderByIdDesc(identifier);
         } else {
-            userOpt = userRepository.findByPhone(identifier);
+            userOpt = userRepository.findFirstByPhoneOrderByIdDesc(identifier);
             if (userOpt.isEmpty()) {
-                userOpt = userRepository.findByEmail(identifier); // fallback
+                userOpt = userRepository.findFirstByEmailOrderByIdDesc(identifier); // fallback
             }
         }
 
@@ -104,7 +104,8 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
         String email = body.get("email");
 
-        if (userRepository.findByEmail(email).isPresent()) {
+        if (email != null && !email.trim().isEmpty()
+                && userRepository.findFirstByEmailOrderByIdDesc(email.trim()).isPresent()) {
             response.put("success", false);
             response.put("message", "Email already registered.");
             return ResponseEntity.ok(response);
@@ -187,7 +188,7 @@ public class AuthController {
                 localPhone = localPhone.substring(localPhone.length() - 10);
             }
 
-            Optional<AppUser> userOpt = userRepository.findByPhone(localPhone);
+            Optional<AppUser> userOpt = userRepository.findFirstByPhoneOrderByIdDesc(localPhone);
             AppUser user;
 
             if ("signup".equalsIgnoreCase(mode)) {
@@ -254,7 +255,9 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
         String email = body.get("email");
 
-        Optional<AppUser> userOpt = userRepository.findByEmail(email);
+        Optional<AppUser> userOpt = (email == null || email.trim().isEmpty())
+                ? Optional.empty()
+                : userRepository.findFirstByEmailOrderByIdDesc(email.trim());
         if (userOpt.isPresent()) {
             AppUser user = userOpt.get();
             String otp = String.format("%04d", new Random().nextInt(10000));
@@ -288,7 +291,9 @@ public class AuthController {
         String otp = body.get("otp");
         String newPassword = body.get("newPassword");
 
-        Optional<AppUser> userOpt = userRepository.findByEmail(email);
+        Optional<AppUser> userOpt = (email == null || email.trim().isEmpty())
+                ? Optional.empty()
+                : userRepository.findFirstByEmailOrderByIdDesc(email.trim());
 
         if (userOpt.isPresent()) {
             AppUser user = userOpt.get();
@@ -347,7 +352,9 @@ public class AuthController {
             String token = authHeader.substring(7);
             String email = jwtUtil.getUsernameFromToken(token);
             
-            Optional<AppUser> userOpt = userRepository.findByEmail(email);
+            Optional<AppUser> userOpt = (email == null || email.trim().isEmpty())
+                    ? Optional.empty()
+                    : userRepository.findFirstByEmailOrderByIdDesc(email.trim());
             if (userOpt.isPresent()) {
                 AppUser user = userOpt.get();
                 
