@@ -87,10 +87,13 @@ jobs:
         script: |
           echo $ECR_PASSWORD | docker login --username AWS --password-stdin $ECR_REGISTRY
           docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker stop anusha-backend || true
+          docker rm anusha-backend || true
           docker stop backend-app || true
           docker rm backend-app || true
-          docker run -d --name backend-app \
-            -p 8080:8080 \
+          docker run -d --name anusha-backend \
+            -p 9000:9000 \
+            -e SERVER_PORT=9000 \
             -e AWS_REGION="$AWS_REGION" \
             -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
             -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
