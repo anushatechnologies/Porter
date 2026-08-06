@@ -7,7 +7,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
 import jakarta.annotation.PostConstruct;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,21 +23,14 @@ public class FirebaseConfig {
 
     @PostConstruct
     public void initialize() {
-        try {
-            org.springframework.core.io.Resource resource = new org.springframework.core.io.FileSystemResource("/app/firebase-service-account.json");
-            
-            if (!resource.exists()) {
-                resource = new org.springframework.core.io.ClassPathResource("firebase-service-account.json");
-            }
-
-            if (!resource.exists()) {
-                logger.warn("firebase-service-account.json not found in /app/ or classpath. Firebase Admin SDK will not be initialized.");
+        try (InputStream serviceAccount = getServiceAccountStream()) {
+            if (serviceAccount == null) {
+                logger.error("Firebase credentials are not configured. Set FIREBASE_SERVICE_ACCOUNT_BASE64.");
                 return;
             }
-            
-            InputStream serviceAccount = resource.getInputStream();
 
-            // Use ApacheHttpTransport to bypass Java's built-in HttpURLConnection GZIP bug on AWS
+            // Use ApacheHttpTransport to bypass Java's built-in HttpURLConnection GZIP bug
+            // on AWS
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
                     .setHttpTransport(new ApacheHttpTransport())
@@ -47,5 +43,25 @@ public class FirebaseConfig {
         } catch (Exception e) {
             logger.error("Failed to initialize Firebase Admin SDK", e);
         }
+    }
+
+    private InputStream getServiceAccountStream() throws Exception {
+        String encodedCredentials = System.getenv("FIREBASE_SERVICE_ACCOUNT_BASE64");
+        if (encodedCredentials != null && !encodedCredentials.trim().isEmpty()) {
+            byte[] credentials = Base64.getDecoder().decode(encodedCredentials.replaceAll("\\s+", ""));
+            return new ByteArrayInputStream(credentials);
+        }
+
+        String jsonCredentials = System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON");
+        if (jsonCredentials != null && !jsonCredentials.trim().isEmpty()) {
+            return new ByteArrayInputStream(jsonCredentials.getBytes(StandardCharsets.UTF_8));
+        }
+
+        org.springframework.core.io.Resource resource = new org.springframework.core.io.FileSystemResource(
+                "/app/firebase-service-account.json");
+        if (!resource.exists()) {
+            resource = new org.springframework.core.io.ClassPathResource("firebase-service-account.json");
+        }
+        return resource.exists() ? resource.getInputStream() : null;
     }
 }
