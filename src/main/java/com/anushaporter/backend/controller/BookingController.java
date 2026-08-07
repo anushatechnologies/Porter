@@ -364,6 +364,68 @@ public class BookingController {
         }
     }
 
+    @PostMapping("/api/orders/{bookingId}/cancel")
+    public ResponseEntity<Map<String, Object>> cancelOrder(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable String bookingId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            if (extractEmail(authHeader) == null) {
+                response.put("success", false); response.put("message", "Unauthorized");
+                return ResponseEntity.status(401).body(response);
+            }
+            Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+            if (orderOpt.isEmpty()) {
+                response.put("success", false); response.put("message", "Booking not found");
+                return ResponseEntity.status(404).body(response);
+            }
+            Order order = orderOpt.get();
+            if (body != null) {
+                Object reason = body.get("customReason") != null ? body.get("customReason") : body.get("selectedReason");
+                if (reason != null) order.setCancellationReason(String.valueOf(reason));
+            }
+            order.setStatus("cancelled"); orderRepository.save(order);
+            response.put("success", true); response.put("bookingId", bookingId);
+            response.put("message", "Booking cancelled successfully");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false); response.put("message", "Failed to cancel booking");
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    @GetMapping("/api/orders/{bookingId}/delivery-otp")
+    public ResponseEntity<Map<String, Object>> getDeliveryOtp(
+            @RequestHeader("Authorization") String authHeader, @PathVariable String bookingId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            String email = extractEmail(authHeader);
+            if (email == null) {
+                response.put("success", false); response.put("message", "Unauthorized");
+                return ResponseEntity.status(401).body(response);
+            }
+            Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+            if (orderOpt.isEmpty()) {
+                response.put("success", false); response.put("message", "Booking not found");
+                return ResponseEntity.status(404).body(response);
+            }
+            Order order = orderOpt.get();
+            if (order.getDeliveryOtp() == null || order.getOtpExpiresAt() == null
+                    || order.getOtpExpiresAt().isBefore(LocalDateTime.now())) {
+                order.setDeliveryOtp(String.format("%06d", new Random().nextInt(1_000_000)));
+                order.setOtpExpiresAt(LocalDateTime.now().plusMinutes(30)); orderRepository.save(order);
+            }
+            Map<String, Object> data = new HashMap<>(); data.put("orderId", bookingId);
+            data.put("otp", order.getDeliveryOtp()); data.put("expiresAt", order.getOtpExpiresAt());
+            data.put("status", "ACTIVE"); response.put("success", true); response.put("data", data);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false); response.put("message", "Failed to get delivery OTP");
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
     /**
      * Reschedule a booking.
      * PUT /api/bookings/{bookingId}/reschedule

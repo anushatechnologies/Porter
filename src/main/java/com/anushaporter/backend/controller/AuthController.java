@@ -327,11 +327,51 @@ public class AuthController {
     }
 
     @PostMapping("/api/users")
-    public ResponseEntity<Map<String, Object>> saveUsers(@RequestBody List<AppUser> users) {
-        userRepository.saveAll(users);
+    public ResponseEntity<Map<String, Object>> saveUsers(@RequestBody Object body) {
+        if (body instanceof List<?> users) {
+            List<AppUser> entities = users.stream()
+                    .filter(AppUser.class::isInstance).map(AppUser.class::cast).toList();
+            userRepository.saveAll(entities);
+        } else if (body instanceof Map<?, ?> values) {
+            AppUser user = new AppUser();
+            user.setName(String.valueOf(values.containsKey("name") ? values.get("name") : ""));
+            user.setEmail(String.valueOf(values.containsKey("email") ? values.get("email") : ""));
+            user.setPhone(String.valueOf(values.containsKey("phone") ? values.get("phone") : ""));
+            user.setRole(String.valueOf(values.containsKey("role") ? values.get("role") : "Support Agent"));
+            user.setStatus(String.valueOf(values.containsKey("status") ? values.get("status") : "Active"));
+            userRepository.save(user);
+        }
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/api/users/profile")
+    public ResponseEntity<Map<String, Object>> getProfile(@RequestHeader("Authorization") String authHeader) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                response.put("success", false); response.put("message", "Unauthorized");
+                return ResponseEntity.status(401).body(response);
+            }
+            String email = jwtUtil.getUsernameFromToken(authHeader.substring(7));
+            Optional<AppUser> userOpt = email == null || email.trim().isEmpty()
+                    ? Optional.empty() : userRepository.findFirstByEmailOrderByIdDesc(email.trim());
+            if (userOpt.isEmpty()) {
+                response.put("success", false); response.put("message", "User not found");
+                return ResponseEntity.status(404).body(response);
+            }
+            AppUser user = userOpt.get();
+            Map<String, Object> profile = new HashMap<>();
+            profile.put("id", user.getId()); profile.put("name", user.getName());
+            profile.put("phone", user.getPhone()); profile.put("email", user.getEmail());
+            profile.put("role", user.getRole()); profile.put("status", user.getStatus());
+            response.put("success", true); response.put("data", profile); response.put("user", profile);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false); response.put("message", "Invalid token or server error");
+            return ResponseEntity.status(401).body(response);
+        }
     }
 
     // Update Profile endpoint

@@ -1,0 +1,74 @@
+ANUSHA PORTER DRIVER PUSH + LIVE LOCATION APIs
+===============================================
+
+Base URL: https://api.anushaporter.com
+Header: Authorization: Bearer <accessToken>
+
+1. REGISTER DRIVER DEVICE TOKEN
+-------------------------------
+POST /api/drivers/me/device-token
+Content-Type: application/json
+
+{
+  "fcmToken": "<FCM device token>"
+}
+
+Success:
+{
+  "success": true,
+  "message": "Device token registered"
+}
+
+Call after every driver login and whenever the device token changes.
+
+2. UPDATE DRIVER LIVE LOCATION
+------------------------------
+PUT /api/drivers/me/location
+Content-Type: application/json
+
+{
+  "latitude": 17.4400802,
+  "longitude": 78.3489168,
+  "heading": 90.5
+}
+
+Success:
+{
+  "success": true,
+  "latitude": 17.4400802,
+  "longitude": 78.3489168,
+  "heading": 90.5
+}
+
+Send every 5-10 seconds while the driver is online and moving. Stop location
+updates when the driver goes offline. Latitude must be -90..90 and longitude
+must be -180..180.
+
+3. GET ACTIVE DRIVER ORDER
+--------------------------
+GET /api/drivers/me/orders/active
+
+Success with active order:
+{
+  "success": true,
+  "order": {
+    "orderId": 123,
+    "bookingId": "BK10023",
+    "status": "driver_assigned",
+    "customerName": "Sravan Kumar",
+    "customerPhone": "9876543210",
+    "pickup": "17.4400802, 78.3489168",
+    "drop": "17.45000, 78.35000",
+    "pickupAddress": "Pickup address",
+    "dropAddress": "Drop address",
+    "amount": 450.0
+  }
+}
+
+Success with no active order:
+{
+  "success": true,
+  "order": null
+}
+
+The customerPhone field is ready for the mobile call button.

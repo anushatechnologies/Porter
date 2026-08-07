@@ -3,6 +3,7 @@ package com.anushaporter.backend.controller;
 import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.repository.OrderRepository;
+import com.anushaporter.backend.repository.AppUserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,19 @@ public class AdminAPIController {
 
     @Autowired
     private OrderRepository orderRepository;
+
+    @Autowired
+    private AppUserRepository appUserRepository;
+
+    @GetMapping("/customers")
+    public ResponseEntity<?> getCustomers() {
+        return ResponseEntity.ok(appUserRepository.findByRoleIgnoreCase("customer"));
+    }
+
+    @GetMapping("/orders")
+    public ResponseEntity<?> getOrders() {
+        return ResponseEntity.ok(orderRepository.findAll());
+    }
 
     @GetMapping("/metrics")
     public ResponseEntity<?> getMetrics() {

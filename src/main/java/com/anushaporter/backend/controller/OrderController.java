@@ -9,6 +9,7 @@ import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
 import com.anushaporter.backend.model.AppUser;
 import com.anushaporter.backend.repository.AppUserRepository;
+import com.anushaporter.backend.service.PushNotificationService;
 
 import java.util.List;
 
@@ -25,6 +26,9 @@ public class OrderController {
 
     @Autowired
     private AppUserRepository appUserRepository;
+
+    @Autowired
+    private PushNotificationService pushNotificationService;
 
     @GetMapping
     public List<Order> getAll() {
@@ -63,15 +67,17 @@ public class OrderController {
             }
             order.setStatus("assigned");
             Order savedOrder = repository.save(order);
+            pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
             return ResponseEntity.ok(Map.of("success", true, "order", savedOrder));
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    @PutMapping("/{id}/status")
+    @RequestMapping(value = "/{id}/status", method = {RequestMethod.PUT, RequestMethod.POST})
     public ResponseEntity<Map<String, Object>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         return repository.findById(id).map(order -> {
             order.setStatus(payload.get("status"));
             Order savedOrder = repository.save(order);
+            pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
             return ResponseEntity.ok(Map.of("success", (Object) true, "order", (Object) savedOrder));
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -96,6 +102,7 @@ public class OrderController {
             }
             order.setStatus("picked_up"); // or "driver_assigned" depending on flow, but the requirement said "driver accepts... status updates"
             Order savedOrder = repository.save(order);
+            pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
             return ResponseEntity.ok(Map.of("success", true, "orderDetails", savedOrder));
         }).orElse(ResponseEntity.notFound().build());
     }
