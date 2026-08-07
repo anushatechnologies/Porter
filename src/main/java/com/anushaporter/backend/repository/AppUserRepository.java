@@ -12,5 +12,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findFirstByEmailOrderByIdDesc(String email);
     Optional<AppUser> findFirstByPhoneOrderByIdDesc(String phone);
     Optional<AppUser> findFirstByOtpOrderByIdDesc(String otp);
+    Optional<AppUser> findFirstByFcmToken(String fcmToken);
     boolean existsByPhone(String phone);
 }
