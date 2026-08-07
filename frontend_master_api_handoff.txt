@@ -103,6 +103,39 @@ The driver cannot accept orders until an admin verifies KYC.
 Optional document upload before registration:
 POST /api/upload with multipart field `file`; save the returned `url` in `documents`.
 
+END-TO-END DRIVER REGISTRATION CHECKLIST
+----------------------------------------
+Frontend implementation order:
+1. Firebase client sends the phone OTP.
+2. Firebase client confirms the OTP and obtains a Firebase ID token.
+3. Call /api/auth/verify-otp with mode=signup. Save accessToken.
+4. Upload profile, Aadhaar, license, RC, and passbook images one at a time:
+   POST /api/upload (multipart/form-data, field name: file)
+   Example response: {"url":"/uploads/abc.jpg"}
+   Store the complete URL as BASE_URL + returned url.
+5. Submit /api/drivers/register with the accessToken and all form values/document URLs.
+6. Show KYC status=pending. Do not show order acceptance until status=verified.
+7. Admin verifies the driver with POST /api/drivers/{driverId}/verify.
+8. Driver logs in again with Firebase OTP using mode=login, then calls:
+   POST /api/drivers/me/device-token
+   PUT /api/drivers/me/status with {"status":"online"}
+
+Example upload request:
+curl -X POST https://api.anushaporter.com/api/upload \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "file=@aadhaar-front.jpg"
+
+Example registration request:
+curl -X POST https://api.anushaporter.com/api/drivers/register \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Ramesh Kumar","email":"ramesh@example.com","dob":"10/05/1992","gender":"Male","addressLine1":"Road No 5, Jubilee Hills","city":"Hyderabad","state":"Telangana","pincode":"500033","vehicleType":"Tata Ace","vehicleNumber":"TS09EA1234","rcNumber":"RC123456","aadhaarNumber":"123412341234","licenseNumber":"DL123456789","bankName":"SBI","accountHolderName":"Ramesh Kumar","accountNumber":"1234567890","ifscCode":"SBIN0001234","documents":{"profilePhotoUrl":"https://api.anushaporter.com/uploads/profile.jpg","aadhaarUrl":"https://api.anushaporter.com/uploads/aadhaar.jpg","licenseUrl":"https://api.anushaporter.com/uploads/license.jpg","rcUrl":"https://api.anushaporter.com/uploads/rc.jpg","bankPassbookUrl":"https://api.anushaporter.com/uploads/passbook.jpg"}}'
+
+Registration errors:
+401 = accessToken missing/expired or verified account not found
+400 = Aadhaar, pincode, or IFSC format is invalid
+500 = database/deployment issue; inspect backend container logs
+
 POST /api/drivers/me/device-token
   {"fcmToken":"<FCM token>"}
 PUT /api/drivers/me/location
