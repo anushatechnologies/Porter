@@ -71,8 +71,13 @@ Driver registration is a two-step authenticated flow:
 POST /api/drivers/register
 {
   "name":"Ramesh Kumar",
+  "email":"ramesh@example.com",
   "dob":"1992-05-10",
   "gender":"Male",
+  "addressLine1":"Road No 5, Jubilee Hills",
+  "city":"Hyderabad",
+  "state":"Telangana",
+  "pincode":"500033",
   "vehicleType":"Tata Ace",
   "vehicleNumber":"TS09EA1234",
   "aadhaarNumber":"123412341234",
@@ -86,10 +91,13 @@ POST /api/drivers/register
     "profilePhotoUrl":"/uploads/profile.jpg",
     "aadhaarUrl":"/uploads/aadhaar.jpg",
     "licenseUrl":"/uploads/license.jpg",
-    "rcUrl":"/uploads/rc.jpg"
+    "rcUrl":"/uploads/rc.jpg",
+    "bankPassbookUrl":"/uploads/passbook.jpg"
   }
 }
 Success response: {"success":true,"driverId":"12","kycStatus":"pending"}.
+Mobile is taken from the verified login account and cannot be changed in this request.
+Validation: Aadhaar=12 digits, pincode=6 digits, IFSC=11 alphanumeric characters.
 The driver cannot accept orders until an admin verifies KYC.
 
 Optional document upload before registration:
