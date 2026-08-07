@@ -327,8 +327,20 @@ public class AuthController {
     }
 
     @PostMapping("/api/users")
-    public ResponseEntity<Map<String, Object>> saveUsers(@RequestBody List<AppUser> users) {
-        userRepository.saveAll(users);
+    public ResponseEntity<Map<String, Object>> saveUsers(@RequestBody Object body) {
+        if (body instanceof List<?> users) {
+            List<AppUser> entities = users.stream()
+                    .filter(AppUser.class::isInstance).map(AppUser.class::cast).toList();
+            userRepository.saveAll(entities);
+        } else if (body instanceof Map<?, ?> values) {
+            AppUser user = new AppUser();
+            user.setName(String.valueOf(values.containsKey("name") ? values.get("name") : ""));
+            user.setEmail(String.valueOf(values.containsKey("email") ? values.get("email") : ""));
+            user.setPhone(String.valueOf(values.containsKey("phone") ? values.get("phone") : ""));
+            user.setRole(String.valueOf(values.containsKey("role") ? values.get("role") : "Support Agent"));
+            user.setStatus(String.valueOf(values.containsKey("status") ? values.get("status") : "Active"));
+            userRepository.save(user);
+        }
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         return ResponseEntity.ok(response);

@@ -87,6 +87,49 @@ GET /api/admin/orders
 GET /api/admin/metrics
 These endpoints require an authenticated admin token according to the server security configuration.
 
+ADMIN PANEL OPERATIONS
+======================
+Pricing:
+GET /api/admin/pricing/vehicles
+GET /api/pricing/vehicle/{id}
+POST /api/pricing
+PUT /api/pricing/vehicle/{id}
+The admin pricing route is implemented; use /api/admin/pricing/vehicles for the dashboard registry.
+
+Orders and KYC:
+POST /api/orders/{id}/assign
+  {"driverId":"12","driverName":"Ramesh","driverPhone":"9876543210","driverVehicleNumber":"TS09EA1234"}
+POST or PUT /api/orders/{id}/status
+  {"status":"accepted"}
+POST /api/drivers/{id}/verify
+POST /api/drivers/{id}/reject
+
+Finance:
+POST /api/customers/{id}/topup  {"amount":500}
+POST /api/payouts/{id}/release
+
+Support:
+POST /api/tickets/{id}/message  {"message":"...","sender":"admin","channel":"app"}
+POST /api/tickets/{id}/status  {"status":"open"}
+POST /api/tickets/{id}/resolve
+
+Notifications:
+POST /api/notifications/broadcast
+  {"title":"Maintenance","message":"Service update","audience":"all","target":""}
+POST /api/notifications/{id}/read
+POST /api/notifications/read-all
+
+Settings and staff:
+POST /api/settings  {"key":"value"}
+POST /api/users  {"name":"Staff User","email":"staff@example.com","phone":"...","role":"Support Agent","status":"Active"}
+
+Password and session:
+POST /api/auth/forgot-password
+POST /api/auth/reset-password
+POST /api/auth/logout
+
+All listed admin routes are now present. Admin authorization is still required by the backend security configuration.
+
 PUSH EVENTS IMPLEMENTED
 =======================
 Order assignment/status changes trigger push notifications when the customer/driver token is saved.

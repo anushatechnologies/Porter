@@ -57,6 +57,37 @@ public class NotificationController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @PostMapping("/notifications/read-all")
+    public ResponseEntity<?> markAllRead(HttpServletRequest request) {
+        Optional<AppUser> user = currentUser(request);
+        if (user.isEmpty()) return unauthorized();
+        List<Notification> notifications = repository.findByUserIdOrderByCreatedAtDesc(user.get().getId());
+        notifications.forEach(notification -> notification.setReadStatus(true));
+        repository.saveAll(notifications);
+        return ResponseEntity.ok(Map.of("success", true, "message", "All notifications marked as read"));
+    }
+
+    @PostMapping("/notifications/broadcast")
+    public ResponseEntity<?> broadcast(@RequestBody Map<String, String> body) {
+        String title = body.get("title");
+        String message = body.get("message");
+        if (title == null || title.isBlank() || message == null || message.isBlank())
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "title and message are required"));
+
+        String audience = body.getOrDefault("audience", "all");
+        List<AppUser> recipients = "all".equalsIgnoreCase(audience)
+                ? userRepository.findAll() : userRepository.findByRoleIgnoreCase(audience);
+        List<Notification> notifications = recipients.stream().map(user -> {
+            Notification notification = new Notification();
+            notification.setUserId(user.getId()); notification.setTitle(title); notification.setMessage(message);
+            notification.setAudience(audience); notification.setTarget(body.get("target"));
+            notification.setNotificationType("BROADCAST");
+            return notification;
+        }).collect(Collectors.toList());
+        repository.saveAll(notifications);
+        return ResponseEntity.ok(Map.of("success", true, "recipientCount", notifications.size()));
+    }
+
     private Optional<AppUser> currentUser(HttpServletRequest request) {
         String header = request.getHeader("Authorization");
         if (header == null || !header.startsWith("Bearer ")) return Optional.empty();
