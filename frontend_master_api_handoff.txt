@@ -1,0 +1,109 @@
+ANUSHA PORTER - FRONTEND API HANDOFF
+Updated: 2026-08-07
+Base URL: https://api.anushaporter.com
+
+AUTHENTICATION
+=============
+All protected requests use:
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+Phone OTP is sent by the Firebase client SDK. Do not call send-otp in the app:
+POST /api/auth/send-otp -> deprecated (410)
+
+Verify Firebase OTP:
+POST /api/auth/verify-otp
+{
+  "firebaseIdToken": "<Firebase ID token>",
+  "mode": "login",
+  "name": "Customer Name"
+}
+Success returns accessToken, refreshToken, and user {id,name,phone,email,isPhoneVerified}.
+For signup use mode=signup. The Firebase ID token must belong to the same Firebase project as the server.
+
+CUSTOMER PROFILE AND PUSH
+=========================
+GET /api/users/profile
+PUT /api/users/profile
+  {"name":"Sravan Kumar","phone":"8106970384"}
+POST /api/users/fcm-token
+  {"fcmToken":"<FCM or Expo token>"}
+GET /api/notifications
+PUT /api/notifications/{id}/read
+
+BOOKINGS
+========
+POST /api/bookings
+Body supports serviceName, amount, pickupAddress, pickupLat, pickupLng,
+dropAddress, dropLat, dropLng, receiverName, receiverPhone, paymentMethod,
+scheduledDate, scheduledSlot, houseSize, heavyItems, loadAssist, distanceKm.
+Response includes bookingId, status, amount, currency.
+
+GET /api/bookings?status=active
+GET /api/bookings/{bookingId}
+GET /api/bookings/{bookingId}/tracking
+
+Cancel (current and compatibility routes):
+PUT /api/bookings/{bookingId}/cancel
+POST /api/orders/{bookingId}/cancel
+Optional body:
+{"bookingId":"BK10098","selectedReason":"Ordered by mistake","customReason":"","cancelledBy":"CUSTOMER"}
+
+DELIVERY OTP
+===========
+Customer gets or creates the 6-digit OTP:
+GET /api/orders/{bookingId}/delivery-otp
+Response data: {orderId, otp, expiresAt, status:"ACTIVE"}
+The customer must share this OTP only after receiving the parcel.
+
+PRICING
+=======
+POST /api/pricing/estimate-all
+{"distanceKm":12.5,"pickupLat":17.4483,"pickupLng":78.3915,"dropLat":17.4948,"dropLng":78.3996}
+Returns success and estimates. Use the vehicle keys returned by the server.
+
+DRIVER APP
+==========
+POST /api/drivers/me/device-token
+  {"fcmToken":"<FCM token>"}
+PUT /api/drivers/me/location
+  {"latitude":17.4400802,"longitude":78.3489168,"heading":90.5}
+GET /api/drivers/me/orders/active
+Returns order plus customerName, customerPhone, pickup, drop, pickupAddress, dropAddress.
+
+Compatibility aliases required by the original master spec:
+PUT /api/driver/location
+  {"driverId":"DRV_12","lat":17.4490,"lng":78.3920}
+PUT /api/driver/orders/{bookingId}/accept
+POST /api/driver/orders/{bookingId}/verify-otp
+  {"otp":"482731"}
+Successful OTP verification changes order status to delivered.
+
+ADMIN
+=====
+GET /api/admin/customers
+GET /api/admin/drivers
+GET /api/admin/orders
+GET /api/admin/metrics
+These endpoints require an authenticated admin token according to the server security configuration.
+
+PUSH EVENTS IMPLEMENTED
+=======================
+Order assignment/status changes trigger push notifications when the customer/driver token is saved.
+Important event statuses include accepted, arrived/pickup, delivered, and cancelled.
+If a push token is absent, the API operation still succeeds and the event is logged.
+
+IMPORTANT MODEL NOTE
+===================
+The running backend uses existing tables appusers and orders, not the proposed users and bookings names
+from the master draft. Do not create duplicate users/bookings tables from the draft. Run only the additive
+migration database/master_spec_additions_mysql.sql after confirming each column does not already exist.
+
+ERROR HANDLING
+==============
+401 = missing/expired JWT or no driver profile
+400 = invalid request or OTP
+404 = booking/profile not found
+409 = signup phone already exists
+410 = deprecated server-side send-otp route
+5xx = server/deployment error; frontend should show retry and report request timestamp.

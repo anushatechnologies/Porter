@@ -7,6 +7,7 @@ import com.anushaporter.backend.repository.AppUserRepository;
 import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.repository.OrderRepository;
 import com.anushaporter.backend.repository.CustomerRepository;
+import com.anushaporter.backend.service.PushNotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +41,9 @@ public class DriverAPIController {
 
     @Autowired
     private CustomerRepository customerRepository;
+
+    @Autowired
+    private PushNotificationService pushNotificationService;
 
     private Driver getAuthenticatedDriver(HttpServletRequest request) {
         String email = (String) request.getAttribute("userId");
@@ -132,6 +136,40 @@ public class DriverAPIController {
     private String coordinateOrAddress(Double latitude, Double longitude, String address) {
         if (latitude != null && longitude != null) return latitude + ", " + longitude;
         return address == null ? "" : address;
+    }
+
+    @PutMapping("/driver/location")
+    public ResponseEntity<?> updateLocationAlias(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+        if (payload.containsKey("lat")) payload.put("latitude", payload.get("lat"));
+        if (payload.containsKey("lng")) payload.put("longitude", payload.get("lng"));
+        return updateLocation(request, payload);
+    }
+
+    @PutMapping("/driver/orders/{bookingId}/accept")
+    public ResponseEntity<?> acceptOrderByBookingId(HttpServletRequest request, @PathVariable String bookingId) {
+        if (request.getAttribute("userId") == null) return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized"));
+        Driver driver = getAuthenticatedDriver(request);
+        Order order = orderRepository.findByBookingId(bookingId).orElse(null);
+        if (driver == null) return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver profile not found"));
+        if (order == null) return ResponseEntity.notFound().build();
+        order.setDriverId(driver.getId().toString()); order.setDriverEmail(driver.getEmail());
+        order.setDriverName(driver.getName()); order.setDriverPhone(driver.getPhone());
+        order.setDriverVehicleNumber(driver.getVehicleNumber()); order.setStatus("accepted");
+        Order saved = orderRepository.save(order); pushNotificationService.notifyOrderStatus(saved, saved.getStatus());
+        return ResponseEntity.ok(Map.of("success", true, "bookingId", bookingId, "status", saved.getStatus(), "order", saved));
+    }
+
+    @PostMapping("/driver/orders/{bookingId}/verify-otp")
+    public ResponseEntity<?> verifyDeliveryOtp(HttpServletRequest request, @PathVariable String bookingId,
+                                               @RequestBody Map<String, String> payload) {
+        Driver driver = getAuthenticatedDriver(request); Order order = orderRepository.findByBookingId(bookingId).orElse(null);
+        String otp = payload.get("otp");
+        if (driver == null) return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver profile not found"));
+        if (order == null || otp == null || !otp.equals(order.getDeliveryOtp()) || order.getOtpExpiresAt() == null
+                || order.getOtpExpiresAt().isBefore(java.time.LocalDateTime.now()))
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid or expired delivery OTP"));
+        order.setStatus("delivered"); orderRepository.save(order); pushNotificationService.notifyOrderStatus(order, order.getStatus());
+        return ResponseEntity.ok(Map.of("success", true, "bookingId", bookingId, "status", "delivered"));
     }
 
     // A. Upload Documents

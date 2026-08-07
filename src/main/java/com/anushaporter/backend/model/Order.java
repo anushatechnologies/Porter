@@ -53,6 +53,12 @@ public class Order {
     private String heavyItems;
     private String loadAssist;
 
+    @Column(length = 10)
+    private String deliveryOtp;
+    private LocalDateTime otpExpiresAt;
+    @Column(length = 500)
+    private String cancellationReason;
+
     private LocalDateTime createdAt;
 
     @PrePersist
@@ -118,6 +124,12 @@ public class Order {
     public void setHeavyItems(String heavyItems) { this.heavyItems = heavyItems; }
     public String getLoadAssist() { return loadAssist; }
     public void setLoadAssist(String loadAssist) { this.loadAssist = loadAssist; }
+    public String getDeliveryOtp() { return deliveryOtp; }
+    public void setDeliveryOtp(String deliveryOtp) { this.deliveryOtp = deliveryOtp; }
+    public LocalDateTime getOtpExpiresAt() { return otpExpiresAt; }
+    public void setOtpExpiresAt(LocalDateTime otpExpiresAt) { this.otpExpiresAt = otpExpiresAt; }
+    public String getCancellationReason() { return cancellationReason; }
+    public void setCancellationReason(String cancellationReason) { this.cancellationReason = cancellationReason; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

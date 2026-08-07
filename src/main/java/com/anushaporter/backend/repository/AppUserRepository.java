@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
@@ -14,4 +15,5 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findFirstByOtpOrderByIdDesc(String otp);
     Optional<AppUser> findFirstByFcmToken(String fcmToken);
     boolean existsByPhone(String phone);
+    List<AppUser> findByRoleIgnoreCase(String role);
 }

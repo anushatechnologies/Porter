@@ -334,6 +334,34 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/api/users/profile")
+    public ResponseEntity<Map<String, Object>> getProfile(@RequestHeader("Authorization") String authHeader) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                response.put("success", false); response.put("message", "Unauthorized");
+                return ResponseEntity.status(401).body(response);
+            }
+            String email = jwtUtil.getUsernameFromToken(authHeader.substring(7));
+            Optional<AppUser> userOpt = email == null || email.trim().isEmpty()
+                    ? Optional.empty() : userRepository.findFirstByEmailOrderByIdDesc(email.trim());
+            if (userOpt.isEmpty()) {
+                response.put("success", false); response.put("message", "User not found");
+                return ResponseEntity.status(404).body(response);
+            }
+            AppUser user = userOpt.get();
+            Map<String, Object> profile = new HashMap<>();
+            profile.put("id", user.getId()); profile.put("name", user.getName());
+            profile.put("phone", user.getPhone()); profile.put("email", user.getEmail());
+            profile.put("role", user.getRole()); profile.put("status", user.getStatus());
+            response.put("success", true); response.put("data", profile); response.put("user", profile);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false); response.put("message", "Invalid token or server error");
+            return ResponseEntity.status(401).body(response);
+        }
+    }
+
     // Update Profile endpoint
     @PutMapping("/api/users/profile")
     public ResponseEntity<Map<String, Object>> updateProfile(
