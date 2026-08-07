@@ -1,0 +1,231 @@
+ANUSHA PORTER - PUSH NOTIFICATION APIs
+=======================================
+
+Base URL
+--------
+https://api.anushaporter.com
+
+Authentication
+--------------
+All notification APIs require the JWT returned by:
+
+POST /api/auth/verify-otp
+
+Header:
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+
+1. COMPLETE MOBILE LOGIN FLOW
+-----------------------------
+
+1. Send OTP using Firebase Phone Authentication in the mobile app.
+2. Confirm the OTP with Firebase.
+3. Get the Firebase ID token.
+4. Send the Firebase ID token to the backend.
+
+POST /api/auth/verify-otp
+
+Request:
+{
+  "firebaseIdToken": "<firebase-id-token>",
+  "mode": "login"
+}
+
+Success response:
+{
+  "success": true,
+  "accessToken": "<jwt-access-token>",
+  "refreshToken": "<jwt-refresh-token>",
+  "user": {
+    "id": "12",
+    "name": "Rajesh Kumar",
+    "phone": "8106970384",
+    "email": "driver@example.com",
+    "isPhoneVerified": true
+  }
+}
+
+Save accessToken securely in the mobile app and use it for every API below.
+
+
+2. REGISTER OR UPDATE DEVICE PUSH TOKEN
+---------------------------------------
+
+POST /api/users/fcm-token
+
+Headers:
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+Request for Firebase Cloud Messaging:
+{
+  "fcmToken": "<firebase-device-token>"
+}
+
+Request for Expo Push Notifications:
+{
+  "fcmToken": "ExpoPushToken[xxxxxxxxxxxxxxxxxxxx]"
+}
+
+Success response:
+{
+  "success": true,
+  "message": "FCM token registered"
+}
+
+Call this endpoint:
+- after login;
+- after every app reinstall;
+- whenever the mobile push token changes.
+
+
+3. FETCH NOTIFICATION HISTORY
+-----------------------------
+
+GET /api/notifications
+
+Headers:
+Authorization: Bearer <accessToken>
+
+Success response:
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "bookingId": "BK10023",
+      "title": "Driver Accepted!",
+      "message": "Driver Ramesh (TS09EA1234) has accepted your order.",
+      "notificationType": "DRIVER_ACCEPTED",
+      "isRead": false,
+      "createdAt": "2026-08-07T12:00:00"
+    }
+  ]
+}
+
+The list belongs only to the authenticated user and is ordered newest first.
+
+
+4. MARK ONE NOTIFICATION AS READ
+-------------------------------
+
+PUT /api/notifications/{notificationId}/read
+
+Headers:
+Authorization: Bearer <accessToken>
+
+Example:
+PUT /api/notifications/1/read
+
+Success response:
+{
+  "success": true,
+  "message": "Notification marked as read"
+}
+
+The backend also accepts POST /api/notifications/{notificationId}/read for
+backward compatibility.
+
+
+5. ORDER STATUS PUSH TRIGGERS
+----------------------------
+
+When an order status changes, the backend saves a notification and sends a
+push notification if the recipient has a registered device token.
+
+Status                         Type                  Recipient
+--------------------------------------------------------------------------
+assigned / accepted           DRIVER_ACCEPTED       Customer
+driver_assigned               DRIVER_ACCEPTED       Customer
+arriving_at_pickup            ARRIVING_AT_PICKUP     Customer
+pickup_started                ARRIVING_AT_PICKUP     Customer
+picked_up / transit            IN_TRANSIT             Customer
+in_transit                    IN_TRANSIT             Customer
+delivered / completed         DELIVERED              Customer
+cancelled / canceled          CANCELLED              Customer + Driver
+
+The notification is still saved in the database if push delivery fails.
+
+
+6. DRIVER APIs AFTER LOGIN
+--------------------------
+
+Use the same JWT accessToken returned by /api/auth/verify-otp.
+
+GET /api/drivers/me/orders
+Authorization: Bearer <accessToken>
+
+GET /api/drivers/me/earnings?filter=today
+Authorization: Bearer <accessToken>
+
+PUT /api/drivers/me/status
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+{
+  "status": "online"
+}
+
+
+7. DATABASE MIGRATION
+---------------------
+
+The backend entity table is appusers, not users.
+
+Run once against production MySQL:
+
+database/push_notifications_mysql.sql
+
+It adds:
+- appusers.fcm_token
+- notifications.user_id
+- notifications.booking_id
+- notifications.notification_type
+- notifications.is_read
+- notifications.created_at
+
+Take a database backup before running the migration.
+
+
+8. MOBILE IMPLEMENTATION PSEUDOCODE
+------------------------------------
+
+const confirmation = await firebaseSignInWithPhone(phoneNumber);
+await confirmation.confirm(otpCode);
+
+const firebaseIdToken = await firebaseUser.getIdToken(true);
+
+const login = await POST("/api/auth/verify-otp", {
+  firebaseIdToken: firebaseIdToken,
+  mode: "login"
+});
+
+const accessToken = login.accessToken;
+
+await POST("/api/users/fcm-token", {
+  fcmToken: devicePushToken
+}, {
+  Authorization: "Bearer " + accessToken
+});
+
+const notifications = await GET("/api/notifications", {
+  Authorization: "Bearer " + accessToken
+});
+
+
+9. COMMON ERRORS
+----------------
+
+401 Unauthorized
+The Authorization header is missing, expired, or invalid.
+
+404 No account found with this number.
+The Firebase phone number has no matching appusers record.
+
+400 fcmToken is required
+The request body did not contain a non-empty fcmToken.
+
+Firebase push delivery failed
+The notification is saved, but the device token may be expired or invalid.
+Register the latest device token again after the user logs in.
