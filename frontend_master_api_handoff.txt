@@ -130,6 +130,20 @@ POST /api/auth/logout
 
 All listed admin routes are now present. Admin authorization is still required by the backend security configuration.
 
+ADMIN PANEL TROUBLESHOOTING
+===========================
+For every /api/admin, /api/orders, /api/drivers, /api/pricing, /api/tickets,
+/api/customers, /api/payouts, /api/settings, /api/users, and notification request,
+send the admin login JWT:
+Authorization: Bearer <token returned by /api/auth/login>
+
+Do not use /api/vehicles as a fallback for pricing-management requests. The correct
+pricing registry is GET /api/admin/pricing/vehicles. A 401 means the JWT is missing,
+expired, or invalid. A 404 means the deployed container is older than the latest
+GitHub branch and must be rebuilt/restarted. After merging this branch, redeploy the
+latest image and confirm with:
+curl -i -H "Authorization: Bearer <ADMIN_JWT>" https://api.anushaporter.com/api/admin/pricing/vehicles
+
 PUSH EVENTS IMPLEMENTED
 =======================
 Order assignment/status changes trigger push notifications when the customer/driver token is saved.
