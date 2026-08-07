@@ -48,8 +48,20 @@ public class FirebaseConfig {
     private InputStream getServiceAccountStream() throws Exception {
         String encodedCredentials = System.getenv("FIREBASE_SERVICE_ACCOUNT_BASE64");
         if (encodedCredentials != null && !encodedCredentials.trim().isEmpty()) {
-            byte[] credentials = Base64.getDecoder().decode(encodedCredentials.replaceAll("\\s+", ""));
-            return new ByteArrayInputStream(credentials);
+            String value = encodedCredentials.trim();
+            // Accept raw JSON as a deployment-safe fallback. Some Docker/EC2
+            // environments store the service account under the BASE64 variable
+            // without actually encoding it.
+            if (value.startsWith("{")) {
+                return new ByteArrayInputStream(value.getBytes(StandardCharsets.UTF_8));
+            }
+            try {
+                byte[] credentials = Base64.getDecoder().decode(value.replaceAll("\\s+", ""));
+                return new ByteArrayInputStream(credentials);
+            } catch (IllegalArgumentException ex) {
+                logger.warn("FIREBASE_SERVICE_ACCOUNT_BASE64 is not valid Base64; trying it as JSON");
+                return new ByteArrayInputStream(value.getBytes(StandardCharsets.UTF_8));
+            }
         }
 
         String jsonCredentials = System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON");
