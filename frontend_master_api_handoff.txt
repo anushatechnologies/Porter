@@ -64,6 +64,37 @@ Returns success and estimates. Use the vehicle keys returned by the server.
 
 DRIVER APP
 ==========
+Driver registration is a two-step authenticated flow:
+
+1. Verify phone OTP with /api/auth/verify-otp using mode=signup and role=driver.
+2. Use the returned accessToken to register the driver:
+POST /api/drivers/register
+{
+  "name":"Ramesh Kumar",
+  "dob":"1992-05-10",
+  "gender":"Male",
+  "vehicleType":"Tata Ace",
+  "vehicleNumber":"TS09EA1234",
+  "aadhaarNumber":"123412341234",
+  "rcNumber":"RC123456",
+  "licenseNumber":"DL123456789",
+  "bankName":"State Bank of India",
+  "accountHolderName":"Ramesh Kumar",
+  "accountNumber":"1234567890",
+  "ifscCode":"SBIN0001234",
+  "documents": {
+    "profilePhotoUrl":"/uploads/profile.jpg",
+    "aadhaarUrl":"/uploads/aadhaar.jpg",
+    "licenseUrl":"/uploads/license.jpg",
+    "rcUrl":"/uploads/rc.jpg"
+  }
+}
+Success response: {"success":true,"driverId":"12","kycStatus":"pending"}.
+The driver cannot accept orders until an admin verifies KYC.
+
+Optional document upload before registration:
+POST /api/upload with multipart field `file`; save the returned `url` in `documents`.
+
 POST /api/drivers/me/device-token
   {"fcmToken":"<FCM token>"}
 PUT /api/drivers/me/location
