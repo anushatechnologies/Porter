@@ -219,19 +219,37 @@ public class DriverAPIController {
         String phone = appUser.getPhone();
         Driver driver = driverRepository.findByPhone(phone).orElse(new Driver());
 
+        String aadhaar = text(payload, "aadhaarNumber");
+        String pincode = text(payload, "pincode");
+        String ifsc = text(payload, "ifscCode");
+        if (aadhaar != null && !aadhaar.matches("\\d{12}")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "aadhaarNumber must contain exactly 12 digits"));
+        }
+        if (pincode != null && !pincode.matches("\\d{6}")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "pincode must contain exactly 6 digits"));
+        }
+        if (ifsc != null && !ifsc.matches("[A-Za-z0-9]{11}")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "ifscCode must contain exactly 11 letters or digits"));
+        }
+
         driver.setPhone(phone);
-        driver.setEmail(appUser.getEmail());
-        driver.setName((String) payload.get("name"));
-        driver.setDob((String) payload.get("dob"));
-        driver.setGender((String) payload.get("gender"));
-        driver.setVehicleType((String) payload.get("vehicleType"));
-        driver.setVehicleNumber((String) payload.get("vehicleNumber"));
-        driver.setAadhaarNumber((String) payload.get("aadhaarNumber"));
-        driver.setRcNumber((String) payload.get("rcNumber"));
-        driver.setLicenseNumber((String) payload.get("licenseNumber"));
-        driver.setBankName((String) payload.get("bankName"));
-        driver.setAccountNumber((String) payload.get("accountNumber"));
-        driver.setIfscCode((String) payload.get("ifscCode"));
+        driver.setEmail(text(payload, "email") != null ? text(payload, "email") : appUser.getEmail());
+        driver.setName(text(payload, "name"));
+        driver.setDob(text(payload, "dob"));
+        driver.setGender(text(payload, "gender"));
+        driver.setVehicleType(text(payload, "vehicleType"));
+        driver.setVehicleNumber(text(payload, "vehicleNumber"));
+        driver.setAadhaarNumber(aadhaar);
+        driver.setRcNumber(text(payload, "rcNumber"));
+        driver.setLicenseNumber(text(payload, "licenseNumber"));
+        driver.setAddressLine1(text(payload, "addressLine1"));
+        driver.setCity(text(payload, "city"));
+        driver.setState(text(payload, "state"));
+        driver.setPincode(pincode);
+        driver.setBankName(text(payload, "bankName"));
+        driver.setAccountHolderName(text(payload, "accountHolderName"));
+        driver.setAccountNumber(text(payload, "accountNumber"));
+        driver.setIfscCode(ifsc);
         driver.setKyc("pending");
         driver.setStatus("offline"); // initial status
 
@@ -242,6 +260,7 @@ public class DriverAPIController {
             driver.setAadhaarUri(docs.get("aadhaarUrl"));
             driver.setLicenseUri(docs.get("licenseUrl"));
             driver.setRcUri(docs.get("rcUrl"));
+            driver.setBankPassbookUri(docs.get("bankPassbookUrl"));
         }
 
         Driver saved = driverRepository.save(driver);
@@ -251,6 +270,13 @@ public class DriverAPIController {
             "driverId", saved.getId().toString(),
             "kycStatus", saved.getKyc()
         ));
+    }
+
+    private String text(Map<String, Object> payload, String key) {
+        Object value = payload.get(key);
+        if (value == null) return null;
+        String result = String.valueOf(value).trim();
+        return result.isEmpty() ? null : result;
     }
 
     // Toggle Status

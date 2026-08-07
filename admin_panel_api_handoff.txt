@@ -1,0 +1,171 @@
+ANUSHA PORTER ADMIN PANEL API HANDOFF
+=====================================
+Base URL: https://api.anushaporter.com
+
+AUTHENTICATION
+==============
+1. Login:
+POST /api/auth/login
+Body: {"email":"admin@example.com","password":"<password>"}
+Response contains:
+{"success":true,"token":"<ADMIN_JWT>","user":{"id":1,"role":"Super Admin"}}
+
+2. Add this header to every admin request:
+Authorization: Bearer <ADMIN_JWT>
+Content-Type: application/json
+
+3. All IDs below are database IDs unless the endpoint explicitly says bookingId.
+
+PRICING ENGINE
+==============
+GET /api/admin/pricing/vehicles
+Returns all pricing vehicles for the management table.
+
+GET /api/pricing/vehicle/{vehicleId}
+Example: GET /api/pricing/vehicle/tata-ace
+
+POST /api/pricing
+Body:
+{
+  "vehicleId":"tata-ace",
+  "name":"Tata Ace",
+  "icon":"truck",
+  "capacityKg":750,
+  "volume":4.5,
+  "minDistance":1,
+  "maxDistance":100,
+  "baseFare":450,
+  "pricePerKm":18,
+  "minFare":450,
+  "maxFare":5000,
+  "status":true,
+  "priority":1,
+  "commissionPercentage":10
+}
+
+PUT /api/pricing/vehicle/{vehicleId}
+Uses the same body as POST /api/pricing.
+
+ORDER AND DRIVER ACTIONS
+========================
+POST /api/orders/{id}/assign
+Body:
+{
+  "driverId":"12",
+  "driverName":"Ramesh Kumar",
+  "driverPhone":"9876543210",
+  "driverVehicleNumber":"TS09EA1234"
+}
+Response: {"success":true,"order":{...}}
+
+POST /api/orders/{id}/status
+PUT /api/orders/{id}/status
+Body: {"status":"accepted"}
+Supported examples: assigned, accepted, picked_up, transit, delivered, cancelled.
+
+POST /api/drivers/{id}/verify
+No body required.
+Response: {"success":true,"driver":{..."kyc":"verified"}}
+
+POST /api/drivers/{id}/reject
+No body required.
+Response: {"success":true,"driver":{..."kyc":"rejected"}}
+
+FINANCE AND CUSTOMERS
+=====================
+POST /api/customers/{id}/topup
+Body: {"amount":500}
+Response: {"success":true,"wallet":500}
+
+POST /api/payouts/{id}/release
+No body required.
+Response: {"success":true,"status":"settled"}
+
+SUPPORT TICKETS
+===============
+POST /api/tickets/{id}/message
+Body: {"message":"Customer contacted support","sender":"admin","channel":"app"}
+Response: {"success":true,"message":{...ticket}}
+
+POST /api/tickets/{id}/status
+Body: {"status":"open"}
+Response: {"success":true}
+
+POST /api/tickets/{id}/resolve
+No body required.
+Response: {"success":true}
+
+NOTIFICATIONS
+=============
+POST /api/notifications/broadcast
+Body:
+{
+  "title":"Service Maintenance",
+  "message":"The service will be unavailable for 10 minutes.",
+  "audience":"all",
+  "target":""
+}
+Audience can be all, customer, or driver.
+Response: {"success":true,"recipientCount":25}
+
+POST /api/notifications/{id}/read
+No body required.
+Response: {"success":true,"message":"Notification marked as read"}
+
+POST /api/notifications/read-all
+No body required.
+Response: {"success":true,"message":"All notifications marked as read"}
+
+SETTINGS AND STAFF USERS
+========================
+GET /api/settings
+Returns key/value settings.
+
+POST /api/settings
+Body example: {"commissionPercentage":"10","supportPhone":"9876543210"}
+Response: {"success":true}
+
+POST /api/users
+Creates an admin/staff user record.
+Body:
+{
+  "name":"Support Agent",
+  "email":"support@example.com",
+  "phone":"9876543210",
+  "role":"Support Agent",
+  "status":"Active"
+}
+Response: {"success":true}
+
+AUTH EDGE CASES
+===============
+POST /api/auth/forgot-password
+Body: {"email":"admin@example.com"}
+
+POST /api/auth/reset-password
+Body: {"email":"admin@example.com","otp":"1234","newPassword":"<new-password>"}
+
+POST /api/auth/logout
+No body required.
+Response: {"success":true}
+
+COMMON ERRORS
+=============
+401: missing, invalid, or expired Authorization token.
+400: invalid body or validation failure.
+404: requested ID does not exist.
+409: duplicate account data.
+500: backend/database/deployment error.
+
+POSTMAN TESTING
+===============
+Create a Postman environment:
+baseUrl = https://api.anushaporter.com
+adminToken = token returned by /api/auth/login
+
+Use URL: {{baseUrl}}/api/admin/pricing/vehicles
+Header: Authorization = Bearer {{adminToken}}
+
+If pricing returns 401, the token is missing or expired.
+If pricing returns 404, the production container is running an old image and must be rebuilt/deployed.
+The admin panel must use /api/admin/pricing/vehicles, not /api/vehicles, for pricing management.
