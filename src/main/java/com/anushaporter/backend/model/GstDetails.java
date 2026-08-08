@@ -1,6 +1,7 @@
 package com.anushaporter.backend.model;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonAlias;
 
 @Entity
 @Table(name = "gst_details")
@@ -10,7 +11,9 @@ public class GstDetails {
     private String id;
 
     private String gstin;
+    @JsonAlias("companyName")
     private String businessName;
+    @JsonAlias("registeredAddress")
     private String billingAddress;
 
     public String getId() {

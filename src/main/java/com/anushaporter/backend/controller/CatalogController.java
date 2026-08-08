@@ -23,9 +23,11 @@ public class CatalogController {
     @GetMapping("/packers")
     public ResponseEntity<List<Map<String, Object>>> getPackers() {
         return ResponseEntity.ok(List.of(
-            Map.of("id", "within-city", "name", "Within City Only", "subtitle", "Local home and office shifting inside the city", "icon", "home-outline", "value", "Within City Shifting"),
-            Map.of("id", "intercity", "name", "Between Cities", "subtitle", "Door-to-door shifting service between cities", "icon", "navigate-outline", "value", "Intercity Shifting"),
-            Map.of("id", "labor", "name", "Mini Truck + 2 Labours", "subtitle", "Within-city shifting with a mini truck and two helpers", "icon", "people-outline", "value", "Mini Truck + Labor")
+            Map.of("id", "house-shifting", "name", "Full House Shifting", "subtitle", "Complete packing, loading, transport & unpacking", "value", "House Shifting", "basePrice", 2500, "icon", "home-outline"),
+            Map.of("id", "1bhk", "name", "1 BHK Relocation", "subtitle", "Ideal for small apartments & single rooms", "value", "1 BHK Shifting", "basePrice", 1800, "icon", "cube-outline"),
+            Map.of("id", "2bhk", "name", "2 BHK Relocation", "subtitle", "Complete apartment relocation service", "value", "2 BHK Shifting", "basePrice", 2800, "icon", "home-outline"),
+            Map.of("id", "office-relocation", "name", "Office Relocation", "subtitle", "Packing and shifting for offices", "value", "Office Relocation", "basePrice", 3500, "icon", "business-outline"),
+            Map.of("id", "mini-packers", "name", "Mini Packers", "subtitle", "Small-room packing and transport", "value", "Mini Packers", "basePrice", 1200, "icon", "cube-outline")
         ));
     }
 }

@@ -413,7 +413,7 @@ public class BookingController {
             Order order = orderOpt.get();
             if (order.getDeliveryOtp() == null || order.getOtpExpiresAt() == null
                     || order.getOtpExpiresAt().isBefore(LocalDateTime.now())) {
-                order.setDeliveryOtp(String.format("%06d", new Random().nextInt(1_000_000)));
+                order.setDeliveryOtp(String.format("%04d", new Random().nextInt(10_000)));
                 order.setOtpExpiresAt(LocalDateTime.now().plusMinutes(30)); orderRepository.save(order);
             }
             Map<String, Object> data = new HashMap<>(); data.put("orderId", bookingId);
@@ -519,6 +519,23 @@ public class BookingController {
     }
 
     /* ── Helpers ────────────────────────────────── */
+
+    @GetMapping("/api/bookings/{bookingId}/invoice")
+    public ResponseEntity<Map<String, Object>> getInvoice(@RequestHeader("Authorization") String authHeader,
+                                                          @PathVariable String bookingId) {
+        Map<String, Object> response = new HashMap<>();
+        if (extractEmail(authHeader) == null) {
+            response.put("success", false); response.put("message", "Unauthorized");
+            return ResponseEntity.status(401).body(response);
+        }
+        if (orderRepository.findByBookingId(bookingId).isEmpty()) {
+            response.put("success", false); response.put("message", "Booking not found");
+            return ResponseEntity.status(404).body(response);
+        }
+        response.put("success", true); response.put("bookingId", bookingId);
+        response.put("downloadUrl", "https://api.anushaporter.com/invoices/" + bookingId + ".pdf");
+        return ResponseEntity.ok(response);
+    }
 
     private String extractEmail(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
