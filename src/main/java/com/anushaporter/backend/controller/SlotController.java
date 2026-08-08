@@ -16,10 +16,9 @@ public class SlotController {
             @RequestParam("date") String date) {
         
         List<Map<String, Object>> slots = List.of(
-            Map.of("id", "slot_0900", "label", "9:00 AM", "available", true),
-            Map.of("id", "slot_1230", "label", "12:30 PM", "available", true),
-            Map.of("id", "slot_1600", "label", "4:00 PM", "available", true),
-            Map.of("id", "slot_1800", "label", "6:00 PM", "available", true)
+            Map.of("id", "slot-0900", "label", "09:00 AM - 11:00 AM", "available", true),
+            Map.of("id", "slot-1400", "label", "02:00 PM - 04:00 PM", "available", true),
+            Map.of("id", "slot-1800", "label", "06:00 PM - 08:00 PM", "available", true)
         );
 
         return ResponseEntity.ok(Map.of(

@@ -17,7 +17,7 @@ public class ReferralController {
     private ReferralRepository repository;
 
     @GetMapping
-    public ResponseEntity<Referral> getReferral() {
+    public ResponseEntity<Map<String, Object>> getReferral() {
         List<Referral> all = repository.findAll();
         if (all.isEmpty()) {
             Referral ref = new Referral();
@@ -25,9 +25,15 @@ public class ReferralController {
             ref.setReferralCode("PORTER50");
             ref.setTotalInvites(0);
             ref.setTotalRewards(0.0);
-            return ResponseEntity.ok(repository.save(ref));
+            repository.save(ref);
         }
-        return ResponseEntity.ok(all.get(0));
+        Referral ref = repository.findAll().get(0);
+        return ResponseEntity.ok(Map.of(
+                "referralCode", ref.getReferralCode(),
+                "totalEarned", ref.getTotalRewards(),
+                "successfulReferrals", ref.getTotalInvites(),
+                "totalRewards", ref.getTotalRewards(),
+                "totalInvites", ref.getTotalInvites()));
     }
 
     @PostMapping("/invite")

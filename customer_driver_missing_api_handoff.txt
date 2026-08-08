@@ -1,0 +1,110 @@
+ANUSHA PORTER - CUSTOMER AND DRIVER API HANDOFF
+===============================================
+Base URL: https://api.anushaporter.com
+Protected APIs require: Authorization: Bearer <accessToken>
+
+PACKERS CATALOG
+==============
+GET /api/catalog/packers
+Returns service cards with id, name, subtitle, value, basePrice and icon.
+
+PACKER PRICE ESTIMATE
+=====================
+POST /api/pricing/packers
+Body:
+{
+  "serviceId":"house-shifting",
+  "distanceKm":12,
+  "pickupFloor":2,
+  "dropFloor":3,
+  "hasElevatorPickup":true,
+  "hasElevatorDrop":false,
+  "items":["Beds","Sofa","Refrigerator","TV"]
+}
+Response:
+{"baseFare":2000,"distanceFare":300,"laborCharge":800,"packingCharge":500,"floorCharge":200,"gst":684,"totalFare":4484}
+The fare is calculated from distance, floors, elevators and item count. Display the server total.
+
+BOOKING DRAFTS
+==============
+POST /api/drafts
+Body: {"serviceCategory":"packers","serviceId":"house-shifting"}
+Response: {"draftId":"draft_...","expiresAt":"...","status":"draft"}
+
+PUT /api/drafts/{draftId}
+Body can contain pickup/drop coordinates, selected vehicle, inventory and service choices.
+Response: {"draftId":"draft_...","expiresAt":"...","status":"draft"}
+Draft payload is persisted for 24 hours.
+
+TIME SLOTS
+==========
+GET /api/slots?serviceId=house-shifting&date=2026-08-09
+Response:
+{
+  "date":"2026-08-09",
+  "slots":[
+    {"id":"slot-0900","label":"09:00 AM - 11:00 AM","available":true},
+    {"id":"slot-1400","label":"02:00 PM - 04:00 PM","available":true},
+    {"id":"slot-1800","label":"06:00 PM - 08:00 PM","available":true}
+  ]
+}
+
+INVOICE
+=======
+GET /api/bookings/{bookingId}/invoice
+Response:
+{
+  "success":true,
+  "bookingId":"BK-10293",
+  "downloadUrl":"https://api.anushaporter.com/invoices/BK-10293.pdf"
+}
+The endpoint validates the booking and returns the invoice download contract. The PDF storage/serving
+route must be enabled in production before the returned URL is opened.
+
+DELIVERY OTP
+============
+GET /api/orders/{bookingId}/delivery-otp
+Response data contains a 4-digit OTP and expiry:
+{"success":true,"data":{"orderId":"BK-10293","otp":"4829","expiresAt":"...","status":"ACTIVE"}}
+The driver verifies it using POST /api/driver/orders/{bookingId}/verify-otp with {"otp":"4829"}.
+
+GST DETAILS
+===========
+GET /api/user/gst
+POST /api/user/gst
+Body:
+{"gstin":"36AAAAA0000A1Z5","companyName":"Anusha Logistics Pvt Ltd","registeredAddress":"Madhapur, Hyderabad, Telangana"}
+The backend accepts companyName/registeredAddress aliases and stores them as the existing businessName/billingAddress fields.
+
+ENTERPRISE LEADS
+================
+POST /api/enterprise/leads
+Body:
+{"source":"customer_app","companyName":"TechCorp India","contactPerson":"Manager","phone":"+919876543210","email":"manager@techcorp.in"}
+Response:
+{"success":true,"leadId":1,"lead":{...}}
+
+SUPPORT
+=======
+GET /api/support/topics
+POST /api/support/tickets
+Body: {"topicId":"billing_issue","bookingId":"BK-10293","message":"Double charged for toll fee."}
+GET /api/support/tickets
+
+REFERRAL
+========
+GET /api/user/referral
+Response:
+{"referralCode":"PORTER50","totalEarned":0,"successfulReferrals":0,"totalRewards":0,"totalInvites":0}
+
+ERRORS
+======
+400 invalid payload or validation failure
+401 missing/expired token
+404 booking/draft/GST record not found
+500 database or deployment failure
+
+IMPLEMENTATION NOTE
+===================
+Existing database tables are retained. New enterprise leads use enterprise_leads and draft expiry uses
+the new expires_at column on booking_drafts; Hibernate update mode adds the column automatically.

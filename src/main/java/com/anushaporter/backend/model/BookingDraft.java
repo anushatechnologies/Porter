@@ -10,6 +10,7 @@ public class BookingDraft {
     private String id; // draftId
 
     private String status;
+    private java.time.LocalDateTime expiresAt;
 
     @Column(columnDefinition = "TEXT")
     private String payload;
@@ -38,4 +39,6 @@ public class BookingDraft {
     public void setPayload(String payload) {
         this.payload = payload;
     }
+    public java.time.LocalDateTime getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(java.time.LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
 }
