@@ -115,7 +115,11 @@ public class PricingService {
         }
 
         // 3. Helper Charges
-        double helperRate = Double.parseDouble(settings.getOrDefault("HELPER_CHARGE_" + vehicleId.toUpperCase(), "150.0"));
+        double helperRate = 150.0; // default ₹150 per helper
+        try {
+            helperRate = Double.parseDouble(settings.getOrDefault(
+                "HELPER_CHARGE_" + vehicleId.toUpperCase().replace("-","_"), "150.0"));
+        } catch (NumberFormatException ignored) {}
         double helperCharge = helperCount * helperRate;
 
         // 4. Waiting Charges
@@ -160,14 +164,15 @@ public class PricingService {
             platformFee = subtotal * (pct / 100.0);
         }
 
-        double gst = (subtotal + platformFee) * 0.05; // 5% GST
-        double totalFare = subtotal + platformFee + gst - discount;
+        double gst = subtotal * 0.18; // 18% GST (standard logistics rate)
+        double totalFare = subtotal + gst - discount;
 
         PricingResponse response = new PricingResponse();
         response.setBaseFare(Math.round(baseFare * 100.0) / 100.0);
         response.setDistanceFare(Math.round(distanceFare * 100.0) / 100.0);
         response.setWeightCharge(Math.round(weightCharge * 100.0) / 100.0);
         response.setHelperCharge(Math.round(helperCharge * 100.0) / 100.0);
+        response.setHelperChargePerHead(Math.round(helperRate * 100.0) / 100.0);
         response.setFuelCharge(Math.round(fuelSurcharge * 100.0) / 100.0);
         response.setWaitingCharge(Math.round(waitingCharge * 100.0) / 100.0);
         response.setTollCharge(Math.round(tollCharge * 100.0) / 100.0);
@@ -175,6 +180,11 @@ public class PricingService {
         response.setDiscount(Math.round(discount * 100.0) / 100.0);
         response.setGst(Math.round(gst * 100.0) / 100.0);
         response.setTotalFare(Math.round(totalFare * 100.0) / 100.0);
+        response.setVehicleId(vehicleId);
+        response.setVehicleName(vehicle != null && vehicle.getName() != null ? vehicle.getName() : vehicleId);
+        response.setHelperCount(helperCount);
+        response.setDistanceKm(Math.round(distanceKm * 100.0) / 100.0);
+        response.setGstRate(18.0);
 
         return response;
     }
