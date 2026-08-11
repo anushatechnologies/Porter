@@ -14,7 +14,6 @@ import java.util.stream.Collectors;
 import com.anushaporter.backend.model.Customer;
 
 @RestController
-
 public class BookingController {
 
     @Autowired
@@ -57,13 +56,19 @@ public class BookingController {
             order.setScheduledSlot((String) body.getOrDefault("scheduledSlot", "Immediate"));
             order.setReceiverName((String) body.getOrDefault("receiverName", ""));
             order.setReceiverPhone((String) body.getOrDefault("receiverPhone", ""));
+            order.setGoodsCategory((String) body.get("goodsCategory"));
             order.setCurrency("INR");
             order.setCreatedAt(LocalDateTime.now());
-            
-            // New specialized fields
+
+            // Specialized fields
             order.setHouseSize((String) body.get("houseSize"));
             order.setHeavyItems((String) body.get("heavyItems"));
             order.setLoadAssist((String) body.get("loadAssist"));
+
+            // Helpers count
+            if (body.get("helpersCount") != null) {
+                order.setHelpersCount(((Number) body.get("helpersCount")).intValue());
+            }
 
             // Handle numeric fields safely
             if (body.get("amount") != null) {
@@ -83,6 +88,20 @@ public class BookingController {
             }
             if (body.get("distanceKm") != null) {
                 order.setDistanceKm(((Number) body.get("distanceKm")).doubleValue());
+            }
+
+            // Fare breakdown (may be pre-calculated by app)
+            if (body.get("baseFare") != null) {
+                order.setBaseFare(((Number) body.get("baseFare")).doubleValue());
+            }
+            if (body.get("distanceFare") != null) {
+                order.setDistanceFare(((Number) body.get("distanceFare")).doubleValue());
+            }
+            if (body.get("helperCharges") != null) {
+                order.setHelperCharges(((Number) body.get("helperCharges")).doubleValue());
+            }
+            if (body.get("gstAmount") != null) {
+                order.setGstAmount(((Number) body.get("gstAmount")).doubleValue());
             }
 
             // Update or create Customer details dynamically
@@ -147,6 +166,10 @@ public class BookingController {
                 item.put("serviceName", order.getServiceName());
                 item.put("amount", order.getAmount());
                 item.put("status", order.getStatus());
+                item.put("pickupAddress", order.getPickupAddress());
+                item.put("dropAddress", order.getDropAddress());
+                item.put("paymentMethod", order.getPaymentMethod());
+                item.put("createdAt", order.getCreatedAt());
 
                 String dateLabel = "Recently";
                 if (order.getScheduledDate() != null && order.getScheduledSlot() != null) {
@@ -158,7 +181,10 @@ public class BookingController {
 
                 boolean trackable = "searching".equals(order.getStatus())
                         || "driver_assigned".equals(order.getStatus())
-                        || "in_transit".equals(order.getStatus());
+                        || "in_transit".equals(order.getStatus())
+                        || "accepted".equals(order.getStatus())
+                        || "assigned".equals(order.getStatus())
+                        || "pickup_started".equals(order.getStatus());
                 item.put("trackable", trackable);
 
                 return item;
@@ -179,7 +205,7 @@ public class BookingController {
     }
 
     /**
-     * Get booking detail.
+     * Get booking detail with driver info and fare breakdown.
      * GET /api/bookings/{bookingId}
      */
     @GetMapping("/api/bookings/{bookingId}")
@@ -210,13 +236,25 @@ public class BookingController {
             response.put("status", order.getStatus());
             response.put("serviceName", order.getServiceName());
             response.put("amount", order.getAmount());
+            response.put("paymentMethod", order.getPaymentMethod());
+            response.put("paymentStatus", order.getPaymentStatus());
+            response.put("currency", order.getCurrency() != null ? order.getCurrency() : "INR");
+            response.put("receiverName", order.getReceiverName());
+            response.put("receiverPhone", order.getReceiverPhone());
+            response.put("goodsCategory", order.getGoodsCategory());
+            response.put("helpersCount", order.getHelpersCount() != null ? order.getHelpersCount() : 0);
+            response.put("distanceKm", order.getDistanceKm());
 
             Map<String, String> pickup = new HashMap<>();
             pickup.put("addressLine", order.getPickupAddress());
+            if (order.getPickupLat() != null) pickup.put("lat", String.valueOf(order.getPickupLat()));
+            if (order.getPickupLng() != null) pickup.put("lng", String.valueOf(order.getPickupLng()));
             response.put("pickup", pickup);
 
             Map<String, String> drop = new HashMap<>();
             drop.put("addressLine", order.getDropAddress());
+            if (order.getDropLat() != null) drop.put("lat", String.valueOf(order.getDropLat()));
+            if (order.getDropLng() != null) drop.put("lng", String.valueOf(order.getDropLng()));
             response.put("drop", drop);
 
             Map<String, String> schedule = new HashMap<>();
@@ -224,6 +262,41 @@ public class BookingController {
             schedule.put("slotLabel", order.getScheduledSlot());
             response.put("schedule", schedule);
 
+            // Fare breakdown
+            double total = order.getAmount() != null ? order.getAmount() : 0.0;
+            double baseFare = order.getBaseFare() != null ? order.getBaseFare() : 0.0;
+            double distanceFare = order.getDistanceFare() != null ? order.getDistanceFare() : 0.0;
+            double helperCharges = order.getHelperCharges() != null ? order.getHelperCharges() : 0.0;
+            double gstAmount = order.getGstAmount() != null ? order.getGstAmount() : 0.0;
+
+            // If fare breakdown wasn't stored at booking time, derive it
+            if (baseFare == 0.0 && distanceFare == 0.0 && total > 0) {
+                gstAmount = Math.round(total * 0.18 * 100.0) / 100.0;
+                double subtotal = total - gstAmount;
+                helperCharges = (order.getHelpersCount() != null ? order.getHelpersCount() : 0) * 100.0;
+                baseFare = Math.max(0, subtotal - helperCharges);
+            }
+
+            Map<String, Object> fareBreakdown = new HashMap<>();
+            fareBreakdown.put("baseFare", baseFare);
+            fareBreakdown.put("distanceFare", distanceFare);
+            fareBreakdown.put("helperCharges", helperCharges);
+            fareBreakdown.put("gst", gstAmount);
+            fareBreakdown.put("total", total);
+            response.put("fareBreakdown", fareBreakdown);
+
+            // Driver details (if assigned)
+            if (order.getDriverName() != null && !order.getDriverName().isEmpty()) {
+                Map<String, Object> driver = new HashMap<>();
+                driver.put("name", order.getDriverName());
+                driver.put("phone", order.getDriverPhone() != null ? order.getDriverPhone() : "");
+                driver.put("vehicleNumber", order.getDriverVehicleNumber() != null ? order.getDriverVehicleNumber() : "");
+                driver.put("vehicleLabel", order.getServiceName() != null ? order.getServiceName() : "");
+                driver.put("rating", 4.5); // placeholder; extend Driver model for live rating
+                response.put("driver", driver);
+            }
+
+            // Optional specialized fields
             if (order.getHouseSize() != null) response.put("houseSize", order.getHouseSize());
             if (order.getHeavyItems() != null) response.put("heavyItems", order.getHeavyItems());
             if (order.getLoadAssist() != null) response.put("loadAssist", order.getLoadAssist());
@@ -278,7 +351,7 @@ public class BookingController {
                     "searching".equals(status) ? "Searching for Driver..." : "Driver Assigned",
                     !"searching".equals(status),
                     !"searching".equals(status) ? LocalDateTime.now().toString() : null));
-            timeline.add(buildTimelineStep("pickup_started", "Pickup Started",
+            timeline.add(buildTimelineStep("pickup_started", "Driver Reached",
                     "pickup_started".equals(status) || "picked_up".equals(status) || "transit".equals(status) || "in_transit".equals(status) || "delivered".equals(status) || "completed".equals(status), null));
             timeline.add(buildTimelineStep("in_transit", "In Transit",
                     "transit".equals(status) || "in_transit".equals(status) || "delivered".equals(status) || "completed".equals(status), null));
@@ -288,8 +361,8 @@ public class BookingController {
 
             // Driver info
             if (!"searching".equals(status) && !"cancelled".equals(status)) {
-                Map<String, String> driver = new HashMap<>();
-                driver.put("id", "drv_001");
+                Map<String, Object> driver = new HashMap<>();
+                driver.put("id", order.getDriverId() != null ? order.getDriverId() : "drv_001");
                 driver.put("name", order.getDriverName() != null ? order.getDriverName() : "Driver");
                 driver.put("phone", order.getDriverPhone() != null ? order.getDriverPhone() : "");
                 driver.put("vehicleNumber", order.getDriverVehicleNumber() != null ? order.getDriverVehicleNumber() : "");
@@ -326,11 +399,13 @@ public class BookingController {
     /**
      * Cancel a booking.
      * PUT /api/bookings/{bookingId}/cancel
+     * Optional body: { "reason": "Driver delay", "remarks": "..." }
      */
     @PutMapping("/api/bookings/{bookingId}/cancel")
     public ResponseEntity<Map<String, Object>> cancelBooking(
             @RequestHeader("Authorization") String authHeader,
-            @PathVariable String bookingId) {
+            @PathVariable String bookingId,
+            @RequestBody(required = false) Map<String, Object> body) {
 
         Map<String, Object> response = new HashMap<>();
 
@@ -350,7 +425,27 @@ public class BookingController {
             }
 
             Order order = orderOpt.get();
+
+            // Accept optional cancellation reason
+            if (body != null) {
+                String reason = null;
+                if (body.get("reason") != null) reason = String.valueOf(body.get("reason"));
+                else if (body.get("cancellationReason") != null) reason = String.valueOf(body.get("cancellationReason"));
+                else if (body.get("selectedReason") != null) reason = String.valueOf(body.get("selectedReason"));
+
+                if (reason != null) {
+                    String remarks = body.get("remarks") != null ? " - " + body.get("remarks") : "";
+                    order.setCancellationReason(reason + remarks);
+                }
+            }
+
             order.setStatus("cancelled");
+            // Unassign driver
+            order.setDriverId(null);
+            order.setDriverName(null);
+            order.setDriverPhone(null);
+            order.setDriverVehicleNumber(null);
+
             orderRepository.save(order);
 
             response.put("success", true);
@@ -464,6 +559,8 @@ public class BookingController {
 
             response.put("success", true);
             response.put("message", "Booking rescheduled successfully");
+            response.put("scheduledDate", order.getScheduledDate());
+            response.put("scheduledSlot", order.getScheduledSlot());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -498,14 +595,6 @@ public class BookingController {
                 response.put("message", "Booking not found");
                 return ResponseEntity.status(404).body(response);
             }
-
-
-            // Don't auto assign dummy driver anymore. This endpoint should just fail or do nothing
-            // order.setStatus("driver_assigned");
-            // order.setDriverName("Ramesh Kumar");
-            // order.setDriverPhone("+91 9876543210");
-            // order.setDriverVehicleNumber("TS 09 EU 1234");
-            // orderRepository.save(order);
 
             response.put("success", false);
             response.put("message", "Auto-assign disabled. Admin must assign driver.");
