@@ -75,11 +75,13 @@ public class AuthController {
                 userProfile.put("phone", user.getPhone());
                 userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed=" + (user.getName() != null ? user.getName().replace(" ", "") : "User"));
 
-                String token = jwtUtil.generateToken(user.getEmail());
+                String token = jwtUtil.generateToken(user.getEmail() != null ? user.getEmail() : user.getPhone());
 
                 response.put("success", true);
                 response.put("user", userProfile);
                 response.put("token", token);
+                response.put("accessToken", token);
+                response.put("refreshToken", token);
                 return ResponseEntity.ok(response);
             }
         }

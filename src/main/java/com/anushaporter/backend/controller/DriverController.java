@@ -67,16 +67,17 @@ public class DriverController {
             map.put("licenseUri", d.getLicenseUri() != null ? d.getLicenseUri() : "");
             map.put("rcUri", d.getRcUri() != null ? d.getRcUri() : "");
 
-            double lat = d.getLatitude() != null ? d.getLatitude() : 17.4483;
-            double lng = d.getLongitude() != null ? d.getLongitude() : 78.3915;
-            map.put("location", Map.of(
-                    "x", lat,
-                    "y", lng,
-                    "lat", lat,
-                    "lng", lng,
-                    "speed", 24.5,
-                    "angle", 180
-            ));
+            double speed = d.getSpeed() != null ? d.getSpeed() : 0.0;
+            double angle = d.getHeading() != null ? d.getHeading() : 45.0;
+
+            Map<String, Object> locMap = new LinkedHashMap<>();
+            locMap.put("x", lat);
+            locMap.put("y", lng);
+            locMap.put("lat", lat);
+            locMap.put("lng", lng);
+            locMap.put("speed", speed);
+            locMap.put("angle", angle);
+            map.put("location", locMap);
 
             return map;
         }).collect(Collectors.toList());

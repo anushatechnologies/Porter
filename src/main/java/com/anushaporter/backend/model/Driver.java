@@ -20,6 +20,7 @@ public class Driver {
     private Double latitude;
     private Double longitude;
     private Double heading;
+    private Double speed; // speed in km/h (0.0 when parked)
 
     @Column(unique = true)
     private String email;
@@ -52,6 +53,7 @@ public class Driver {
     private String rejectedReason;
     private Integer trips;
     private String tenure;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
@@ -72,6 +74,8 @@ public class Driver {
     public void setLongitude(Double longitude) { this.longitude = longitude; }
     public Double getHeading() { return heading; }
     public void setHeading(Double heading) { this.heading = heading; }
+    public Double getSpeed() { return speed; }
+    public void setSpeed(Double speed) { this.speed = speed; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     public String getDob() { return dob; }

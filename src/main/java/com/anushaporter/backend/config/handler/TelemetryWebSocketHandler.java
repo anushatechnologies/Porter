@@ -57,8 +57,8 @@ public class TelemetryWebSocketHandler extends TextWebSocketHandler {
         String json = "{"
                 + "\"event\":\"driver:telemetry\","
                 + "\"data\":{"
-                + "\"driverId\":\"DRV-102\","
-                + "\"location\":{\"lat\":17.4483,\"lng\":78.3915,\"speed\":24.5,\"angle\":180},"
+                + "\"driverId\":\"DRV-104\","
+                + "\"location\":{\"lat\":17.4375,\"lng\":78.3780,\"speed\":0.0,\"angle\":45},"
                 + "\"timestamp\":" + System.currentTimeMillis()
                 + "}}";
 
