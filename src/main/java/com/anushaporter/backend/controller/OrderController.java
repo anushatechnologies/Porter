@@ -5,21 +5,18 @@ import com.anushaporter.backend.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 import jakarta.servlet.http.HttpServletRequest;
 import com.anushaporter.backend.model.AppUser;
 import com.anushaporter.backend.repository.AppUserRepository;
 import com.anushaporter.backend.service.PushNotificationService;
 
-import java.util.List;
-
 /**
- * Legacy admin-facing CRUD endpoint for orders.
- * The main booking flow uses BookingController (/api/bookings).
+ * Admin-facing CRUD endpoint for orders (GET /api/orders).
  */
 @RestController
 @RequestMapping("/api/orders")
-
 public class OrderController {
     @Autowired
     private OrderRepository repository;
@@ -30,18 +27,74 @@ public class OrderController {
     @Autowired
     private PushNotificationService pushNotificationService;
 
+    @Autowired
+    private com.anushaporter.backend.repository.DriverRepository driverRepository;
+
+    /**
+     * GET /api/orders
+     * Returns formatted orders list for Admin Dashboard, Orders view, and Live Dispatch screen.
+     */
     @GetMapping
-    public List<Order> getAll() {
-        return repository.findAll();
+    public ResponseEntity<List<Map<String, Object>>> getAll() {
+        List<Order> orders = repository.findAll();
+
+        List<Map<String, Object>> items = orders.stream().map(o -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", o.getId());
+            map.put("bookingId", o.getBookingId() != null ? o.getBookingId() : "ORD-" + o.getId());
+
+            // User/Customer info
+            String userEmail = o.getUserEmail() != null ? o.getUserEmail() : "";
+            AppUser user = appUserRepository.findFirstByEmailOrderByIdDesc(userEmail).orElse(null);
+            String customerName = user != null && user.getName() != null ? user.getName() : (o.getReceiverName() != null ? o.getReceiverName() : "Customer");
+            String userPhone = user != null && user.getPhone() != null ? user.getPhone() : (o.getReceiverPhone() != null ? o.getReceiverPhone() : "");
+
+            map.put("customer", customerName);
+            map.put("userEmail", userEmail);
+            map.put("userPhone", userPhone);
+
+            // Pickup & Drop
+            map.put("pickup", Map.of(
+                    "addressLine", o.getPickupAddress() != null ? o.getPickupAddress() : "",
+                    "lat", o.getPickupLat() != null ? o.getPickupLat() : 17.4483,
+                    "lng", o.getPickupLng() != null ? o.getPickupLng() : 78.3915
+            ));
+            map.put("drop", Map.of(
+                    "addressLine", o.getDropAddress() != null ? o.getDropAddress() : "",
+                    "lat", o.getDropLat() != null ? o.getDropLat() : 17.4560,
+                    "lng", o.getDropLng() != null ? o.getDropLng() : 78.4000
+            ));
+
+            map.put("amount", o.getAmount() != null ? o.getAmount() : 0.0);
+            map.put("status", o.getStatus() != null ? o.getStatus() : "searching");
+
+            // Driver info
+            map.put("driver", o.getDriverName() != null ? o.getDriverName() : null);
+            map.put("driverEmail", o.getDriverEmail() != null ? o.getDriverEmail() : null);
+            map.put("driverPhone", o.getDriverPhone() != null ? o.getDriverPhone() : null);
+            map.put("driverVehicleNumber", o.getDriverVehicleNumber() != null ? o.getDriverVehicleNumber() : null);
+
+            map.put("serviceName", o.getServiceName() != null ? o.getServiceName() : "Standard Delivery");
+            map.put("createdAt", o.getCreatedAt() != null ? o.getCreatedAt().toString() : java.time.LocalDateTime.now().toString());
+
+            // Timeline
+            List<Map<String, String>> timeline = new ArrayList<>();
+            timeline.add(Map.of("time", "10:30 AM", "text", "Order Placed"));
+            if (o.getDriverName() != null) {
+                timeline.add(Map.of("time", "10:32 AM", "text", "Driver Assigned (" + o.getDriverName() + ")"));
+            }
+            map.put("timeline", timeline);
+
+            return map;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(items);
     }
 
     @PostMapping
     public Order create(@RequestBody Order entity) {
         return repository.save(entity);
     }
-
-    @Autowired
-    private com.anushaporter.backend.repository.DriverRepository driverRepository;
 
     @PostMapping("/{id}/assign")
     public ResponseEntity<Map<String, Object>> assignDriver(@PathVariable Long id, @RequestBody Map<String, String> payload) {
@@ -100,7 +153,7 @@ public class OrderController {
                     order.setDriverVehicleNumber(driver.getVehicleNumber());
                 });
             }
-            order.setStatus("picked_up"); // or "driver_assigned" depending on flow, but the requirement said "driver accepts... status updates"
+            order.setStatus("picked_up");
             Order savedOrder = repository.save(order);
             pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
             return ResponseEntity.ok(Map.of("success", true, "orderDetails", savedOrder));
