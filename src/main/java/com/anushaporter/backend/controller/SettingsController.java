@@ -19,7 +19,7 @@ public class SettingsController {
     @GetMapping
     public Map<String, String> getSettings() {
         return settingsRepo.findAll().stream()
-                .collect(Collectors.toMap(GlobalSettings::getSettingKey, GlobalSettings::getSettingValue));
+                .collect(Collectors.toMap(s -> s.getSettingKey(), s -> s.getSettingValue()));
     }
 
     @PostMapping

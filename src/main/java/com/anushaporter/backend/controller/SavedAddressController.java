@@ -74,7 +74,7 @@ public class SavedAddressController {
         SavedAddress address = new SavedAddress();
         address.setUserEmail(email);
         address.setLabel((String) body.getOrDefault("label", ""));
-        address.setTag((String) body.getOrDefault("tag", "other"));
+        address.setTag((String) body.getOrDefault("tag", "home"));
         address.setAddressLine((String) body.getOrDefault("addressLine", ""));
 
         if (body.get("lat") != null) {

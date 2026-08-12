@@ -1,6 +1,16 @@
 package com.anushaporter.backend.dto;
 
 public class PricingResponse {
+
+    // Context
+    private String vehicleId;
+    private String vehicleName;
+    private Double distanceKm;
+    private Integer helperCount;
+    private Double helperChargePerHead;
+    private Double gstRate;
+
+    // Fare breakdown
     private Double baseFare;
     private Double distanceFare;
     private Double weightCharge;
@@ -13,7 +23,25 @@ public class PricingResponse {
     private Double gst;
     private Double totalFare;
 
-    // Getters and Setters
+    // ── Getters & Setters ──────────────────────────────────────────────────────
+    public String getVehicleId() { return vehicleId; }
+    public void setVehicleId(String vehicleId) { this.vehicleId = vehicleId; }
+
+    public String getVehicleName() { return vehicleName; }
+    public void setVehicleName(String vehicleName) { this.vehicleName = vehicleName; }
+
+    public Double getDistanceKm() { return distanceKm; }
+    public void setDistanceKm(Double distanceKm) { this.distanceKm = distanceKm; }
+
+    public Integer getHelperCount() { return helperCount; }
+    public void setHelperCount(Integer helperCount) { this.helperCount = helperCount; }
+
+    public Double getHelperChargePerHead() { return helperChargePerHead; }
+    public void setHelperChargePerHead(Double helperChargePerHead) { this.helperChargePerHead = helperChargePerHead; }
+
+    public Double getGstRate() { return gstRate; }
+    public void setGstRate(Double gstRate) { this.gstRate = gstRate; }
+
     public Double getBaseFare() { return baseFare; }
     public void setBaseFare(Double baseFare) { this.baseFare = baseFare; }
 

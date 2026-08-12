@@ -53,9 +53,31 @@ public class Order {
     private String heavyItems;
     private String loadAssist;
 
+    /** Goods category e.g. "Electronics", "Furniture", "General" */
+    private String goodsCategory;
+
+    /** Number of helper laborers requested */
+    private Integer helpersCount;
+
+    /** Per-helper charge applied (calculated by pricing service) */
+    private Double helperCharges;
+
+    /** GST amount (18% of subtotal) */
+    private Double gstAmount;
+
+    /** Base fare component */
+    private Double baseFare;
+
+    /** Distance-based fare component */
+    private Double distanceFare;
+
+    /** Payment status: "unpaid", "paid" */
+    private String paymentStatus;
+
     @Column(length = 10)
     private String deliveryOtp;
     private LocalDateTime otpExpiresAt;
+
     @Column(length = 500)
     private String cancellationReason;
 
@@ -63,13 +85,12 @@ public class Order {
 
     @PrePersist
     protected void onCreate() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (currency == null) {
-            currency = "INR";
-        }
+        if (createdAt == null) createdAt = LocalDateTime.now();
+        if (currency == null) currency = "INR";
+        if (paymentStatus == null) paymentStatus = "unpaid";
     }
+
+    // ── Getters & Setters ──────────────────────────────────────────────────────
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getBookingId() { return bookingId; }
@@ -124,6 +145,20 @@ public class Order {
     public void setHeavyItems(String heavyItems) { this.heavyItems = heavyItems; }
     public String getLoadAssist() { return loadAssist; }
     public void setLoadAssist(String loadAssist) { this.loadAssist = loadAssist; }
+    public String getGoodsCategory() { return goodsCategory; }
+    public void setGoodsCategory(String goodsCategory) { this.goodsCategory = goodsCategory; }
+    public Integer getHelpersCount() { return helpersCount; }
+    public void setHelpersCount(Integer helpersCount) { this.helpersCount = helpersCount; }
+    public Double getHelperCharges() { return helperCharges; }
+    public void setHelperCharges(Double helperCharges) { this.helperCharges = helperCharges; }
+    public Double getGstAmount() { return gstAmount; }
+    public void setGstAmount(Double gstAmount) { this.gstAmount = gstAmount; }
+    public Double getBaseFare() { return baseFare; }
+    public void setBaseFare(Double baseFare) { this.baseFare = baseFare; }
+    public Double getDistanceFare() { return distanceFare; }
+    public void setDistanceFare(Double distanceFare) { this.distanceFare = distanceFare; }
+    public String getPaymentStatus() { return paymentStatus; }
+    public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
     public String getDeliveryOtp() { return deliveryOtp; }
     public void setDeliveryOtp(String deliveryOtp) { this.deliveryOtp = deliveryOtp; }
     public LocalDateTime getOtpExpiresAt() { return otpExpiresAt; }
