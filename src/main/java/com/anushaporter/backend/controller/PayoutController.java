@@ -28,7 +28,7 @@ public class PayoutController {
             map.put("id", p.getPayoutId() != null ? p.getPayoutId() : "PAY-" + p.getId());
             map.put("payoutId", p.getPayoutId() != null ? p.getPayoutId() : "PAY-" + p.getId());
             map.put("driverId", p.getDriverId() != null ? p.getDriverId() : "DRV-100");
-            map.put("driverName", p.getDriverName() != null ? p.getDriverName() : (p.getDriver() != null ? p.getDriver() : "Partner Driver"));
+            map.put("driverName", p.getDriverName() != null ? p.getDriverName() : "Partner Driver");
             map.put("bankAccount", p.getBankAccount() != null ? p.getBankAccount() : "XXXX-XXXX-4589");
             map.put("ifscCode", p.getIfscCode() != null ? p.getIfscCode() : "SBIN0001234");
             map.put("amount", p.getAmount() != null ? p.getAmount() : 1000.0);
