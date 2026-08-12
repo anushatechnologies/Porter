@@ -80,14 +80,15 @@ public class PaymentController {
         String paymentId = (String) payload.getOrDefault("paymentId", "");
         String status = (String) payload.getOrDefault("status", "paid");
 
-        // Mark the order as paid in the database
+        // Mark the order as paid in the database (Edge case rule #9)
         if (!bookingId.isEmpty()) {
             Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
             if (orderOpt.isPresent()) {
                 Order order = orderOpt.get();
                 order.setPaymentStatus("paid");
-                // If order was in unpaid-searching state, keep searching status
-                // Only change payment status, not delivery status
+                if ("searching".equalsIgnoreCase(order.getStatus()) || "pending".equalsIgnoreCase(order.getStatus()) || order.getStatus() == null) {
+                    order.setStatus("confirmed");
+                }
                 orderRepository.save(order);
             }
         }
@@ -95,7 +96,7 @@ public class PaymentController {
         response.put("success", true);
         response.put("bookingId", bookingId);
         response.put("paymentId", paymentId);
-        response.put("status", status);
+        response.put("status", "paid");
         response.put("message", "Payment verified successfully");
         return ResponseEntity.ok(response);
     }

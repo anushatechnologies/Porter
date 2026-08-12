@@ -108,12 +108,14 @@ public class CouponController {
     public ResponseEntity<Map<String, Object>> validateCoupon(@RequestBody Map<String, Object> payload) {
         String code = (String) payload.getOrDefault("couponCode", payload.get("code"));
         if (code == null || code.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of(
+            double origAmt = extractAmount(payload);
+            return ResponseEntity.ok(Map.of(
                     "success", false,
                     "applied", false,
                     "message", "Coupon code is required.",
                     "discount", 0.0,
-                    "finalAmount", extractAmount(payload)
+                    "originalAmount", origAmt,
+                    "finalAmount", origAmt
             ));
         }
 

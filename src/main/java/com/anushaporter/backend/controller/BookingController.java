@@ -245,16 +245,16 @@ public class BookingController {
             response.put("helpersCount", order.getHelpersCount() != null ? order.getHelpersCount() : 0);
             response.put("distanceKm", order.getDistanceKm());
 
-            Map<String, String> pickup = new HashMap<>();
-            pickup.put("addressLine", order.getPickupAddress());
-            if (order.getPickupLat() != null) pickup.put("lat", String.valueOf(order.getPickupLat()));
-            if (order.getPickupLng() != null) pickup.put("lng", String.valueOf(order.getPickupLng()));
+            Map<String, Object> pickup = new HashMap<>();
+            pickup.put("addressLine", order.getPickupAddress() != null ? order.getPickupAddress() : "");
+            if (order.getPickupLat() != null) pickup.put("lat", order.getPickupLat());
+            if (order.getPickupLng() != null) pickup.put("lng", order.getPickupLng());
             response.put("pickup", pickup);
 
-            Map<String, String> drop = new HashMap<>();
-            drop.put("addressLine", order.getDropAddress());
-            if (order.getDropLat() != null) drop.put("lat", String.valueOf(order.getDropLat()));
-            if (order.getDropLng() != null) drop.put("lng", String.valueOf(order.getDropLng()));
+            Map<String, Object> drop = new HashMap<>();
+            drop.put("addressLine", order.getDropAddress() != null ? order.getDropAddress() : "");
+            if (order.getDropLat() != null) drop.put("lat", order.getDropLat());
+            if (order.getDropLng() != null) drop.put("lng", order.getDropLng());
             response.put("drop", drop);
 
             Map<String, String> schedule = new HashMap<>();
@@ -359,14 +359,21 @@ public class BookingController {
                     "delivered".equals(status) || "completed".equals(status), null));
             response.put("timeline", timeline);
 
-            // Driver info
-            if (!"searching".equals(status) && !"cancelled".equals(status)) {
+            // Driver info & location nullability (Edge case rule #3)
+            boolean hasDriver = !"searching".equalsIgnoreCase(status)
+                             && !"confirmed".equalsIgnoreCase(status)
+                             && !"cancelled".equalsIgnoreCase(status)
+                             && order.getDriverName() != null
+                             && !order.getDriverName().trim().isEmpty();
+
+            if (hasDriver) {
                 Map<String, Object> driver = new HashMap<>();
                 driver.put("id", order.getDriverId() != null ? order.getDriverId() : "drv_001");
-                driver.put("name", order.getDriverName() != null ? order.getDriverName() : "Driver");
+                driver.put("name", order.getDriverName());
                 driver.put("phone", order.getDriverPhone() != null ? order.getDriverPhone() : "");
                 driver.put("vehicleNumber", order.getDriverVehicleNumber() != null ? order.getDriverVehicleNumber() : "");
                 driver.put("vehicleLabel", order.getServiceName() != null ? order.getServiceName() : "");
+                driver.put("rating", 4.5);
                 response.put("driver", driver);
 
                 Map<String, Object> location = new HashMap<>();
@@ -426,18 +433,19 @@ public class BookingController {
 
             Order order = orderOpt.get();
 
-            // Accept optional cancellation reason
+            // Accept optional cancellation reason (Edge case rule #4)
+            String reason = "Cancelled by customer";
             if (body != null) {
-                String reason = null;
                 if (body.get("reason") != null) reason = String.valueOf(body.get("reason"));
                 else if (body.get("cancellationReason") != null) reason = String.valueOf(body.get("cancellationReason"));
                 else if (body.get("selectedReason") != null) reason = String.valueOf(body.get("selectedReason"));
+                else if (body.get("customReason") != null) reason = String.valueOf(body.get("customReason"));
 
-                if (reason != null) {
-                    String remarks = body.get("remarks") != null ? " - " + body.get("remarks") : "";
-                    order.setCancellationReason(reason + remarks);
+                if (body.get("remarks") != null && !String.valueOf(body.get("remarks")).isBlank()) {
+                    reason = reason + " - " + body.get("remarks");
                 }
             }
+            order.setCancellationReason(reason);
 
             order.setStatus("cancelled");
             // Unassign driver
@@ -511,9 +519,13 @@ public class BookingController {
                 order.setDeliveryOtp(String.format("%04d", new Random().nextInt(10_000)));
                 order.setOtpExpiresAt(LocalDateTime.now().plusMinutes(30)); orderRepository.save(order);
             }
-            Map<String, Object> data = new HashMap<>(); data.put("orderId", bookingId);
-            data.put("otp", order.getDeliveryOtp()); data.put("expiresAt", order.getOtpExpiresAt());
-            data.put("status", "ACTIVE"); response.put("success", true); response.put("data", data);
+            Map<String, Object> data = new HashMap<>();
+            data.put("orderId", bookingId);
+            data.put("otp", order.getDeliveryOtp());
+            data.put("expiresAt", order.getOtpExpiresAt() != null ? order.getOtpExpiresAt().toString() : "");
+            data.put("status", "ACTIVE");
+            response.put("success", true);
+            response.put("data", data);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false); response.put("message", "Failed to get delivery OTP");
