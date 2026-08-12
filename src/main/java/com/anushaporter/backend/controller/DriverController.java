@@ -67,6 +67,8 @@ public class DriverController {
             map.put("licenseUri", d.getLicenseUri() != null ? d.getLicenseUri() : "");
             map.put("rcUri", d.getRcUri() != null ? d.getRcUri() : "");
 
+            double lat = d.getLatitude() != null ? d.getLatitude() : 17.4483;
+            double lng = d.getLongitude() != null ? d.getLongitude() : 78.3915;
             double speed = d.getSpeed() != null ? d.getSpeed() : 0.0;
             double angle = d.getHeading() != null ? d.getHeading() : 45.0;
 
