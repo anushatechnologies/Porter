@@ -199,8 +199,11 @@ public class PricingController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteVehiclePricing(@PathVariable Long id) {
+        if (!vehicleRepo.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
         vehicleRepo.deleteById(id);
-        return ResponseEntity.ok(Map.of("success", true));
+        return ResponseEntity.ok(Map.of("success", true, "message", "Pricing tier deleted."));
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
