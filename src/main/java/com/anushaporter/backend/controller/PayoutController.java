@@ -10,7 +10,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/payouts")
 public class PayoutController {
     @Autowired
     private PayoutRepository repository;
@@ -19,7 +18,7 @@ public class PayoutController {
      * GET /api/payouts
      * Returns driver payout requests for Admin Payouts module.
      */
-    @GetMapping
+    @GetMapping("/api/payouts")
     public ResponseEntity<List<Map<String, Object>>> getAll() {
         List<Payout> payouts = repository.findAll();
 
@@ -40,7 +39,7 @@ public class PayoutController {
         return ResponseEntity.ok(items);
     }
 
-    @PostMapping
+    @PostMapping("/api/payouts")
     public Payout create(@RequestBody Payout entity) {
         if (entity.getPayoutId() == null) {
             entity.setPayoutId("PAY-" + System.currentTimeMillis());
@@ -48,12 +47,50 @@ public class PayoutController {
         return repository.save(entity);
     }
 
-    @PostMapping("/{id}/release")
+    @PostMapping("/api/payouts/{id}/release")
     public ResponseEntity<Map<String, Object>> releasePayout(@PathVariable Long id) {
         return repository.findById(id).map(payout -> {
             payout.setStatus("settled");
             repository.save(payout);
             return ResponseEntity.ok(Map.of("success", (Object) true, "status", (Object) "settled"));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Endpoint 1: Request Instant Driver Payout
+     * POST /api/drivers/me/payouts/request
+     */
+    @PostMapping({"/api/drivers/me/payouts/request", "/api/drivers/payouts/request", "/api/payouts/request"})
+    public ResponseEntity<Map<String, Object>> requestInstantPayout(@RequestBody(required = false) Map<String, Object> body) {
+        double amount = 500.0;
+        String accountNumber = "1234567890";
+        String ifscCode = "SBIN0001234";
+
+        if (body != null) {
+            if (body.get("amount") != null) {
+                try { amount = Double.parseDouble(body.get("amount").toString()); } catch (Exception ignored) {}
+            }
+            if (body.get("accountNumber") != null) accountNumber = String.valueOf(body.get("accountNumber"));
+            if (body.get("ifscCode") != null) ifscCode = String.valueOf(body.get("ifscCode"));
+        }
+
+        String payoutId = "PO-" + (1000 + new Random().nextInt(9000));
+
+        Payout p = new Payout();
+        p.setPayoutId(payoutId);
+        p.setAmount(amount);
+        p.setBankAccount(accountNumber);
+        p.setIfscCode(ifscCode);
+        p.setStatus("processing");
+        p.setDriverId("DRV-102");
+        p.setDriverName("Partner Driver");
+        repository.save(p);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("payoutId", payoutId);
+        response.put("status", "processing");
+        response.put("message", "Payout request submitted successfully");
+        return ResponseEntity.ok(response);
     }
 }

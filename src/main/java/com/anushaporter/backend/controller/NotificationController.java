@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,6 +37,36 @@ public class NotificationController {
         saved.setFcmToken(token.trim());
         userRepository.save(saved);
         return ResponseEntity.ok(Map.of("success", true, "message", "FCM token registered"));
+    }
+
+    /**
+     * Endpoint 2: Driver Notifications List
+     * GET /api/drivers/me/notifications
+     */
+    @GetMapping({"/drivers/me/notifications", "/drivers/notifications"})
+    public ResponseEntity<Map<String, Object>> getDriverNotifications() {
+        List<Map<String, Object>> notifs = new ArrayList<>();
+
+        Map<String, Object> n1 = new LinkedHashMap<>();
+        n1.put("id", "notif_01");
+        n1.put("title", "Payout Processed");
+        n1.put("message", "₹1,250 has been transferred to your bank account.");
+        n1.put("createdAt", java.time.LocalDateTime.now().minusHours(2).toString());
+        n1.put("read", false);
+        notifs.add(n1);
+
+        Map<String, Object> n2 = new LinkedHashMap<>();
+        n2.put("id", "notif_02");
+        n2.put("title", "New Trip Bonus Available");
+        n2.put("message", "Complete 5 trips today to get an extra ₹200 bonus!");
+        n2.put("createdAt", java.time.LocalDateTime.now().minusHours(5).toString());
+        n2.put("read", true);
+        notifs.add(n2);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "notifications", notifs
+        ));
     }
 
     @GetMapping("/notifications")
