@@ -11,6 +11,8 @@ import org.springframework.http.HttpStatus;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.anushaporter.backend.model.AppUser;
+import com.anushaporter.backend.repository.AppUserRepository;
 import com.anushaporter.backend.model.Vehicle;
 import com.anushaporter.backend.repository.VehicleRepository;
 
@@ -22,6 +24,9 @@ public class DriverController {
 
     @Autowired
     private OrderRepository orderRepository;
+
+    @Autowired(required = false)
+    private AppUserRepository appUserRepository;
 
     @Autowired
     private com.anushaporter.backend.repository.NotificationRepository notificationRepository;
@@ -51,7 +56,9 @@ public class DriverController {
             }
 
             String userEmail = o.getUserEmail() != null ? o.getUserEmail() : "";
-            AppUser user = appUserRepository.findFirstByEmailOrderByIdDesc(userEmail).orElse(null);
+            AppUser user = (appUserRepository != null && !userEmail.isBlank())
+                    ? appUserRepository.findFirstByEmailOrderByIdDesc(userEmail).orElse(null)
+                    : null;
 
             String custName = (user != null && user.getName() != null && !user.getName().isBlank())
                     ? user.getName()
