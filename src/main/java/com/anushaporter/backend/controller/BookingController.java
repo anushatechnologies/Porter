@@ -121,6 +121,11 @@ public class BookingController {
                 customerRepository.save(newCust);
             });
 
+            // Generate a single 4-digit OTP per order and persist it
+            String deliveryOtp = String.format("%04d", new Random().nextInt(10_000));
+            order.setDeliveryOtp(deliveryOtp);
+            order.setOtpExpiresAt(LocalDateTime.now().plusHours(24));
+
             orderRepository.save(order);
 
             response.put("success", true);
@@ -566,7 +571,7 @@ public class BookingController {
         if (inputOtp == null || !inputOtp.trim().equals(validOtp)) {
             return ResponseEntity.status(400).body(Map.of(
                     "success", false,
-                    "message", "Incorrect Customer Delivery OTP"
+                    "message", "Incorrect Customer Delivery OTP. Verification failed."
             ));
         }
 

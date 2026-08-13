@@ -150,7 +150,7 @@ public class OrderController {
             if (inputOtp == null || !inputOtp.trim().equals(validOtp)) {
                 return ResponseEntity.status(400).body(Map.of(
                         "success", false,
-                        "message", "Incorrect Customer Delivery OTP"
+                        "message", "Incorrect Customer Delivery OTP. Verification failed."
                 ));
             }
         }
@@ -160,7 +160,12 @@ public class OrderController {
         }
         Order savedOrder = repository.save(order);
         pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
-        return ResponseEntity.ok(Map.of("success", true, "message", "Status updated successfully", "order", savedOrder));
+
+        String msg = "completed".equalsIgnoreCase(savedOrder.getStatus()) || "delivered".equalsIgnoreCase(savedOrder.getStatus())
+                ? "Delivery completed successfully"
+                : "Status updated successfully";
+
+        return ResponseEntity.ok(Map.of("success", true, "message", msg, "order", savedOrder));
     }
 
     @PutMapping("/{id}/accept")
