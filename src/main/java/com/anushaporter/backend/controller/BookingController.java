@@ -25,6 +25,9 @@ public class BookingController {
     @Autowired
     private com.anushaporter.backend.repository.CustomerRepository customerRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.PushNotificationService pushNotificationService;
+
     /**
      * Create a new booking.
      * POST /api/bookings
@@ -569,7 +572,9 @@ public class BookingController {
 
         order.setStatus("completed");
         Order savedOrder = orderRepository.save(order);
-        pushNotificationService.notifyOrderStatus(savedOrder, "completed");
+        if (pushNotificationService != null) {
+            pushNotificationService.notifyOrderStatus(savedOrder, "completed");
+        }
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
