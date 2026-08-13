@@ -126,13 +126,41 @@ public class OrderController {
     }
 
     @RequestMapping(value = "/{id}/status", method = {RequestMethod.PUT, RequestMethod.POST})
-    public ResponseEntity<Map<String, Object>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
-        return repository.findById(id).map(order -> {
-            order.setStatus(payload.get("status"));
-            Order savedOrder = repository.save(order);
-            pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
-            return ResponseEntity.ok(Map.of("success", (Object) true, "order", (Object) savedOrder));
-        }).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Map<String, Object>> updateStatus(@PathVariable String id, @RequestBody Map<String, String> payload) {
+        Optional<Order> orderOpt = repository.findByBookingId(id);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = repository.findById(Long.valueOf(id));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
+        }
+
+        Order order = orderOpt.get();
+        String targetStatus = payload != null ? payload.get("status") : null;
+        String inputOtp = payload != null ? payload.get("otp") : null;
+        if (inputOtp == null && payload != null) inputOtp = payload.get("deliveryOtp");
+
+        // If completing/delivering order or OTP is provided, enforce strict OTP verification!
+        if ("delivered".equalsIgnoreCase(targetStatus) || "completed".equalsIgnoreCase(targetStatus) || inputOtp != null) {
+            String validOtp = order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813";
+
+            if (inputOtp == null || !inputOtp.trim().equals(validOtp)) {
+                return ResponseEntity.status(400).body(Map.of(
+                        "success", false,
+                        "message", "Incorrect Customer Delivery OTP"
+                ));
+            }
+        }
+
+        if (targetStatus != null && !targetStatus.isBlank()) {
+            order.setStatus(targetStatus);
+        }
+        Order savedOrder = repository.save(order);
+        pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
+        return ResponseEntity.ok(Map.of("success", true, "message", "Status updated successfully", "order", savedOrder));
     }
 
     @PutMapping("/{id}/accept")

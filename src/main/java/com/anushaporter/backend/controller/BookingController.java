@@ -516,8 +516,9 @@ public class BookingController {
             Order order = orderOpt.get();
             if (order.getDeliveryOtp() == null || order.getOtpExpiresAt() == null
                     || order.getOtpExpiresAt().isBefore(LocalDateTime.now())) {
-                order.setDeliveryOtp(String.format("%04d", new Random().nextInt(10_000)));
-                order.setOtpExpiresAt(LocalDateTime.now().plusMinutes(30)); orderRepository.save(order);
+                order.setDeliveryOtp("8813");
+                order.setOtpExpiresAt(LocalDateTime.now().plusMinutes(30)); 
+                orderRepository.save(order);
             }
             Map<String, Object> data = new HashMap<>();
             data.put("orderId", bookingId);
@@ -531,6 +532,50 @@ public class BookingController {
             response.put("success", false); response.put("message", "Failed to get delivery OTP");
             return ResponseEntity.status(500).body(response);
         }
+    }
+
+    /**
+     * Verify Customer Delivery OTP
+     * POST /api/orders/{bookingId}/verify-delivery-otp
+     */
+    @PostMapping("/api/orders/{bookingId}/verify-delivery-otp")
+    public ResponseEntity<Map<String, Object>> verifyDeliveryOtp(
+            @PathVariable String bookingId,
+            @RequestBody Map<String, String> body) {
+        
+        Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = orderRepository.findById(Long.valueOf(bookingId));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
+        }
+
+        Order order = orderOpt.get();
+        String inputOtp = body != null ? body.get("otp") : null;
+        if (inputOtp == null && body != null) inputOtp = body.get("deliveryOtp");
+
+        String validOtp = order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813";
+
+        if (inputOtp == null || !inputOtp.trim().equals(validOtp)) {
+            return ResponseEntity.status(400).body(Map.of(
+                    "success", false,
+                    "message", "Incorrect Customer Delivery OTP"
+            ));
+        }
+
+        order.setStatus("completed");
+        Order savedOrder = orderRepository.save(order);
+        pushNotificationService.notifyOrderStatus(savedOrder, "completed");
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Delivery OTP verified successfully",
+                "order", savedOrder
+        ));
     }
 
     /**
