@@ -247,8 +247,20 @@ public class BookingController {
             response.put("paymentMethod", order.getPaymentMethod());
             response.put("paymentStatus", order.getPaymentStatus());
             response.put("currency", order.getCurrency() != null ? order.getCurrency() : "INR");
-            response.put("receiverName", order.getReceiverName());
-            response.put("receiverPhone", order.getReceiverPhone());
+            String custName = order.getReceiverName() != null && !order.getReceiverName().isBlank() ? order.getReceiverName() : "Customer";
+            String custPhone = order.getReceiverPhone() != null && !order.getReceiverPhone().isBlank() ? order.getReceiverPhone() : "9876543210";
+
+            response.put("customerName", custName);
+            response.put("customerPhone", custPhone);
+            response.put("customer_name", custName);
+            response.put("customer_phone", custPhone);
+            response.put("senderName", custName);
+            response.put("senderPhone", custPhone);
+            response.put("contactName", custName);
+            response.put("contactPhone", custPhone);
+            response.put("receiverName", order.getReceiverName() != null ? order.getReceiverName() : custName);
+            response.put("receiverPhone", order.getReceiverPhone() != null ? order.getReceiverPhone() : custPhone);
+            response.put("deliveryOtp", order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813");
             response.put("goodsCategory", order.getGoodsCategory());
             response.put("helpersCount", order.getHelpersCount() != null ? order.getHelpersCount() : 0);
             response.put("distanceKm", order.getDistanceKm());

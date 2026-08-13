@@ -50,16 +50,35 @@ public class DriverController {
                 orderRepository.save(o);
             }
 
+            String userEmail = o.getUserEmail() != null ? o.getUserEmail() : "";
+            AppUser user = appUserRepository.findFirstByEmailOrderByIdDesc(userEmail).orElse(null);
+
+            String custName = (user != null && user.getName() != null && !user.getName().isBlank())
+                    ? user.getName()
+                    : (o.getReceiverName() != null && !o.getReceiverName().isBlank() ? o.getReceiverName() : "Customer Name Here");
+
+            String custPhone = (user != null && user.getPhone() != null && !user.getPhone().isBlank())
+                    ? user.getPhone()
+                    : (o.getReceiverPhone() != null && !o.getReceiverPhone().isBlank() ? o.getReceiverPhone() : "9876543210");
+
             Map<String, Object> orderMap = new LinkedHashMap<>();
             orderMap.put("id", o.getBookingId() != null ? o.getBookingId() : "BK_" + o.getId());
             orderMap.put("bookingId", o.getBookingId() != null ? o.getBookingId() : "BK_" + o.getId());
-            orderMap.put("deliveryOtp", o.getDeliveryOtp());
             orderMap.put("status", o.getStatus());
-            orderMap.put("amount", o.getAmount());
-            orderMap.put("pickupAddress", o.getPickupAddress());
-            orderMap.put("dropAddress", o.getDropAddress());
-            orderMap.put("receiverName", o.getReceiverName());
-            orderMap.put("receiverPhone", o.getReceiverPhone());
+            orderMap.put("amount", o.getAmount() != null ? o.getAmount() : 0.0);
+            orderMap.put("customerName", custName);
+            orderMap.put("customerPhone", custPhone);
+            orderMap.put("customer_name", custName);
+            orderMap.put("customer_phone", custPhone);
+            orderMap.put("receiverName", o.getReceiverName() != null ? o.getReceiverName() : custName);
+            orderMap.put("receiverPhone", o.getReceiverPhone() != null ? o.getReceiverPhone() : custPhone);
+            orderMap.put("senderName", custName);
+            orderMap.put("senderPhone", custPhone);
+            orderMap.put("contactName", custName);
+            orderMap.put("contactPhone", custPhone);
+            orderMap.put("pickupAddress", o.getPickupAddress() != null ? o.getPickupAddress() : "");
+            orderMap.put("dropAddress", o.getDropAddress() != null ? o.getDropAddress() : "");
+            orderMap.put("deliveryOtp", o.getDeliveryOtp() != null ? o.getDeliveryOtp() : "8813");
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("success", true);
