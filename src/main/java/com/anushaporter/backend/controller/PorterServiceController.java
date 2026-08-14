@@ -184,8 +184,11 @@ public class PorterServiceController {
         if (identifier == null || identifier.isBlank()) return null;
         String clean = identifier.trim();
 
-        Optional<PorterService> idOpt = serviceRepository.findById(clean);
-        if (idOpt.isPresent()) return idOpt.get();
+        try {
+            Long numericId = Long.parseLong(clean);
+            Optional<PorterService> idOpt = serviceRepository.findById(numericId);
+            if (idOpt.isPresent()) return idOpt.get();
+        } catch (NumberFormatException ignored) {}
 
         Optional<PorterService> slugOpt = serviceRepository.findFirstByServiceIdIgnoreCase(clean);
         if (slugOpt.isPresent()) return slugOpt.get();

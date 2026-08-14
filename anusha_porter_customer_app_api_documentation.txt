@@ -2088,6 +2088,295 @@ Response (200 OK):
 
 
 ================================================================================
+24. PRODUCTION-GRADE DRIVER PAYMENT, DYNAMIC QR SETTLEMENT, DOUBLE-ENTRY LEDGER, COMMISSION ENGINE & DRIVER PAYOUT APIS
+================================================================================
+
+Base URL: https://api.anushaporter.com
+All financial operations execute under server-side atomic transactions with cryptographic HMAC-SHA256 verification and double-entry ledger bookkeeping.
+
+
+24.1 CREATE PAYMENT ORDER & DYNAMIC UPI QR
+--------------------------------------------------------------------------------
+Endpoint: POST /api/payments/create (or /api/payments/initiate)
+Auth: Public / Bearer <CUSTOMER_TOKEN>
+Headers: Idempotency-Key: <UUID>
+
+Request Body:
+{
+  "bookingId": "BK_1786691980998",
+  "paymentMethod": "UPI_QR" // "UPI_QR", "UPI_INTENT", "CARD", "NET_BANKING", "WALLET", "CASH"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "paymentId": "PAY_BK_1786691980998_A8F9B2",
+  "bookingId": "BK_1786691980998",
+  "invoiceId": "INV-2026-894120",
+  "amount": 500.0,
+  "currency": "INR",
+  "status": "PENDING",
+  "paymentMethod": "UPI_QR",
+  "qrCodeData": "upi://pay?pa=anushaporter@icici&pn=Anusha%20Porter%20Logistics&mc=4214&tr=PAY_BK_1786691980998_A8F9B2&tn=Anusha%20Porter%20BK_1786691980998&am=500.00&cu=INR",
+  "qrImageUrl": "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi%3A%2F%2Fpay%3Fpa%3D...",
+  "qrExpiresAt": "2026-08-14T17:45:00",
+  "gateway": "sandbox",
+  "gatewayOrderId": "order_sbx_984128"
+}
+
+
+24.2 GET PAYMENT STATUS (SERVER SOURCE OF TRUTH)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/payments/:id/status (or /api/payments/:id)
+Auth: Public / Bearer <token>
+
+Response (200 OK):
+{
+  "success": true,
+  "paymentId": "PAY_BK_1786691980998_A8F9B2",
+  "bookingId": "BK_1786691980998",
+  "invoiceId": "INV-2026-894120",
+  "amount": 500.0,
+  "currency": "INR",
+  "status": "SUCCESS", // "CREATED", "PENDING", "PROCESSING", "SUCCESS", "FAILED", "REFUNDED"
+  "paymentMethod": "UPI_QR",
+  "transactionId": "TXN_881920",
+  "gatewayPaymentId": "pay_sbx_77192",
+  "paidAt": "2026-08-14T17:32:10"
+}
+
+
+24.3 PAYMENT GATEWAY WEBHOOK (IDEMPOTENT & CRYPTOGRAPHIC)
+--------------------------------------------------------------------------------
+Endpoint: POST /api/payments/webhook
+Headers:
+  X-Webhook-Signature: <HMAC_SHA256_HEX> (or X-Razorpay-Signature)
+  Content-Type: application/json
+
+Request Body:
+{
+  "eventId": "evt_rzp_991823",
+  "event": "payment.captured",
+  "paymentId": "PAY_BK_1786691980998_A8F9B2",
+  "gatewayPaymentId": "pay_sbx_77192",
+  "transactionId": "TXN_881920",
+  "method": "UPI_QR"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Webhook processed successfully"
+}
+
+
+24.4 FULL / PARTIAL REFUND
+--------------------------------------------------------------------------------
+Endpoint: POST /api/payments/:id/refund
+Auth: Bearer <ADMIN_OR_CUSTOMER_TOKEN>
+
+Request Body:
+{
+  "amount": 200.0, // Omit or set full amount for full refund
+  "reason": "Customer cancellation / trip dispute"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "refundId": "RFND_88192039",
+  "amount": 200.0,
+  "status": "SUCCESS",
+  "refundType": "PARTIAL_REFUND" // "FULL_REFUND" or "PARTIAL_REFUND"
+}
+
+
+24.5 DIGITAL RECEIPT / TAX INVOICE
+--------------------------------------------------------------------------------
+Endpoint: GET /api/payments/:id/receipt (or /api/bookings/:id/invoice)
+Auth: Public / Bearer <token>
+
+Response (200 OK):
+{
+  "company": "Anusha Porter Logistics Private Limited",
+  "invoiceId": "INV-2026-894120",
+  "paymentId": "PAY_BK_1786691980998_A8F9B2",
+  "bookingId": "BK_1786691980998",
+  "transactionId": "TXN_881920",
+  "amount": 500.0,
+  "currency": "INR",
+  "status": "SUCCESS",
+  "paymentMethod": "UPI_QR",
+  "customerName": "Anusha Customer",
+  "customerPhone": "9123456789",
+  "driverName": "Ramesh Kumar",
+  "paidAt": "2026-08-14T17:32:10",
+  "fareBreakdown": "{\"baseFare\":149.00,\"distanceFare\":351.00,\"helperCharges\":0.00,\"gstAmount\":0.00,\"finalFare\":500.00}"
+}
+
+
+24.6 DRIVER APP: TODAY'S EARNINGS SUMMARY
+--------------------------------------------------------------------------------
+Endpoint: GET /api/drivers/me/earnings
+Auth: Bearer <DRIVER_JWT_TOKEN>
+
+Response (200 OK):
+{
+  "success": true,
+  "driverId": "102",
+  "todayTrips": 8,
+  "todayGrossEarnings": 2450.0,
+  "todayPlatformFee": 245.0, // Platform Commission (10%)
+  "todayNetEarnings": 2205.0, // Driver Net Pay (90%)
+  "totalNetEarnings": 12800.0,
+  "availableBalance": 2205.0, // Eligible for instant/daily payout
+  "pendingBalance": 0.0,
+  "paidBalance": 10595.0
+}
+
+
+24.7 DRIVER APP: COMPLETED RIDES EARNINGS HISTORY
+--------------------------------------------------------------------------------
+Endpoint: GET /api/drivers/me/earnings/history
+Auth: Bearer <DRIVER_JWT_TOKEN>
+
+Response (200 OK):
+{
+  "success": true,
+  "count": 1,
+  "history": [
+    {
+      "id": 1,
+      "driverId": "102",
+      "bookingId": "BK_1786691980998",
+      "paymentId": "PAY_BK_1786691980998_A8F9B2",
+      "grossFare": 500.0,
+      "platformCommission": 50.0,
+      "driverNetEarning": 450.0,
+      "taxAmount": 0.0,
+      "adjustments": 0.0,
+      "paymentStatus": "PAID",
+      "settlementStatus": "PENDING",
+      "rideCompletedAt": "2026-08-14T17:30:00",
+      "createdAt": "2026-08-14T17:30:05"
+    }
+  ]
+}
+
+
+24.8 DRIVER APP: GET PAYOUT ACCOUNT (MASKED)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/drivers/me/payout-account
+Auth: Bearer <DRIVER_JWT_TOKEN>
+
+Response (200 OK):
+{
+  "success": true,
+  "hasAccount": true,
+  "account": {
+    "accountHolderName": "Ramesh Kumar",
+    "bankName": "State Bank of India",
+    "accountNumberMasked": "XXXX XXXX 4582", // Masked according to FinTech security standards
+    "ifscCode": "SBIN0001234",
+    "upiId": "ramesh@oksbi",
+    "verificationStatus": "VERIFIED"
+  }
+}
+
+
+24.9 DRIVER APP: REGISTER / UPDATE PAYOUT ACCOUNT
+--------------------------------------------------------------------------------
+Endpoint: POST /api/drivers/me/payout-account
+Auth: Bearer <DRIVER_JWT_TOKEN>
+
+Request Body:
+{
+  "accountHolderName": "Ramesh Kumar",
+  "bankName": "State Bank of India",
+  "accountNumber": "12345678904582",
+  "ifscCode": "SBIN0001234",
+  "upiId": "ramesh@oksbi"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Payout account registered and verified successfully",
+  "accountNumberMasked": "XXXX XXXX 4582",
+  "upiId": "ramesh@oksbi",
+  "verificationStatus": "VERIFIED"
+}
+
+
+24.10 DRIVER APP: REQUEST PAYOUT SETTLEMENT
+--------------------------------------------------------------------------------
+Endpoint: POST /api/drivers/me/payout-request (or /api/drivers/me/payouts/request)
+Auth: Bearer <DRIVER_JWT_TOKEN>
+Headers: Idempotency-Key: <UUID>
+
+Request Body:
+{
+  "amount": 2205.0, // Or omit to payout entire available balance
+  "payoutMode": "MANUAL" // "DAILY", "WEEKLY", "MANUAL", "INSTANT"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "payoutId": "PO_2026_881920",
+  "amount": 2205.0,
+  "status": "SUCCESS",
+  "destination": "State Bank of India XXXX XXXX 4582",
+  "utr": "UTR881920491823",
+  "message": "Payout processed successfully"
+}
+
+
+24.11 ADMIN PANEL: COMMISSION & PLATFORM REVENUE ANALYTICS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/admin/commissions
+Auth: Bearer <ADMIN_JWT_TOKEN>
+
+Response (200 OK):
+{
+  "success": true,
+  "metrics": {
+    "grossRevenue": 48500.0,
+    "platformCommissionEarned": 4850.0,
+    "driverPayableTotal": 43650.0,
+    "estimatedGstPayable": 873.0,
+    "effectiveCommissionPercentage": 10.0
+  }
+}
+
+
+24.12 ADMIN PANEL: RECONCILIATION AUDIT
+--------------------------------------------------------------------------------
+Endpoint: GET /api/admin/reconciliation (or POST /api/admin/reconciliation/run)
+Auth: Bearer <ADMIN_JWT_TOKEN>
+
+Response (200 OK):
+{
+  "success": true,
+  "auditDate": "2026-08-14",
+  "totalChecked": 25,
+  "matchedCount": 25,
+  "mismatchCount": 0,
+  "records": [
+    {
+      "paymentId": "PAY_BK_1786691980998_A8F9B2",
+      "internalAmount": 500.0,
+      "gatewayAmount": 500.0,
+      "internalStatus": "SUCCESS",
+      "gatewayStatus": "SUCCESS",
+      "matchStatus": "MATCHED",
+      "notes": "Transaction reconciled successfully"
+    }
+  ]
+}
+
+
+================================================================================
 END OF DOCUMENTATION
 ================================================================================
 

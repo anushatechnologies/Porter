@@ -402,37 +402,6 @@ public class DriverAPIController {
         ));
     }
 
-    // Fetch Earnings
-    @GetMapping("/drivers/me/earnings")
-    public ResponseEntity<?> getEarnings(HttpServletRequest request, @RequestParam(defaultValue = "today") String filter) {
-        Driver driver = getAuthenticatedDriver(request);
-        if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized or Driver profile not found"));
-        }
-
-        // Dummy calculations since actual payout entities are complex.
-        // We will fetch orders for this driver and sum the driverEarning field (which maps to amount for now).
-        // Let's assume all orders where driverId = driver.getId()
-        
-        List<Order> orders = orderRepository.findAll().stream()
-                .filter(o -> o.getDriverId() != null && o.getDriverId().equals(driver.getId().toString()))
-                .filter(o -> "completed".equalsIgnoreCase(o.getStatus()))
-                .collect(Collectors.toList());
-
-        double totalEarnings = orders.stream()
-                .mapToDouble(o -> o.getAmount() != null ? o.getAmount() : 0.0)
-                .sum();
-        
-        AppUser appUser = appUserRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone()).orElse(null);
-        double walletBalance = appUser != null && appUser.getWalletBalance() != null ? appUser.getWalletBalance() : 0.0;
-
-        return ResponseEntity.ok(Map.of(
-            "totalEarnings", totalEarnings,
-            "tripsCompleted", orders.size(),
-            "walletBalance", walletBalance
-        ));
-    }
-
     // Fetch History
     @GetMapping("/drivers/me/orders")
     public ResponseEntity<?> getOrderHistory(HttpServletRequest request) {

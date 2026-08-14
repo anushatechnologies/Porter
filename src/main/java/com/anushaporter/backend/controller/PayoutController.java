@@ -60,7 +60,7 @@ public class PayoutController {
      * Endpoint 1: Request Instant Driver Payout
      * POST /api/drivers/me/payouts/request
      */
-    @PostMapping({"/api/drivers/me/payouts/request", "/api/drivers/payouts/request", "/api/payouts/request"})
+    @PostMapping({"/api/drivers/payouts/request", "/api/payouts/request"})
     public ResponseEntity<Map<String, Object>> requestInstantPayout(@RequestBody(required = false) Map<String, Object> body) {
         double amount = 500.0;
         String accountNumber = "1234567890";

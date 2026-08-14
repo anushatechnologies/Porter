@@ -143,29 +143,4 @@ public class AdminAPIController {
 
         return ResponseEntity.ok(response);
     }
-
-    /**
-     * Endpoint 5: Admin Payments & Platform Fees
-     * GET /api/admin/payments
-     */
-    @GetMapping("/payments")
-    public ResponseEntity<Map<String, Object>> getAdminPayments() {
-        double revenueToday = orderRepository.findAll().stream()
-                .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().toLocalDate().isEqual(java.time.LocalDate.now()))
-                .mapToDouble(o -> o.getAmount() != null ? o.getAmount() : 0.0)
-                .sum();
-
-        if (revenueToday == 0.0) revenueToday = 14200.0;
-        double platformFee = Math.round(revenueToday * 0.15 * 100.0) / 100.0;
-        double pendingPayouts = Math.round((revenueToday - platformFee) * 100.0) / 100.0;
-
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("success", true);
-        response.put("revenueToday", revenueToday);
-        response.put("platformFee", platformFee);
-        response.put("pendingPayouts", pendingPayouts);
-        response.put("refundsToday", 0.0);
-
-        return ResponseEntity.ok(response);
-    }
 }
