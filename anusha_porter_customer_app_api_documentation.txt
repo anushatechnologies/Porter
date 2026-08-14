@@ -1692,5 +1692,83 @@ Response (200 OK):
 
 
 ================================================================================
+21. DRIVER RATING & REVIEW APIS
+================================================================================
+
+21.1 SUBMIT DRIVER RATING & REVIEW
+--------------------------------------------------------------------------------
+Endpoint: POST /api/bookings/:id/rate
+Aliases:
+  - POST /api/driver/rate
+  - POST /api/ratings
+Auth: Bearer <token>
+
+Request Body:
+{
+  "bookingId": "BK_1786691980998",
+  "rating": 5,
+  "review": "Very polite driver and reached on time!",
+  "feedback": [
+    "On Time Delivery ⚡",
+    "Polite & Helpful 🤝",
+    "Careful with Goods 📦"
+  ],
+  "driverId": "24"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Driver rating submitted successfully",
+  "data": {
+    "bookingId": "BK_1786691980998",
+    "driverId": "24",
+    "rating": 5,
+    "review": "Very polite driver and reached on time!",
+    "feedback": [
+      "On Time Delivery ⚡",
+      "Polite & Helpful 🤝",
+      "Careful with Goods 📦"
+    ],
+    "newDriverAverageRating": 4.9,
+    "createdAt": "2026-08-14T14:05:00.000Z"
+  }
+}
+
+Error Responses:
+- 400 Bad Request (Invalid Rating):
+  { "success": false, "message": "Rating must be an integer between 1 and 5" }
+- 400 Bad Request (Not Delivered Yet):
+  { "success": false, "message": "You can only rate an order after it has been delivered" }
+- 404 Not Found (Booking Missing):
+  { "success": false, "message": "Booking not found with the provided ID" }
+- 409 Conflict (Already Rated):
+  { "success": false, "message": "This order has already been rated" }
+
+
+21.2 GET BOOKING RATING
+--------------------------------------------------------------------------------
+Endpoint: GET /api/bookings/:id/rate
+Auth: Bearer <token>
+
+Response (200 OK):
+{
+  "success": true,
+  "rating": {
+    "id": 1,
+    "bookingId": "BK_1786691980998",
+    "rating": 5,
+    "review": "Very polite driver and reached on time!",
+    "feedback": [
+      "On Time Delivery ⚡",
+      "Polite & Helpful 🤝",
+      "Careful with Goods 📦"
+    ],
+    "createdAt": "2026-08-14T14:05:00.000Z"
+  }
+}
+
+
+================================================================================
 END OF DOCUMENTATION
 ================================================================================
