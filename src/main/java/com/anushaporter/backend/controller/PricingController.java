@@ -36,6 +36,11 @@ public class PricingController {
     @Autowired
     private PricingVehicleRepository vehicleRepo;
 
+    @Autowired
+    private com.anushaporter.backend.repository.PorterServiceRepository porterServiceRepo;
+
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
     // ─── Customer-facing ─────────────────────────────────────────────────────
 
     /**
@@ -44,16 +49,46 @@ public class PricingController {
      */
     @GetMapping("/vehicles")
     public ResponseEntity<?> getActiveVehicles() {
+        List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepo.findByIsActiveTrueOrderByDisplayOrderAsc();
+        if (!dynamicServices.isEmpty()) {
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (var s : dynamicServices) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
+                item.put("vehicleId", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
+                item.put("name", s.getName() != null ? s.getName() : "");
+                item.put("label", s.getLabel() != null ? s.getLabel() : s.getName());
+                item.put("baseFare", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
+                item.put("basePrice", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
+                item.put("pricePerKm", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
+                item.put("perKmRate", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
+                item.put("capacityKg", s.getCapacityKg() != null ? s.getCapacityKg().doubleValue() : 0.0);
+                item.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
+                item.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+                item.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+                item.put("minFare", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
+                item.put("isActive", true);
+                items.add(item);
+            }
+            return ResponseEntity.ok(Map.of("success", true, "vehicles", items));
+        }
+
         List<PricingVehicle> vehicles = vehicleRepo.findByStatus(true);
         List<Map<String, Object>> items = vehicles.stream().map(v -> {
             Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", v.getVehicleId());
             item.put("vehicleId", v.getVehicleId());
             item.put("name", v.getName() != null ? v.getName() : "");
             item.put("baseFare", v.getBaseFare() != null ? v.getBaseFare() : 0.0);
+            item.put("basePrice", v.getBaseFare() != null ? v.getBaseFare() : 0.0);
             item.put("pricePerKm", v.getPricePerKm() != null ? v.getPricePerKm() : 0.0);
+            item.put("perKmRate", v.getPricePerKm() != null ? v.getPricePerKm() : 0.0);
             item.put("capacityKg", v.getCapacityKg() != null ? v.getCapacityKg() : 0.0);
+            item.put("capacity", v.getCapacityKg() != null ? v.getCapacityKg().intValue() + " Kg" : "");
             item.put("iconUrl", v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
+            item.put("imageUrl", v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
             item.put("minFare", v.getMinFare() != null ? v.getMinFare() : 0.0);
+            item.put("isActive", true);
             return item;
         }).collect(Collectors.toList());
 
@@ -75,36 +110,15 @@ public class PricingController {
      * }
      */
     @PostMapping("/calculate")
-    public ResponseEntity<Map<String, Object>> calculatePricing(@RequestBody PricingRequest request) {
+    public ResponseEntity<?> calculatePricing(@RequestBody PricingRequest request) {
         try {
-            PricingResponse calc = pricingService.calculatePricing(request);
-
-            Map<String, Object> breakdown = new LinkedHashMap<>();
-            breakdown.put("baseFare",         calc.getBaseFare());
-            breakdown.put("distanceFare",     calc.getDistanceFare());
-            breakdown.put("helperCharge",     calc.getHelperCharge());
-            breakdown.put("helperChargePerHead", calc.getHelperChargePerHead());
-            breakdown.put("helperCount",      calc.getHelperCount());
-            breakdown.put("weightCharge",     calc.getWeightCharge());
-            breakdown.put("waitingCharge",    calc.getWaitingCharge());
-            breakdown.put("tollCharge",       calc.getTollCharge());
-            breakdown.put("fuelCharge",       calc.getFuelCharge());
-            breakdown.put("platformFee",      calc.getPlatformFee());
-            breakdown.put("discount",         calc.getDiscount());
-            breakdown.put("gst",              calc.getGst());
-            breakdown.put("gstRate",          calc.getGstRate());
-            breakdown.put("totalFare",        calc.getTotalFare());
-
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("success",     true);
-            response.put("vehicleId",   calc.getVehicleId());
-            response.put("vehicleName", calc.getVehicleName());
-            response.put("distanceKm",  calc.getDistanceKm());
-            response.put("currency",    "INR");
-            response.put("breakdown",   breakdown);
-            response.put("totalFare",   calc.getTotalFare());
-
+            PricingResponse response = pricingService.calculatePricing(request);
             return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", e.getMessage()
+            ));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
                     "success", false,
@@ -122,9 +136,90 @@ public class PricingController {
     @PostMapping("/estimate-all")
     public ResponseEntity<Map<String, Object>> estimateAll(@RequestBody PricingRequest request) {
         try {
-            List<PricingVehicle> vehicles = vehicleRepo.findByStatus(true);
+            double distanceKm = request.getDistanceKm() != null ? request.getDistanceKm() : 0.0;
+            int helperCount = request.getHelperCount() != null ? request.getHelperCount() : 0;
+            List<Map<String, Object>> vehiclesList = new ArrayList<>();
+            int etaBase = 8; // base ETA in minutes
 
-            // Fallback defaults if no vehicles seeded
+            List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepo.findByIsActiveTrueOrderByDisplayOrderAsc();
+            if (!dynamicServices.isEmpty()) {
+                for (var s : dynamicServices) {
+                    double baseFare = s.getBaseFare() != null ? s.getBaseFare() : 100.0;
+                    double baseKm = s.getBaseKm() != null ? s.getBaseKm() : 2.0;
+                    double perKm = s.getPerKmRate() != null ? s.getPerKmRate() : 15.0;
+                    double helperRate = s.getHelperRate() != null ? s.getHelperRate() : 0.0;
+
+                    double extraKm = Math.max(0.0, distanceKm - baseKm);
+                    double distanceFare = Math.round((extraKm * perKm) * 100.0) / 100.0;
+                    double helperCharge = helperCount > 0 ? Math.round((helperCount * helperRate) * 100.0) / 100.0 : 0.0;
+                    double subtotal = baseFare + distanceFare + helperCharge;
+                    double gst = Math.round((subtotal * 0.18) * 100.0) / 100.0;
+                    double totalFare = Math.round((subtotal + gst) * 100.0) / 100.0;
+
+                    String lengthFt = null, widthFt = null, heightFt = null;
+                    if (s.getDimensions() != null && !s.getDimensions().trim().isEmpty()) {
+                        try {
+                            var jsonNode = objectMapper.readTree(s.getDimensions());
+                            if (jsonNode.has("length")) lengthFt = jsonNode.get("length").asText();
+                            if (jsonNode.has("width")) widthFt = jsonNode.get("width").asText();
+                            if (jsonNode.has("height")) heightFt = jsonNode.get("height").asText();
+                        } catch (Exception ignored) {}
+                    }
+
+                    String serviceSlug = s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId();
+                    String displayName = s.getName() != null ? s.getName() : serviceSlug;
+                    String capacityText = s.getCapacityLabel() != null && !s.getCapacityLabel().isEmpty()
+                            ? s.getCapacityLabel()
+                            : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : "500 Kg");
+                    String etaText = s.getEtaLabel() != null && !s.getEtaLabel().isEmpty()
+                            ? s.getEtaLabel()
+                            : etaBase + " mins";
+
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", serviceSlug);
+                    item.put("vehicleId", serviceSlug);
+                    item.put("name", displayName);
+                    item.put("vehicleName", displayName);
+                    item.put("label", s.getLabel() != null ? s.getLabel() : displayName);
+                    item.put("capacity", capacityText);
+                    item.put("capacityKg", s.getCapacityKg() != null ? s.getCapacityKg() : 500);
+                    item.put("capacityLabel", capacityText);
+                    item.put("basePrice", baseFare);
+                    item.put("baseFare", baseFare);
+                    item.put("totalFare", totalFare);
+                    item.put("estimatedFare", totalFare);
+                    item.put("estimatedPrice", totalFare);
+                    item.put("distanceFare", distanceFare);
+                    item.put("helperCharge", helperCharge);
+                    item.put("gst", gst);
+                    item.put("eta", etaText);
+                    item.put("etaLabel", etaText);
+                    item.put("etaMinutes", etaBase);
+                    item.put("description", s.getSubtitle() != null ? s.getSubtitle() : "");
+                    item.put("subtitle", s.getSubtitle() != null ? s.getSubtitle() : "");
+                    item.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+                    item.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+                    item.put("lengthFt", lengthFt);
+                    item.put("widthFt", widthFt);
+                    item.put("heightFt", heightFt);
+                    item.put("dimensions", s.getDimensions());
+                    item.put("isActive", true);
+                    item.put("currency", "INR");
+
+                    vehiclesList.add(item);
+                    etaBase += 3;
+                }
+
+                Map<String, Object> resp = new LinkedHashMap<>();
+                resp.put("success", true);
+                resp.put("distanceKm", distanceKm);
+                resp.put("vehicles", vehiclesList);
+                resp.put("estimates", vehiclesList);
+                return ResponseEntity.ok(resp);
+            }
+
+            // Fallback to PricingVehicle table if PorterServices not yet populated
+            List<PricingVehicle> vehicles = vehicleRepo.findByStatus(true);
             if (vehicles.isEmpty()) {
                 vehicles = List.of(
                         mockVehicle("2-wheeler",  "2 Wheeler",    40.0,  10.0),
@@ -133,37 +228,42 @@ public class PricingController {
                 );
             }
 
-            List<Map<String, Object>> estimates = new ArrayList<>();
-            int etaBase = 5; // base ETA in minutes, increases per vehicle size
-
             for (PricingVehicle v : vehicles) {
                 PricingRequest req = cloneRequest(request, v.getVehicleId());
                 PricingResponse calc = pricingService.calculatePricing(req);
 
                 Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id",             v.getVehicleId());
                 item.put("vehicleId",      v.getVehicleId());
+                item.put("name",           v.getName() != null ? v.getName() : v.getVehicleId());
                 item.put("vehicleName",    v.getName() != null ? v.getName() : v.getVehicleId());
-                item.put("estimatedPrice", calc.getTotalFare());
+                item.put("capacity",       v.getCapacityKg() != null ? v.getCapacityKg().intValue() + " Kg" : "500 Kg");
+                item.put("capacityKg",     v.getCapacityKg() != null ? v.getCapacityKg() : 0.0);
+                item.put("basePrice",      calc.getBaseFare());
                 item.put("baseFare",       calc.getBaseFare());
+                item.put("totalFare",      calc.getTotalFare());
+                item.put("estimatedFare",  calc.getTotalFare());
+                item.put("estimatedPrice", calc.getTotalFare());
                 item.put("distanceFare",   calc.getDistanceFare());
                 item.put("helperCharge",   calc.getHelperCharge());
                 item.put("gst",            calc.getGst());
+                item.put("eta",            etaBase + " mins");
                 item.put("etaMinutes",     etaBase);
                 item.put("currency",       "INR");
-                item.put("iconUrl",
-                        v.getImageUrl() != null ? v.getImageUrl() :
-                        v.getIcon() != null ? v.getIcon() : "");
-                item.put("capacityKg",     v.getCapacityKg() != null ? v.getCapacityKg() : 0.0);
-                estimates.add(item);
+                item.put("imageUrl",       v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
+                item.put("iconUrl",        v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
+                item.put("isActive",       true);
 
-                etaBase += 3; // each larger vehicle has slightly longer ETA
+                vehiclesList.add(item);
+                etaBase += 3;
             }
 
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "distanceKm", request.getDistanceKm() != null ? request.getDistanceKm() : 0.0,
-                    "estimates", estimates
-            ));
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("success", true);
+            resp.put("distanceKm", distanceKm);
+            resp.put("vehicles", vehiclesList);
+            resp.put("estimates", vehiclesList);
+            return ResponseEntity.ok(resp);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
                     "success", false,
