@@ -174,39 +174,197 @@ public class PricingController {
 
     // ─── Admin-facing ─────────────────────────────────────────────────────────
 
-    @GetMapping("/vehicle/{vehicleId}")
+    @GetMapping({"/vehicle/{vehicleId}", "/vehicles/{vehicleId}"})
     public ResponseEntity<?> getVehiclePricing(@PathVariable String vehicleId) {
-        PricingVehicle vehicle = vehicleRepo.findByVehicleId(vehicleId);
-        if (vehicle != null) return ResponseEntity.ok(vehicle);
-        return ResponseEntity.notFound().build();
+        PricingVehicle vehicle = findVehicleByIdOrVehicleId(vehicleId);
+        if (vehicle != null) {
+            return ResponseEntity.ok(vehicle);
+        }
+        return ResponseEntity.status(404).body(Map.of("success", false, "message", "Vehicle pricing not found for: " + vehicleId));
     }
 
-    @PostMapping
-    public ResponseEntity<?> addVehiclePricing(@RequestBody PricingVehicle vehicle) {
-        return ResponseEntity.ok(Map.of("success", true, "vehicle", vehicleRepo.save(vehicle)));
+    @PostMapping({"", "/", "/vehicle", "/vehicles"})
+    public ResponseEntity<?> addVehiclePricing(@RequestBody Map<String, Object> payload) {
+        String vId = parseString(payload, "vehicleId", "vehicle_id");
+        if (vId == null || vId.isBlank()) {
+            String name = parseString(payload, "name", "vehicleName");
+            vId = name != null ? name.toLowerCase().replaceAll("[^a-z0-9]+", "-") : "vehicle-" + System.currentTimeMillis();
+        }
+
+        PricingVehicle vehicle = findVehicleByIdOrVehicleId(vId);
+        if (vehicle == null) {
+            vehicle = new PricingVehicle();
+            vehicle.setVehicleId(vId);
+        }
+
+        mapPricingVehicleFromPayload(payload, vehicle);
+        if (vehicle.getVehicleId() == null || vehicle.getVehicleId().isBlank()) {
+            vehicle.setVehicleId(vId);
+        }
+
+        PricingVehicle saved = vehicleRepo.save(vehicle);
+        return ResponseEntity.ok(Map.of("success", true, "vehicle", saved));
     }
 
-    @PutMapping("/vehicle/{vehicleId}")
+    @PutMapping({"/vehicle/{vehicleId}", "/vehicles/{vehicleId}", "/{vehicleId}"})
     public ResponseEntity<?> updateVehiclePricing(
-            @PathVariable String vehicleId, @RequestBody PricingVehicle vehicle) {
-        PricingVehicle existing = vehicleRepo.findByVehicleId(vehicleId);
-        if (existing != null) {
-            vehicle.setId(existing.getId());
-            return ResponseEntity.ok(Map.of("success", true, "vehicle", vehicleRepo.save(vehicle)));
+            @PathVariable String vehicleId, @RequestBody Map<String, Object> payload) {
+        PricingVehicle vehicle = findVehicleByIdOrVehicleId(vehicleId);
+        if (vehicle == null) {
+            vehicle = new PricingVehicle();
+            vehicle.setVehicleId(vehicleId);
         }
-        return ResponseEntity.notFound().build();
+
+        mapPricingVehicleFromPayload(payload, vehicle);
+        if (vehicle.getVehicleId() == null || vehicle.getVehicleId().isBlank()) {
+            vehicle.setVehicleId(vehicleId);
+        }
+
+        PricingVehicle saved = vehicleRepo.save(vehicle);
+        return ResponseEntity.ok(Map.of("success", true, "vehicle", saved));
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteVehiclePricing(@PathVariable Long id) {
-        if (!vehicleRepo.existsById(id)) {
-            return ResponseEntity.notFound().build();
+    @DeleteMapping({"/{vehicleId}", "/vehicle/{vehicleId}", "/vehicles/{vehicleId}"})
+    public ResponseEntity<?> deleteVehiclePricing(@PathVariable String vehicleId) {
+        PricingVehicle vehicle = findVehicleByIdOrVehicleId(vehicleId);
+        if (vehicle == null) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Vehicle pricing not found for: " + vehicleId));
         }
-        vehicleRepo.deleteById(id);
-        return ResponseEntity.ok(Map.of("success", true, "message", "Pricing tier deleted."));
+        vehicleRepo.delete(vehicle);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Vehicle pricing deleted successfully"));
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private PricingVehicle findVehicleByIdOrVehicleId(String vehicleId) {
+        if (vehicleId == null || vehicleId.isBlank()) return null;
+
+        String clean = vehicleId.trim();
+        PricingVehicle v = vehicleRepo.findFirstByVehicleIdIgnoreCase(clean).orElse(null);
+        if (v != null) return v;
+
+        v = vehicleRepo.findByVehicleId(clean);
+        if (v != null) return v;
+
+        if (clean.matches("^\\d+$")) {
+            try {
+                Long id = Long.parseLong(clean);
+                return vehicleRepo.findById(id).orElse(null);
+            } catch (Exception ignored) {}
+        }
+
+        for (PricingVehicle existing : vehicleRepo.findAll()) {
+            if (existing.getVehicleId() != null && existing.getVehicleId().equalsIgnoreCase(clean)) return existing;
+            if (existing.getName() != null && existing.getName().equalsIgnoreCase(clean)) return existing;
+        }
+
+        return null;
+    }
+
+    private void mapPricingVehicleFromPayload(Map<String, Object> payload, PricingVehicle target) {
+        if (payload == null || target == null) return;
+
+        String vehicleId = parseString(payload, "vehicleId", "vehicle_id");
+        if (vehicleId != null && !vehicleId.isBlank()) target.setVehicleId(vehicleId);
+
+        String name = parseString(payload, "name", "vehicleName", "vehicle_name");
+        if (name != null) target.setName(name);
+
+        Double baseFare = parseDouble(payload, "baseFare", "base_fare");
+        if (baseFare != null) target.setBaseFare(baseFare);
+
+        Double pricePerKm = parseDouble(payload, "pricePerKm", "price_per_km", "perKmPrice", "per_km_price");
+        if (pricePerKm != null) target.setPricePerKm(pricePerKm);
+
+        Double minFare = parseDouble(payload, "minFare", "min_fare");
+        if (minFare != null) target.setMinFare(minFare);
+
+        Double maxFare = parseDouble(payload, "maxFare", "max_fare");
+        if (maxFare != null) target.setMaxFare(maxFare);
+
+        Double freeDistance = parseDouble(payload, "freeDistance", "free_distance");
+        if (freeDistance != null) target.setFreeDistance(freeDistance);
+
+        Double minDistance = parseDouble(payload, "minDistance", "min_distance");
+        if (minDistance != null) target.setMinDistance(minDistance);
+
+        Double maxDistance = parseDouble(payload, "maxDistance", "max_distance");
+        if (maxDistance != null) target.setMaxDistance(maxDistance);
+
+        Double capacityKg = parseDouble(payload, "capacityKg", "capacity_kg", "capacity");
+        if (capacityKg != null) target.setCapacityKg(capacityKg);
+
+        Double volume = parseDouble(payload, "volume");
+        if (volume != null) target.setVolume(volume);
+
+        Boolean status = parseBoolean(payload, "status", "isActive", "is_active");
+        if (status != null) target.setStatus(status);
+        else if (target.getStatus() == null) target.setStatus(true);
+
+        Integer priority = parseInteger(payload, "priority");
+        if (priority != null) target.setPriority(priority);
+        else if (target.getPriority() == null) target.setPriority(1);
+
+        Double commission = parseDouble(payload, "commissionPercentage", "commission_percentage", "commission");
+        if (commission != null) target.setCommissionPercentage(commission);
+
+        Double gst = parseDouble(payload, "gstPercentage", "gst_percentage", "gst");
+        if (gst != null) target.setGstPercentage(gst);
+
+        String icon = parseString(payload, "icon", "iconUrl", "icon_url");
+        if (icon != null) target.setIcon(icon);
+
+        String imageUrl = parseString(payload, "imageUrl", "image_url", "image");
+        if (imageUrl != null) target.setImageUrl(imageUrl);
+
+        String description = parseString(payload, "description");
+        if (description != null) target.setDescription(description);
+    }
+
+    private String parseString(Map<String, Object> map, String... keys) {
+        for (String k : keys) {
+            if (map.containsKey(k) && map.get(k) != null) {
+                String s = String.valueOf(map.get(k)).trim();
+                if (!s.isEmpty()) return s;
+            }
+        }
+        return null;
+    }
+
+    private Double parseDouble(Map<String, Object> map, String... keys) {
+        for (String k : keys) {
+            if (map.containsKey(k) && map.get(k) != null) {
+                try {
+                    return Double.parseDouble(String.valueOf(map.get(k)).trim());
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
+    private Integer parseInteger(Map<String, Object> map, String... keys) {
+        for (String k : keys) {
+            if (map.containsKey(k) && map.get(k) != null) {
+                try {
+                    return Integer.parseInt(String.valueOf(map.get(k)).trim());
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
+    private Boolean parseBoolean(Map<String, Object> map, String... keys) {
+        for (String k : keys) {
+            if (map.containsKey(k) && map.get(k) != null) {
+                Object v = map.get(k);
+                if (v instanceof Boolean) return (Boolean) v;
+                String s = String.valueOf(v).trim().toLowerCase();
+                if (s.equals("true") || s.equals("1") || s.equals("yes") || s.equals("active")) return true;
+                if (s.equals("false") || s.equals("0") || s.equals("no") || s.equals("inactive")) return false;
+            }
+        }
+        return null;
+    }
 
     private PricingRequest cloneRequest(PricingRequest src, String vehicleId) {
         PricingRequest r = new PricingRequest();

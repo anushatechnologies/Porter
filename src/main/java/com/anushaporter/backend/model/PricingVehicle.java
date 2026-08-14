@@ -14,6 +14,7 @@ public class PricingVehicle {
     private String imageUrl;
     private Double capacityKg;
     private Double volume;
+    private Double freeDistance;
     private Double minDistance;
     private Double maxDistance;
     private Double baseFare;
@@ -23,6 +24,8 @@ public class PricingVehicle {
     private Boolean status;
     private Integer priority;
     private Double commissionPercentage;
+    private Double gstPercentage;
+    private String description;
 
     // Getters and Setters
     public Long getId() { return id; }
@@ -45,6 +48,9 @@ public class PricingVehicle {
 
     public Double getVolume() { return volume; }
     public void setVolume(Double volume) { this.volume = volume; }
+
+    public Double getFreeDistance() { return freeDistance; }
+    public void setFreeDistance(Double freeDistance) { this.freeDistance = freeDistance; }
 
     public Double getMinDistance() { return minDistance; }
     public void setMinDistance(Double minDistance) { this.minDistance = minDistance; }
@@ -72,4 +78,10 @@ public class PricingVehicle {
 
     public Double getCommissionPercentage() { return commissionPercentage; }
     public void setCommissionPercentage(Double commissionPercentage) { this.commissionPercentage = commissionPercentage; }
+
+    public Double getGstPercentage() { return gstPercentage; }
+    public void setGstPercentage(Double gstPercentage) { this.gstPercentage = gstPercentage; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 }
