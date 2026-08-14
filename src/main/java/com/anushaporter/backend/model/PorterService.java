@@ -16,10 +16,13 @@ public class PorterService {
 
     private String name;
     private String label;
-    private String category; // 'vehicle', 'two_wheeler', 'packers', 'intercity'
+    private String category; // 'vehicle', 'two_wheeler', 'packers', 'intercity', 'how_it_works'
     
     @Column(length = 1000)
     private String subtitle;
+
+    @Column(length = 2000)
+    private String description;
 
     private Double baseFare;
     private Double baseKm;
@@ -92,6 +95,9 @@ public class PorterService {
 
     public String getSubtitle() { return subtitle; }
     public void setSubtitle(String subtitle) { this.subtitle = subtitle; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 
     public Double getBaseFare() { return baseFare; }
     public void setBaseFare(Double baseFare) { this.baseFare = baseFare; }

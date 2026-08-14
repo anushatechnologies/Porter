@@ -43,20 +43,25 @@ public class AdminPorterServiceController {
                     .collect(Collectors.toList());
         }
 
-        // 3. Search by name or slug
+        // 3. Search by name, slug, subtitle or description
         if (search != null && !search.isBlank()) {
             String query = search.trim().toLowerCase();
             services = services.stream()
                     .filter(s -> (s.getName() != null && s.getName().toLowerCase().contains(query))
                             || (s.getServiceId() != null && s.getServiceId().toLowerCase().contains(query))
-                            || (s.getSubtitle() != null && s.getSubtitle().toLowerCase().contains(query)))
+                            || (s.getSubtitle() != null && s.getSubtitle().toLowerCase().contains(query))
+                            || (s.getDescription() != null && s.getDescription().toLowerCase().contains(query)))
                     .collect(Collectors.toList());
         }
 
+        List<Map<String, Object>> formatted = services.stream()
+                .map(this::formatServiceForAdmin)
+                .collect(Collectors.toList());
+
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "count", services.size(),
-                "services", services
+                "count", formatted.size(),
+                "services", formatted
         ));
     }
 
@@ -73,7 +78,7 @@ public class AdminPorterServiceController {
                     "message", "Service not found with identifier: " + id
             ));
         }
-        return ResponseEntity.ok(Map.of("success", true, "service", service));
+        return ResponseEntity.ok(Map.of("success", true, "service", formatServiceForAdmin(service)));
     }
 
     /**
@@ -93,7 +98,7 @@ public class AdminPorterServiceController {
 
         // Check if slug already exists
         if (serviceRepository.findByServiceId(service.getServiceId()).isPresent()) {
-            service.setServiceId(service.getServiceId() + "-" + System.currentTimeMillis() % 10000);
+            service.setServiceId(service.getServiceId() + "-" + (System.currentTimeMillis() % 10000));
         }
 
         if (service.getDisplayOrder() == null || service.getDisplayOrder() <= 0) {
@@ -105,7 +110,7 @@ public class AdminPorterServiceController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Service created successfully",
-                "service", saved
+                "service", formatServiceForAdmin(saved)
         ));
     }
 
@@ -129,7 +134,7 @@ public class AdminPorterServiceController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Service updated successfully",
-                "service", saved
+                "service", formatServiceForAdmin(saved)
         ));
     }
 
@@ -174,7 +179,7 @@ public class AdminPorterServiceController {
                 "success", true,
                 "message", "Service status updated to " + (Boolean.TRUE.equals(saved.getIsActive()) ? "Active" : "Inactive"),
                 "isActive", saved.getIsActive(),
-                "service", saved
+                "service", formatServiceForAdmin(saved)
         ));
     }
 
@@ -206,10 +211,14 @@ public class AdminPorterServiceController {
         }
 
         List<PorterService> updated = serviceRepository.findAllByOrderByDisplayOrderAsc();
+        List<Map<String, Object>> formatted = updated.stream()
+                .map(this::formatServiceForAdmin)
+                .collect(Collectors.toList());
+
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Services reordered successfully",
-                "services", updated
+                "services", formatted
         ));
     }
 
@@ -232,6 +241,39 @@ public class AdminPorterServiceController {
                 "success", true,
                 "message", "Service deleted successfully"
         ));
+    }
+
+    public Map<String, Object> formatServiceForAdmin(PorterService s) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
+        map.put("serviceId", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
+        map.put("numericId", s.getId());
+        map.put("name", s.getName() != null ? s.getName() : "");
+        map.put("label", s.getLabel() != null ? s.getLabel() : (s.getName() != null ? s.getName() : ""));
+        map.put("category", s.getCategory() != null ? s.getCategory() : "vehicle");
+        map.put("subtitle", s.getSubtitle() != null ? s.getSubtitle() : "");
+        map.put("description", s.getDescription() != null ? s.getDescription() : (s.getSubtitle() != null ? s.getSubtitle() : ""));
+        map.put("baseFare", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
+        map.put("basePrice", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
+        map.put("baseKm", s.getBaseKm() != null ? s.getBaseKm() : 2.0);
+        map.put("perKmRate", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
+        map.put("pricePerKm", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
+        map.put("helperRate", s.getHelperRate() != null ? s.getHelperRate() : 0.0);
+        map.put("capacityKg", s.getCapacityKg() != null ? s.getCapacityKg() : 0);
+        map.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
+        map.put("capacityLabel", s.getCapacityLabel() != null ? s.getCapacityLabel() : "");
+        map.put("dimensions", s.getDimensions());
+        map.put("etaLabel", s.getEtaLabel() != null ? s.getEtaLabel() : "10-15 mins");
+        map.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+        map.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+        map.put("bgTint", s.getBgTint() != null ? s.getBgTint() : "#EEF4FF");
+        map.put("isActive", Boolean.TRUE.equals(s.getIsActive()));
+        map.put("order", s.getDisplayOrder() != null ? s.getDisplayOrder() : 1);
+        map.put("displayOrder", s.getDisplayOrder() != null ? s.getDisplayOrder() : 1);
+        map.put("availableCities", s.getAvailableCities() != null ? s.getAvailableCities() : "[\"ALL\"]");
+        map.put("createdAt", s.getCreatedAt());
+        map.put("updatedAt", s.getUpdatedAt());
+        return map;
     }
 
     private PorterService findServiceByIdOrSlug(String identifier) {
@@ -264,6 +306,8 @@ public class AdminPorterServiceController {
     private void mapServiceFromPayload(Map<String, Object> payload, PorterService target) {
         if (payload.containsKey("serviceId") && payload.get("serviceId") != null) {
             target.setServiceId(payload.get("serviceId").toString().trim());
+        } else if (payload.containsKey("id") && payload.get("id") != null && !payload.get("id").toString().matches("^\\d+$")) {
+            target.setServiceId(payload.get("id").toString().trim());
         }
         if (payload.containsKey("name") && payload.get("name") != null) {
             target.setName(payload.get("name").toString().trim());
@@ -278,6 +322,9 @@ public class AdminPorterServiceController {
         }
         if (payload.containsKey("subtitle")) {
             target.setSubtitle(payload.get("subtitle") != null ? payload.get("subtitle").toString().trim() : null);
+        }
+        if (payload.containsKey("description")) {
+            target.setDescription(payload.get("description") != null ? payload.get("description").toString().trim() : null);
         }
         if (payload.containsKey("baseFare") && payload.get("baseFare") != null) {
             target.setBaseFare(parseDouble(payload.get("baseFare")));

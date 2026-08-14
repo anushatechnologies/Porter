@@ -18,6 +18,8 @@ public interface PorterServiceRepository extends JpaRepository<PorterService, Lo
 
     List<PorterService> findAllByOrderByDisplayOrderAsc();
 
+    List<PorterService> findByCategoryAndIsActiveTrueOrderByDisplayOrderAsc(String category);
+
     List<PorterService> findByCategoryIgnoreCaseAndIsActiveTrueOrderByDisplayOrderAsc(String category);
 
     List<PorterService> findByCategoryIgnoreCaseOrderByDisplayOrderAsc(String category);
