@@ -65,6 +65,9 @@ public class DriverAPIController {
         return null;
     }
 
+    @Autowired
+    private com.anushaporter.backend.service.StorageService storageService;
+
     @GetMapping({"/drivers/me", "/driver/me"})
     public ResponseEntity<?> getDriverProfile(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
@@ -94,11 +97,11 @@ public class DriverAPIController {
         map.put("heading", driver.getHeading());
         map.put("speed", driver.getSpeed());
         map.put("location", driver.getLocation());
-        map.put("profilePhotoUri", driver.getProfilePhotoUri());
-        map.put("licenseUri", driver.getLicenseUri());
-        map.put("rcUri", driver.getRcUri());
-        map.put("aadhaarUri", driver.getAadhaarUri());
-        map.put("bankPassbookUri", driver.getBankPassbookUri());
+        map.put("profilePhotoUri", storageService.getPresignedOrSanitizedUrl(driver.getProfilePhotoUri()));
+        map.put("licenseUri", storageService.getPresignedOrSanitizedUrl(driver.getLicenseUri()));
+        map.put("rcUri", storageService.getPresignedOrSanitizedUrl(driver.getRcUri()));
+        map.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(driver.getAadhaarUri()));
+        map.put("bankPassbookUri", storageService.getPresignedOrSanitizedUrl(driver.getBankPassbookUri()));
         return ResponseEntity.ok(map);
     }
 
@@ -350,11 +353,11 @@ public class DriverAPIController {
         @SuppressWarnings("unchecked")
         Map<String, String> docs = (Map<String, String>) payload.get("documents");
         if (docs != null) {
-            driver.setProfilePhotoUri(docs.get("profilePhotoUrl"));
-            driver.setAadhaarUri(docs.get("aadhaarUrl"));
-            driver.setLicenseUri(docs.get("licenseUrl"));
-            driver.setRcUri(docs.get("rcUrl"));
-            driver.setBankPassbookUri(docs.get("bankPassbookUrl"));
+            driver.setProfilePhotoUri(storageService.sanitizeUri(docs.get("profilePhotoUrl")));
+            driver.setAadhaarUri(storageService.sanitizeUri(docs.get("aadhaarUrl")));
+            driver.setLicenseUri(storageService.sanitizeUri(docs.get("licenseUrl")));
+            driver.setRcUri(storageService.sanitizeUri(docs.get("rcUrl")));
+            driver.setBankPassbookUri(storageService.sanitizeUri(docs.get("bankPassbookUrl")));
         }
 
         Driver saved = driverRepository.save(driver);
@@ -374,7 +377,7 @@ public class DriverAPIController {
     }
 
     // Toggle Status
-    @PutMapping({"/drivers/me/status", "/driver/me/status", "/drivers/status"})
+    @RequestMapping(value = {"/drivers/me/status", "/driver/me/status", "/drivers/status", "/driver/status"}, method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
     public ResponseEntity<?> updateStatus(HttpServletRequest request, @RequestBody(required = false) Map<String, Object> payload) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
@@ -394,7 +397,8 @@ public class DriverAPIController {
 
         return ResponseEntity.ok(Map.of(
             "success", true,
-            "status", saved.getStatus() != null ? saved.getStatus().toLowerCase() : newStatus
+            "status", saved.getStatus() != null ? saved.getStatus().toLowerCase() : newStatus,
+            "driver", saved
         ));
     }
 

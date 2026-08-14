@@ -104,6 +104,9 @@ public class DriverController {
         return orderRepository.findAllByDriverEmailOrderByCreatedAtDesc(email);
     }
 
+    @Autowired
+    private com.anushaporter.backend.service.StorageService storageService;
+
     /**
      * GET /api/drivers
      * Returns formatted list of drivers for Admin Drivers roster & Live Driver GPS tracking map.
@@ -123,9 +126,12 @@ public class DriverController {
             map.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
             map.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
-            map.put("rating", 4.8);
-            map.put("licenseUri", d.getLicenseUri() != null ? d.getLicenseUri() : "");
-            map.put("rcUri", d.getRcUri() != null ? d.getRcUri() : "");
+            map.put("rating", d.getRating() != null ? d.getRating() : "4.8");
+            map.put("licenseUri", storageService.getPresignedOrSanitizedUrl(d.getLicenseUri()));
+            map.put("rcUri", storageService.getPresignedOrSanitizedUrl(d.getRcUri()));
+            map.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(d.getAadhaarUri()));
+            map.put("profilePhotoUri", storageService.getPresignedOrSanitizedUrl(d.getProfilePhotoUri()));
+            map.put("bankPassbookUri", storageService.getPresignedOrSanitizedUrl(d.getBankPassbookUri()));
 
             double lat = d.getLatitude() != null ? d.getLatitude() : 17.4483;
             double lng = d.getLongitude() != null ? d.getLongitude() : 78.3915;
@@ -154,6 +160,12 @@ public class DriverController {
         } else {
             entity.setStatus(driverAuthService.normalizeStatus(entity.getStatus()));
         }
+        if (entity.getLicenseUri() != null) entity.setLicenseUri(storageService.sanitizeUri(entity.getLicenseUri()));
+        if (entity.getRcUri() != null) entity.setRcUri(storageService.sanitizeUri(entity.getRcUri()));
+        if (entity.getAadhaarUri() != null) entity.setAadhaarUri(storageService.sanitizeUri(entity.getAadhaarUri()));
+        if (entity.getProfilePhotoUri() != null) entity.setProfilePhotoUri(storageService.sanitizeUri(entity.getProfilePhotoUri()));
+        if (entity.getBankPassbookUri() != null) entity.setBankPassbookUri(storageService.sanitizeUri(entity.getBankPassbookUri()));
+
         Driver savedDriver = repository.save(entity);
 
         if (entity.getVehicleNumber() != null && !entity.getVehicleNumber().trim().isEmpty()) {
@@ -184,7 +196,7 @@ public class DriverController {
         return ResponseEntity.ok(driver);
     }
 
-    @PutMapping("/email/{email}/status")
+    @RequestMapping(value = "/email/{email}/status", method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
     public ResponseEntity<?> updateStatusByEmail(@PathVariable String email, @RequestBody(required = false) Map<String, Object> payload) {
         Driver driver = driverAuthService.resolveDriverByIdentifier(email);
         if (driver == null) {
@@ -209,17 +221,21 @@ public class DriverController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/{driverId}/status")
-    public ResponseEntity<?> updateStatusById(@PathVariable String driverId, jakarta.servlet.http.HttpServletRequest request, @RequestBody(required = false) Map<String, Object> payload) {
+    @RequestMapping(value = {"/{driverId}/status", "/status", "/me/status"}, method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
+    public ResponseEntity<?> updateStatusById(
+            @PathVariable(required = false) String driverId,
+            jakarta.servlet.http.HttpServletRequest request,
+            @RequestBody(required = false) Map<String, Object> payload) {
+
         Driver driver = null;
-        if ("me".equalsIgnoreCase(driverId)) {
+        if (driverId == null || "me".equalsIgnoreCase(driverId) || "status".equalsIgnoreCase(driverId)) {
             driver = driverAuthService.resolveAuthenticatedDriver(request);
         } else {
             driver = driverAuthService.resolveDriverByIdentifier(driverId);
         }
 
         if (driver == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + driverId));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + (driverId != null ? driverId : "me")));
         }
 
         Object rawStatus = null;
@@ -236,6 +252,7 @@ public class DriverController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("status", saved.getStatus() != null ? saved.getStatus().toLowerCase() : newStatus);
+        response.put("driver", saved);
         return ResponseEntity.ok(response);
     }
 

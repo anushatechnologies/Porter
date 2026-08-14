@@ -1770,5 +1770,113 @@ Response (200 OK):
 
 
 ================================================================================
+22. FLEET VEHICLES & PRICING INTEGRATION & DRIVER STORAGE
+================================================================================
+
+22.1 GET FLEET VEHICLES WITH LIVE PRICING
+--------------------------------------------------------------------------------
+Endpoint: GET /api/vehicles
+Auth: Optional / Public
+Description: Returns complete vehicle models joined with their real-time pricing data.
+
+Response (200 OK):
+[
+  {
+    "id": "V-3",
+    "vehicleId": "bike",
+    "name": "Bike",
+    "model": "Bike Model",
+    "type": "Bike",
+    "plate": "TS09AB1111",
+    "owner": "Ramesh",
+    "trips": 0,
+    "baseFare": 100.0,
+    "pricePerKm": 15.0,
+    "minFare": 100.0,
+    "maxFare": 5000.0,
+    "freeDistance": 2.0,
+    "minDistance": 2.0,
+    "maxDistance": 500.0,
+    "capacityKg": 500.0,
+    "capacity": "500 kg",
+    "volume": 1.0,
+    "status": true,
+    "priority": 1,
+    "icon": "https://...",
+    "imageUrl": "https://..."
+  },
+  {
+    "id": "V-4",
+    "vehicleId": "scooter-model",
+    "name": "Scooter Model",
+    "model": "Scooter Model",
+    "type": "Scooter",
+    "plate": "TS09AB2222",
+    "owner": "Suresh",
+    "trips": 0,
+    "baseFare": 120.0,
+    "pricePerKm": 18.0,
+    "minFare": 120.0,
+    "maxFare": 5000.0,
+    "freeDistance": 2.0,
+    "minDistance": 2.0,
+    "maxDistance": 500.0,
+    "capacityKg": 500.0,
+    "capacity": "500 kg",
+    "volume": 1.0,
+    "status": true,
+    "priority": 2,
+    "icon": "https://...",
+    "imageUrl": "https://..."
+  }
+]
+
+
+22.2 DRIVER ONLINE / OFFLINE STATUS TOGGLE
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/driver/status (also supports PATCH and aliases /api/drivers/me/status, /api/drivers/status)
+Auth: Bearer <DRIVER_JWT_TOKEN>
+
+Request Body:
+{
+  "status": "offline"
+}
+// Alternative payloads supported: { "online": false } or { "isOnline": false }
+
+Response (200 OK):
+{
+  "success": true,
+  "status": "offline",
+  "driver": {
+    "id": 1,
+    "name": "Supriya",
+    "email": "supriya@driver.com",
+    "phone": "9876543211",
+    "status": "offline",
+    "kyc": "verified",
+    "rating": "4.8"
+  }
+}
+
+
+22.3 DRIVER DOCUMENT SCANS & S3 URL FORMAT
+--------------------------------------------------------------------------------
+Endpoint: GET /api/drivers OR GET /api/drivers/me
+Auth: Bearer <token>
+Description: Driver DL, RC, Aadhaar, and Profile Photo URLs are automatically sanitized
+and generated via S3 pre-signed URLs (valid for 2 hours) to ensure no 403 Forbidden errors.
+
+Response fields:
+{
+  "licenseUri": "https://poteranusha.s3.ap-south-2.amazonaws.com/license/ba4c8473-c1dc-417d-b456-bfe7222be8a8.jpeg?...",
+  "rcUri": "https://poteranusha.s3.ap-south-2.amazonaws.com/rc/f1234567-c1dc-417d-b456-bfe7222be8a8.jpeg?...",
+  "profilePhotoUri": "https://...",
+  "aadhaarUri": "https://...",
+  "bankPassbookUri": "https://..."
+}
+
+
+================================================================================
 END OF DOCUMENTATION
 ================================================================================
+
