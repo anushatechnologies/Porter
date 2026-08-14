@@ -188,18 +188,69 @@ public class DriverAPIController {
         return updateLocation(request, payload);
     }
 
-    @PutMapping("/driver/orders/{bookingId}/accept")
+    @RequestMapping(value = {"/driver/orders/{bookingId}/accept", "/drivers/orders/{bookingId}/accept"}, method = {RequestMethod.PUT, RequestMethod.POST})
     public ResponseEntity<?> acceptOrderByBookingId(HttpServletRequest request, @PathVariable String bookingId) {
-        if (request.getAttribute("userId") == null) return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized"));
         Driver driver = getAuthenticatedDriver(request);
-        Order order = orderRepository.findByBookingId(bookingId).orElse(null);
-        if (driver == null) return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver profile not found"));
-        if (order == null) return ResponseEntity.notFound().build();
-        order.setDriverId(driver.getId().toString()); order.setDriverEmail(driver.getEmail());
-        order.setDriverName(driver.getName()); order.setDriverPhone(driver.getPhone());
-        order.setDriverVehicleNumber(driver.getVehicleNumber()); order.setStatus("accepted");
-        Order saved = orderRepository.save(order); pushNotificationService.notifyOrderStatus(saved, saved.getStatus());
-        return ResponseEntity.ok(Map.of("success", true, "bookingId", bookingId, "status", saved.getStatus(), "order", saved));
+        if (driver == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver profile not found or unauthorized"));
+        }
+
+        Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = orderRepository.findById(Long.valueOf(bookingId));
+            } catch (NumberFormatException ignored) {}
+        }
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
+        }
+
+        Order order = orderOpt.get();
+        String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "searching";
+        boolean isClaimable = currentStatus.equals("searching") || currentStatus.equals("pending");
+
+        boolean isSameDriver = (driver.getId() != null && driver.getId().toString().equals(order.getDriverId()))
+                || (driver.getEmail() != null && driver.getEmail().equalsIgnoreCase(order.getDriverEmail()));
+
+        if (!isClaimable && !isSameDriver) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "success", false,
+                    "message", "This order has already been accepted by another driver."
+            ));
+        }
+
+        int rows = orderRepository.claimOrderByIdAtomic(
+                order.getId(),
+                driver.getId() != null ? driver.getId().toString() : "",
+                driver.getName(),
+                driver.getEmail(),
+                driver.getPhone(),
+                driver.getVehicleNumber()
+        );
+
+        if (rows == 0 && !isSameDriver) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "success", false,
+                    "message", "This order has already been accepted by another driver."
+            ));
+        }
+
+        order.setDriverId(driver.getId() != null ? driver.getId().toString() : "");
+        order.setDriverName(driver.getName());
+        order.setDriverEmail(driver.getEmail());
+        order.setDriverPhone(driver.getPhone());
+        order.setDriverVehicleNumber(driver.getVehicleNumber());
+        order.setStatus("accepted");
+
+        Order saved = orderRepository.findById(order.getId()).orElse(order);
+        pushNotificationService.notifyOrderStatus(saved, saved.getStatus());
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Order accepted successfully",
+                "bookingId", saved.getBookingId() != null ? saved.getBookingId() : bookingId,
+                "status", "accepted",
+                "order", saved
+        ));
     }
 
     @PostMapping("/driver/orders/{bookingId}/verify-otp")

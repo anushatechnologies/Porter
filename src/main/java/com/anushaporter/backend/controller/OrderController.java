@@ -30,6 +30,9 @@ public class OrderController {
     @Autowired
     private com.anushaporter.backend.repository.DriverRepository driverRepository;
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverAuthService driverAuthService;
+
     /**
      * GET /api/orders
      * Returns formatted orders list for Admin Dashboard, Orders view, and Live Dispatch screen.
@@ -126,7 +129,7 @@ public class OrderController {
     }
 
     @RequestMapping(value = "/{id}/status", method = {RequestMethod.PUT, RequestMethod.POST})
-    public ResponseEntity<Map<String, Object>> updateStatus(@PathVariable String id, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, Object>> updateStatus(@PathVariable String id, @RequestBody(required = false) Map<String, String> payload, HttpServletRequest request) {
         Optional<Order> orderOpt = repository.findByBookingId(id);
         if (orderOpt.isEmpty()) {
             try {
@@ -143,7 +146,53 @@ public class OrderController {
         String inputOtp = payload != null ? payload.get("otp") : null;
         if (inputOtp == null && payload != null) inputOtp = payload.get("deliveryOtp");
 
-        // If completing/delivering order or OTP is provided, enforce strict OTP verification!
+        // ── 1. Atomic Single-Driver Locking on Order Acceptance ───────────────
+        if ("accepted".equalsIgnoreCase(targetStatus) || "assigned".equalsIgnoreCase(targetStatus) || "driver_assigned".equalsIgnoreCase(targetStatus)) {
+            com.anushaporter.backend.model.Driver driver = driverAuthService.resolveAuthenticatedDriver(request);
+            String driverId = driver != null ? driver.getId().toString() : (payload != null ? payload.get("driverId") : null);
+            String driverName = driver != null ? driver.getName() : (payload != null ? payload.get("driverName") : null);
+            String driverEmail = driver != null ? driver.getEmail() : (payload != null ? payload.get("driverEmail") : null);
+            String driverPhone = driver != null ? driver.getPhone() : (payload != null ? payload.get("driverPhone") : null);
+            String driverVehicle = driver != null ? driver.getVehicleNumber() : (payload != null ? payload.get("driverVehicleNumber") : null);
+
+            String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "searching";
+            boolean isClaimable = currentStatus.equals("searching") || currentStatus.equals("pending");
+
+            boolean isSameDriver = (driverId != null && driverId.equals(order.getDriverId()))
+                    || (driverEmail != null && driverEmail.equalsIgnoreCase(order.getDriverEmail()));
+
+            if (!isClaimable && !isSameDriver) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "success", false,
+                        "message", "This order has already been accepted by another driver."
+                ));
+            }
+
+            int rows = repository.claimOrderByIdAtomic(order.getId(), driverId, driverName, driverEmail, driverPhone, driverVehicle);
+            if (rows == 0 && !isSameDriver) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "success", false,
+                        "message", "This order has already been accepted by another driver."
+                ));
+            }
+
+            order.setDriverId(driverId);
+            order.setDriverName(driverName);
+            order.setDriverEmail(driverEmail);
+            order.setDriverPhone(driverPhone);
+            order.setDriverVehicleNumber(driverVehicle);
+            order.setStatus("accepted");
+
+            Order savedOrder = repository.findById(order.getId()).orElse(order);
+            pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Order accepted successfully",
+                    "order", savedOrder
+            ));
+        }
+
+        // ── 2. OTP Verification for Delivery Completion ───────────────────────
         if ("delivered".equalsIgnoreCase(targetStatus) || "completed".equalsIgnoreCase(targetStatus) || inputOtp != null) {
             String validOtp = order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813";
 
@@ -168,28 +217,84 @@ public class OrderController {
         return ResponseEntity.ok(Map.of("success", true, "message", msg, "order", savedOrder));
     }
 
-    @PutMapping("/{id}/accept")
-    public ResponseEntity<?> acceptOrder(@PathVariable Long id, HttpServletRequest request) {
-        String email = (String) request.getAttribute("userId");
-        if (email == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized"));
+    @RequestMapping(value = {"/{id}/accept", "/{id}/accept-order"}, method = {RequestMethod.PUT, RequestMethod.POST})
+    public ResponseEntity<?> acceptOrder(@PathVariable String id, HttpServletRequest request) {
+        Optional<Order> orderOpt = repository.findByBookingId(id);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = repository.findById(Long.valueOf(id));
+            } catch (NumberFormatException ignored) {}
         }
 
-        return repository.findById(id).map(order -> {
-            AppUser user = appUserRepository.findFirstByEmailOrderByIdDesc(email).orElse(null);
-            if (user != null) {
-                driverRepository.findByPhone(user.getPhone()).ifPresent(driver -> {
-                    order.setDriverId(driver.getId().toString());
-                    order.setDriverEmail(driver.getEmail());
-                    order.setDriverName(driver.getName());
-                    order.setDriverPhone(driver.getPhone());
-                    order.setDriverVehicleNumber(driver.getVehicleNumber());
-                });
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
+        }
+
+        Order order = orderOpt.get();
+        com.anushaporter.backend.model.Driver driver = driverAuthService.resolveAuthenticatedDriver(request);
+
+        String driverId = driver != null ? driver.getId().toString() : null;
+        String driverName = driver != null ? driver.getName() : null;
+        String driverEmail = driver != null ? driver.getEmail() : null;
+        String driverPhone = driver != null ? driver.getPhone() : null;
+        String driverVehicle = driver != null ? driver.getVehicleNumber() : null;
+
+        if (driver == null) {
+            String email = (String) request.getAttribute("userId");
+            if (email != null) {
+                AppUser user = appUserRepository.findFirstByEmailOrderByIdDesc(email).orElse(null);
+                if (user != null) {
+                    driver = driverRepository.findByPhone(user.getPhone()).orElse(null);
+                    if (driver != null) {
+                        driverId = driver.getId().toString();
+                        driverName = driver.getName();
+                        driverEmail = driver.getEmail();
+                        driverPhone = driver.getPhone();
+                        driverVehicle = driver.getVehicleNumber();
+                    }
+                }
             }
-            order.setStatus("picked_up");
-            Order savedOrder = repository.save(order);
-            pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
-            return ResponseEntity.ok(Map.of("success", true, "orderDetails", savedOrder));
-        }).orElse(ResponseEntity.notFound().build());
+        }
+
+        if (driverId == null && driverEmail == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized or driver profile not found"));
+        }
+
+        String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "searching";
+        boolean isClaimable = currentStatus.equals("searching") || currentStatus.equals("pending");
+
+        boolean isSameDriver = (driverId != null && driverId.equals(order.getDriverId()))
+                || (driverEmail != null && driverEmail.equalsIgnoreCase(order.getDriverEmail()));
+
+        if (!isClaimable && !isSameDriver) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "success", false,
+                    "message", "This order has already been accepted by another driver."
+            ));
+        }
+
+        int rows = repository.claimOrderByIdAtomic(order.getId(), driverId, driverName, driverEmail, driverPhone, driverVehicle);
+        if (rows == 0 && !isSameDriver) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "success", false,
+                    "message", "This order has already been accepted by another driver."
+            ));
+        }
+
+        order.setDriverId(driverId);
+        order.setDriverName(driverName);
+        order.setDriverEmail(driverEmail);
+        order.setDriverPhone(driverPhone);
+        order.setDriverVehicleNumber(driverVehicle);
+        order.setStatus("accepted");
+
+        Order savedOrder = repository.findById(order.getId()).orElse(order);
+        pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Order accepted successfully",
+                "order", savedOrder,
+                "orderDetails", savedOrder
+        ));
     }
 }
