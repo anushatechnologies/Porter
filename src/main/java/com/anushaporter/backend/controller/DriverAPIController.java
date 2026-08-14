@@ -45,18 +45,61 @@ public class DriverAPIController {
     @Autowired
     private PushNotificationService pushNotificationService;
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverAuthService driverAuthService;
+
     private Driver getAuthenticatedDriver(HttpServletRequest request) {
-        String email = (String) request.getAttribute("userId");
-        Optional<AppUser> userOpt = appUserRepository.findFirstByEmailOrderByIdDesc(email);
-        if (userOpt.isPresent()) {
-            return driverRepository.findByPhone(userOpt.get().getPhone()).orElse(null);
+        return driverAuthService.resolveAuthenticatedDriver(request);
+    }
+
+    private AppUser getAuthenticatedAppUser(HttpServletRequest request) {
+        String userId = (String) request.getAttribute("userId");
+        if (userId == null) return null;
+        Optional<AppUser> userOpt = appUserRepository.findFirstByEmailOrderByIdDesc(userId);
+        if (userOpt.isPresent()) return userOpt.get();
+        String cleanPhone = driverAuthService.normalizePhone(userId);
+        if (!cleanPhone.isEmpty()) {
+            userOpt = appUserRepository.findFirstByPhoneOrderByIdDesc(cleanPhone);
+            if (userOpt.isPresent()) return userOpt.get();
         }
         return null;
     }
 
-    private AppUser getAuthenticatedAppUser(HttpServletRequest request) {
-        String email = (String) request.getAttribute("userId");
-        return appUserRepository.findFirstByEmailOrderByIdDesc(email).orElse(null);
+    @GetMapping({"/drivers/me", "/driver/me"})
+    public ResponseEntity<?> getDriverProfile(HttpServletRequest request) {
+        Driver driver = getAuthenticatedDriver(request);
+        if (driver == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
+        }
+        Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("success", true);
+        map.put("id", driver.getId());
+        map.put("driverId", driver.getId() != null ? driver.getId().toString() : "");
+        map.put("name", driver.getName() != null ? driver.getName() : "Driver");
+        map.put("phone", driver.getPhone() != null ? driver.getPhone() : "");
+        map.put("email", driver.getEmail() != null ? driver.getEmail() : "");
+        map.put("status", driver.getStatus() != null ? driver.getStatus().toLowerCase() : "offline");
+        map.put("kyc", driver.getKyc() != null ? driver.getKyc() : "pending");
+        map.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "pending");
+        map.put("rating", driver.getRating() != null ? driver.getRating() : "4.8");
+        map.put("vehicle", driver.getVehicle() != null ? driver.getVehicle() : "");
+        map.put("vehicleType", driver.getVehicleType() != null ? driver.getVehicleType() : "");
+        map.put("vehicleNumber", driver.getVehicleNumber() != null ? driver.getVehicleNumber() : "");
+        map.put("rcNumber", driver.getRcNumber() != null ? driver.getRcNumber() : "");
+        map.put("licenseNumber", driver.getLicenseNumber() != null ? driver.getLicenseNumber() : "");
+        map.put("aadhaarNumber", driver.getAadhaarNumber() != null ? driver.getAadhaarNumber() : "");
+        map.put("trips", driver.getTrips() != null ? driver.getTrips() : 0);
+        map.put("latitude", driver.getLatitude());
+        map.put("longitude", driver.getLongitude());
+        map.put("heading", driver.getHeading());
+        map.put("speed", driver.getSpeed());
+        map.put("location", driver.getLocation());
+        map.put("profilePhotoUri", driver.getProfilePhotoUri());
+        map.put("licenseUri", driver.getLicenseUri());
+        map.put("rcUri", driver.getRcUri());
+        map.put("aadhaarUri", driver.getAadhaarUri());
+        map.put("bankPassbookUri", driver.getBankPassbookUri());
+        return ResponseEntity.ok(map);
     }
 
     @PostMapping("/drivers/me/device-token")
@@ -280,20 +323,28 @@ public class DriverAPIController {
     }
 
     // Toggle Status
-    @PutMapping("/drivers/me/status")
-    public ResponseEntity<?> updateStatus(HttpServletRequest request, @RequestBody Map<String, String> payload) {
+    @PutMapping({"/drivers/me/status", "/driver/me/status", "/drivers/status"})
+    public ResponseEntity<?> updateStatus(HttpServletRequest request, @RequestBody(required = false) Map<String, Object> payload) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized or Driver profile not found"));
+            return ResponseEntity.status(401).body(Map.of("success", false, "error", "Unauthorized or Driver profile not found"));
         }
 
-        String newStatus = payload.get("status");
-        if (newStatus != null) {
-            driver.setStatus(newStatus);
-            driverRepository.save(driver);
+        Object rawStatus = null;
+        if (payload != null) {
+            rawStatus = payload.get("status");
+            if (rawStatus == null) rawStatus = payload.get("online");
+            if (rawStatus == null) rawStatus = payload.get("isOnline");
         }
 
-        return ResponseEntity.ok(Map.of("success", true, "status", driver.getStatus()));
+        String newStatus = driverAuthService.normalizeStatus(rawStatus);
+        driver.setStatus(newStatus);
+        Driver saved = driverRepository.save(driver);
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "status", saved.getStatus() != null ? saved.getStatus().toLowerCase() : newStatus
+        ));
     }
 
     // Fetch Earnings

@@ -1,0 +1,155 @@
+==============================================================
+         ANUSHA PORTER ADMIN PANEL - API SPECIFICATION
+==============================================================
+
+BASE URL: https://<your-backend-domain>
+
+--------------------------------------------------------------
+1. Authentication & Access Control
+--------------------------------------------------------------
+POST /api/auth/login
+  Request: { "email": "admin@porter.com", "password": "password123" }
+  Response: { "success": true, "user": { "id", "name", "email", "role" }, "token": "jwt-token" }
+
+POST /api/auth/signup
+  Request: { "fullName": "Admin Name", "email": "admin@porter.com", "password": "password123", "phone": "1234567890", "role": "admin" }
+  Response: { "success": true, "user": { "id", "name", "email", "role" } }
+
+POST /api/auth/forgot-password
+  Request: { "email": "admin@porter.com" }
+  Response: { "success": true, "message": "If an account with that email exists, a reset code has been sent." }
+
+POST /api/auth/reset-password
+  Request: { "email": "admin@porter.com", "otp": "1234", "newPassword": "newpassword123" }
+  Response: { "success": true, "message": "Password reset successfully." }
+
+POST /api/auth/logout
+  Request: {}
+  Response: { "success": true }
+
+--------------------------------------------------------------
+2. Dispatch & Order Management
+--------------------------------------------------------------
+GET /api/orders
+  Response: [ { order details... }, ... ]
+
+POST /api/orders/{id}/assign
+  Request: { "driverId": "123" } OR { "driverName": "Test", "driverPhone": "1234", "driverVehicleNumber": "TS09" }
+  Response: { "success": true, "order": { updated order... } }
+
+POST /api/orders/{id}/status
+  Request: { "status": "transit" }
+  Response: { "success": true, "order": { updated order... } }
+
+--------------------------------------------------------------
+3. Driver & KYC Management
+--------------------------------------------------------------
+GET /api/drivers
+  Response: [ { driver details... }, ... ]
+
+POST /api/drivers/{id}/verify
+  Request: {}
+  Response: { "success": true, "driver": { ... "kyc": "verified" } }
+
+POST /api/drivers/{id}/reject
+  Request: {}
+  Response: { "success": true, "driver": { ... "kyc": "rejected" } }
+
+--------------------------------------------------------------
+4. Dynamic Pricing & Vehicle Config
+--------------------------------------------------------------
+GET /api/admin/pricing/vehicles
+  Response: [ { pricing vehicle details... }, ... ]
+
+GET /api/pricing/vehicle/{vehicleId}
+  Response: { pricing vehicle details... }
+
+POST /api/pricing
+  Request: { "vehicleId": "mini_truck", "baseFare": 50.0, ... }
+  Response: { "success": true, "vehicle": { ... } }
+
+PUT /api/pricing/vehicle/{vehicleId}
+  Request: { "baseFare": 60.0, ... }
+  Response: { "success": true, "vehicle": { ... } }
+
+DELETE /api/pricing/{id}
+  Request: {}
+  Response: { "success": true }
+
+--------------------------------------------------------------
+5. Finance & Payout Settlement
+--------------------------------------------------------------
+GET /api/payouts
+  Response: [ { payout details... }, ... ]
+
+POST /api/payouts/{id}/release
+  Request: {}
+  Response: { "success": true, "status": "settled" }
+
+POST /api/customers/{id}/topup
+  Request: { "amount": 500.0 }
+  Response: { "success": true, "wallet": 500.0 }
+
+--------------------------------------------------------------
+6. Support Ticketing & Chat
+--------------------------------------------------------------
+GET /api/tickets
+  Response: [ { ticket details... }, ... ]
+
+POST /api/tickets/{id}/message
+  Request: { "message": "Reply from admin", "sender": "admin" }
+  Response: { "success": true, "message": { ticket details... } }
+
+POST /api/tickets/{id}/status
+  Request: { "status": "in_progress" }
+  Response: { "success": true }
+
+POST /api/tickets/{id}/resolve
+  Request: {}
+  Response: { "success": true }
+
+--------------------------------------------------------------
+7. Broadcast Notifications
+--------------------------------------------------------------
+GET /api/notifications
+  Response: [ { notification details... }, ... ]
+
+POST /api/notifications/broadcast
+  Request: { "title": "System Update", "message": "Downtime expected.", "audience": "all" }
+  Response: { "success": true, "notification": { ... } }
+
+POST /api/notifications/{id}/read
+  Request: {}
+  Response: { "success": true, "notification": { ... } }
+
+POST /api/notifications/read-all
+  Request: {}
+  Response: { "success": true }
+
+--------------------------------------------------------------
+8. Master Settings & User Management
+--------------------------------------------------------------
+GET /api/customers
+  Response: [ { customer details... }, ... ]
+
+GET /api/vehicles
+  Response: [ { vehicle master details... }, ... ]
+
+GET /api/franchises
+  Response: [ { franchise details... }, ... ]
+
+GET /api/settings
+  Response: { "system_maintenance": "false", "default_currency": "INR" }
+
+POST /api/settings
+  Request: { "system_maintenance": "true" }
+  Response: { "success": true }
+
+GET /api/users
+  Response: [ { user details... }, ... ]
+
+POST /api/users
+  Request: [ { "email": "test@test.com", "role": "manager" } ]
+  Response: { "success": true }
+
+==============================================================

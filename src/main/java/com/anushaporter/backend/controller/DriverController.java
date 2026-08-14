@@ -34,6 +34,9 @@ public class DriverController {
     @Autowired
     private VehicleRepository vehicleRepository;
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverAuthService driverAuthService;
+
     @GetMapping({"/me/orders/active", "/active-order", "/{email}/orders/active"})
     public ResponseEntity<?> getActiveOrder(@PathVariable(required = false) String email) {
         List<String> activeStatuses = Arrays.asList("assigned", "accepted", "picked_up", "transit", "driver_assigned", "in_transit");
@@ -117,7 +120,7 @@ public class DriverController {
             map.put("email", d.getEmail() != null ? d.getEmail() : "");
             map.put("phone", d.getPhone() != null ? d.getPhone() : "");
             map.put("vehicleNumber", d.getVehicleNumber() != null ? d.getVehicleNumber() : "");
-            map.put("status", d.getStatus() != null ? d.getStatus() : "online");
+            map.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
             map.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("rating", 4.8);
@@ -146,6 +149,11 @@ public class DriverController {
 
     @PostMapping
     public Driver create(@RequestBody Driver entity) {
+        if (entity.getStatus() == null || entity.getStatus().isBlank()) {
+            entity.setStatus("offline");
+        } else {
+            entity.setStatus(driverAuthService.normalizeStatus(entity.getStatus()));
+        }
         Driver savedDriver = repository.save(entity);
 
         if (entity.getVehicleNumber() != null && !entity.getVehicleNumber().trim().isEmpty()) {
@@ -168,18 +176,67 @@ public class DriverController {
     }
 
     @GetMapping("/email/{email}")
-    public ResponseEntity<Driver> getByEmail(@PathVariable String email) {
-        return repository.findByEmail(email)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+    public ResponseEntity<?> getByEmail(@PathVariable String email) {
+        Driver driver = driverAuthService.resolveDriverByIdentifier(email);
+        if (driver == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        return ResponseEntity.ok(driver);
     }
 
     @PutMapping("/email/{email}/status")
-    public ResponseEntity<Driver> updateStatusByEmail(@PathVariable String email, @RequestBody java.util.Map<String, String> payload) {
-        return repository.findByEmail(email).map(driver -> {
-            driver.setStatus(payload.get("status"));
-            return ResponseEntity.ok(repository.save(driver));
-        }).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> updateStatusByEmail(@PathVariable String email, @RequestBody(required = false) Map<String, Object> payload) {
+        Driver driver = driverAuthService.resolveDriverByIdentifier(email);
+        if (driver == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found with email: " + email));
+        }
+
+        Object rawStatus = null;
+        if (payload != null) {
+            rawStatus = payload.get("status");
+            if (rawStatus == null) rawStatus = payload.get("online");
+            if (rawStatus == null) rawStatus = payload.get("isOnline");
+        }
+
+        String newStatus = driverAuthService.normalizeStatus(rawStatus);
+        driver.setStatus(newStatus);
+        Driver saved = repository.save(driver);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("status", saved.getStatus() != null ? saved.getStatus().toLowerCase() : newStatus);
+        response.put("driver", saved);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{driverId}/status")
+    public ResponseEntity<?> updateStatusById(@PathVariable String driverId, jakarta.servlet.http.HttpServletRequest request, @RequestBody(required = false) Map<String, Object> payload) {
+        Driver driver = null;
+        if ("me".equalsIgnoreCase(driverId)) {
+            driver = driverAuthService.resolveAuthenticatedDriver(request);
+        } else {
+            driver = driverAuthService.resolveDriverByIdentifier(driverId);
+        }
+
+        if (driver == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + driverId));
+        }
+
+        Object rawStatus = null;
+        if (payload != null) {
+            rawStatus = payload.get("status");
+            if (rawStatus == null) rawStatus = payload.get("online");
+            if (rawStatus == null) rawStatus = payload.get("isOnline");
+        }
+
+        String newStatus = driverAuthService.normalizeStatus(rawStatus);
+        driver.setStatus(newStatus);
+        Driver saved = repository.save(driver);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("status", saved.getStatus() != null ? saved.getStatus().toLowerCase() : newStatus);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{id}/verify")
