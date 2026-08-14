@@ -310,7 +310,7 @@ public class PaymentLifecycleIntegrationTest {
         earn.setSettlementStatus("PENDING");
         driverEarningsRepository.save(earn);
 
-        // 3. Driver Earnings Summary API Check
+        // 3. Driver Earnings Summary & Balance API Check
         mockMvc.perform(get("/api/drivers/me/earnings")
                         .header("Authorization", "Bearer " + driverToken)
                         .requestAttr("userId", testDriver.getEmail()))
@@ -318,6 +318,14 @@ public class PaymentLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.availableBalance", is(450.0)))
                 .andExpect(jsonPath("$.todayPlatformFee", is(50.0)));
+
+        mockMvc.perform(get("/api/drivers/me/balance")
+                        .header("Authorization", "Bearer " + driverToken)
+                        .requestAttr("userId", testDriver.getEmail()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.availableBalance", is(450.0)))
+                .andExpect(jsonPath("$.isPayoutEligible", is(true)));
 
         // 4. Request Instant Payout
         mockMvc.perform(post("/api/drivers/me/payout-request")
@@ -333,6 +341,14 @@ public class PaymentLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.status", is("SUCCESS")))
                 .andExpect(jsonPath("$.destination", containsString("4582")))
                 .andExpect(jsonPath("$.utr", notNullValue()));
+
+        // 5. Check Payouts List
+        mockMvc.perform(get("/api/drivers/me/payouts")
+                        .header("Authorization", "Bearer " + driverToken)
+                        .requestAttr("userId", testDriver.getEmail()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.count", greaterThanOrEqualTo(1)));
     }
 
     @Test

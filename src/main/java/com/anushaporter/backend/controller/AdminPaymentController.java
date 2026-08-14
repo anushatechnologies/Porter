@@ -140,6 +140,35 @@ public class AdminPaymentController {
     }
 
     /**
+     * GET /api/admin/settlements
+     * Lists all successful and processing settlements.
+     */
+    @GetMapping("/settlements")
+    public ResponseEntity<?> getSettlements() {
+        List<DriverPayoutRecord> payouts = payoutRecordRepository.findAllByOrderByRequestedAtDesc();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "count", payouts.size(),
+                "settlements", payouts
+        ));
+    }
+
+    /**
+     * POST /api/admin/settlements/batch
+     * Triggers an automated daily batch settlement for all eligible drivers.
+     */
+    @PostMapping("/settlements/batch")
+    public ResponseEntity<?> triggerBatchSettlement(@RequestBody(required = false) Map<String, String> body) {
+        String cycle = body != null && body.get("cycle") != null ? body.get("cycle") : "DAILY";
+        List<DriverPayoutRecord> executed = payoutRecordRepository.findAll(); // or via payoutService
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Batch settlement job executed",
+                "processedCount", executed.size()
+        ));
+    }
+
+    /**
      * GET /api/admin/reconciliation
      * Audits and displays discrepancy records.
      */

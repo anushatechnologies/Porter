@@ -35,8 +35,49 @@ public class DriverPayoutService {
     @Autowired
     private PaymentProvider paymentProvider;
 
+    @org.springframework.beans.factory.annotation.Value("${payment.payout.min-amount:100.0}")
+    private double minPayoutAmount;
+
     public Optional<DriverPayoutAccount> getPayoutAccount(String driverId) {
         return accountRepository.findByDriverId(driverId);
+    }
+
+    public Optional<DriverPayoutRecord> getPayoutById(String driverId, String payoutId) {
+        Optional<DriverPayoutRecord> record = payoutRecordRepository.findByPayoutId(payoutId);
+        if (record.isPresent() && driverId != null) {
+            if (!driverId.equals(record.get().getDriverId())) {
+                return Optional.empty();
+            }
+        }
+        return record;
+    }
+
+    public Map<String, Object> getDriverBalance(String driverId) {
+        Double totalNetEarnings = driverEarningsRepository.sumTotalNetEarningsByDriverId(driverId);
+        Double paidOut = payoutRecordRepository.sumPaidOutByDriverId(driverId);
+        Double processing = payoutRecordRepository.sumProcessingPayoutsByDriverId(driverId);
+
+        double totalNet = totalNetEarnings != null ? totalNetEarnings : 0.0;
+        double paid = paidOut != null ? paidOut : 0.0;
+        double proc = processing != null ? processing : 0.0;
+        double available = Math.max(0.0, totalNet - paid - proc);
+
+        Optional<DriverPayoutAccount> accountOpt = accountRepository.findByDriverId(driverId);
+        boolean hasVerifiedAccount = accountOpt.isPresent() && "VERIFIED".equalsIgnoreCase(accountOpt.get().getVerificationStatus());
+        boolean isEligible = hasVerifiedAccount && available >= minPayoutAmount;
+
+        Map<String, Object> balance = new LinkedHashMap<>();
+        balance.put("driverId", driverId);
+        balance.put("availableBalance", Math.round(available * 100.0) / 100.0);
+        balance.put("pendingBalance", 0.0);
+        balance.put("processingBalance", Math.round(proc * 100.0) / 100.0);
+        balance.put("paidBalance", Math.round(paid * 100.0) / 100.0);
+        balance.put("onHoldBalance", 0.0);
+        balance.put("minPayoutAmount", minPayoutAmount);
+        balance.put("isPayoutEligible", isEligible);
+        balance.put("needsMoreForPayout", available < minPayoutAmount ? Math.round((minPayoutAmount - available) * 100.0) / 100.0 : 0.0);
+        balance.put("hasVerifiedAccount", hasVerifiedAccount);
+        return balance;
     }
 
     @Transactional
@@ -88,7 +129,10 @@ public class DriverPayoutService {
         summary.put("totalNetEarnings", Math.round(totalNet * 100.0) / 100.0);
         summary.put("availableBalance", Math.round(available * 100.0) / 100.0);
         summary.put("pendingBalance", Math.round(proc * 100.0) / 100.0);
+        summary.put("processingBalance", Math.round(proc * 100.0) / 100.0);
         summary.put("paidBalance", Math.round(paid * 100.0) / 100.0);
+        summary.put("minPayoutAmount", minPayoutAmount);
+        summary.put("isPayoutEligible", available >= minPayoutAmount);
         return summary;
     }
 
@@ -119,9 +163,16 @@ public class DriverPayoutService {
         if (amount > available) {
             throw new IllegalArgumentException("Insufficient available balance. Requested: ₹" + amount + ", Available: ₹" + available);
         }
+        if (amount < minPayoutAmount) {
+            throw new IllegalArgumentException("Minimum withdrawal amount is ₹" + minPayoutAmount + ". You need ₹" + (Math.round((minPayoutAmount - available) * 100.0) / 100.0) + " more to request a payout.");
+        }
 
         DriverPayoutAccount account = accountRepository.findByDriverId(driverId)
                 .orElseThrow(() -> new IllegalStateException("No verified bank/UPI payout account registered. Please add bank details first."));
+
+        if (!"VERIFIED".equalsIgnoreCase(account.getVerificationStatus())) {
+            throw new IllegalStateException("Please verify your bank account before requesting a payout.");
+        }
 
         String payoutId = "PO_" + LocalDateTime.now().getYear() + "_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
@@ -174,5 +225,30 @@ public class DriverPayoutService {
         }
 
         return savedPayout;
+    }
+
+    /**
+     * Executes automated batch settlement for all drivers with eligible available balance >= minPayoutAmount
+     */
+    @Transactional
+    public List<DriverPayoutRecord> runBatchSettlement(String settlementCycle) {
+        List<DriverPayoutAccount> verifiedAccounts = accountRepository.findAll();
+        List<DriverPayoutRecord> settlements = new ArrayList<>();
+
+        for (DriverPayoutAccount acc : verifiedAccounts) {
+            if (!"VERIFIED".equalsIgnoreCase(acc.getVerificationStatus())) continue;
+
+            Map<String, Object> summary = getDriverEarningsSummary(acc.getDriverId());
+            double available = (Double) summary.get("availableBalance");
+
+            if (available >= minPayoutAmount) {
+                try {
+                    String batchKey = "BATCH_" + LocalDate.now() + "_" + acc.getDriverId();
+                    DriverPayoutRecord p = requestPayout(acc.getDriverId(), available, settlementCycle != null ? settlementCycle : "DAILY", batchKey);
+                    settlements.add(p);
+                } catch (Exception ignored) {}
+            }
+        }
+        return settlements;
     }
 }

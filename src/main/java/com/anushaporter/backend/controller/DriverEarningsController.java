@@ -60,6 +60,22 @@ public class DriverEarningsController {
     }
 
     /**
+     * GET /api/drivers/me/balance
+     * Returns separate ledger-based driver balance buckets.
+     */
+    @GetMapping("/balance")
+    public ResponseEntity<?> getDriverBalance(HttpServletRequest request) {
+        Driver driver = getAuthenticatedDriver(request);
+        if (driver == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
+        }
+
+        Map<String, Object> balance = payoutService.getDriverBalance(driver.getId().toString());
+        balance.put("success", true);
+        return ResponseEntity.ok(balance);
+    }
+
+    /**
      * GET /api/drivers/me/payouts
      * Returns driver payout history with status and bank UTR references.
      */
@@ -75,6 +91,28 @@ public class DriverEarningsController {
                 "success", true,
                 "count", payouts.size(),
                 "payouts", payouts
+        ));
+    }
+
+    /**
+     * GET /api/drivers/me/payouts/{payoutId}
+     * Returns specific payout transaction details with settlement UTR & timeline.
+     */
+    @GetMapping("/payouts/{payoutId}")
+    public ResponseEntity<?> getPayoutDetails(HttpServletRequest request, @PathVariable String payoutId) {
+        Driver driver = getAuthenticatedDriver(request);
+        if (driver == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
+        }
+
+        Optional<DriverPayoutRecord> payoutOpt = payoutService.getPayoutById(driver.getId().toString(), payoutId);
+        if (payoutOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Payout record not found"));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "payout", payoutOpt.get()
         ));
     }
 
@@ -115,10 +153,10 @@ public class DriverEarningsController {
     }
 
     /**
-     * POST /api/drivers/me/payout-account
-     * Securely registers driver bank account and UPI details.
+     * POST /api/drivers/me/payout-account or PUT /api/drivers/me/payout-account
+     * Securely registers or updates driver bank account and UPI details.
      */
-    @PostMapping("/payout-account")
+    @RequestMapping(value = "/payout-account", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<?> savePayoutAccount(
             HttpServletRequest request,
             @RequestBody Map<String, String> payload
