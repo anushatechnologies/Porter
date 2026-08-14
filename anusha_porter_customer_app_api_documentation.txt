@@ -1,0 +1,1573 @@
+================================================================================
+          ANUSHA PORTER — CUSTOMER MOBILE & WEB APP BACKEND API DOCUMENTATION
+================================================================================
+
+App: Anusha Porter Customer Mobile App (Android / iOS) & Web
+Production Base URL: https://api.anushaporter.com
+Local / Dev Base URL: http://localhost:8080
+Format: JSON (application/json)
+Authorization: Bearer <JWT_ACCESS_TOKEN>
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+1. AUTHENTICATION & PROFILE APIS
+2. HOME FEED & BANNER APIS
+3. VEHICLE CATALOG & PRICING APIS
+4. LOCATION & GOOGLE PLACES APIS
+5. TIME SLOTS & BOOKING DRAFTS APIS
+6. BOOKINGS & ORDER LIFECYCLE APIS
+7. REAL-TIME TRACKING APIS
+8. PAYMENTS & GATEWAY APIS
+9. COUPONS & PROMO CODES APIS
+10. SAVED ADDRESSES APIS
+11. GST DETAILS APIS (BUSINESS CUSTOMERS)
+12. WALLET & TOP-UP APIS
+13. NOTIFICATIONS APIS
+14. CUSTOMER SUPPORT & TICKETS APIS
+15. REFERRAL & REWARDS APIS
+16. FILE & IMAGE UPLOADS (AWS S3)
+17. ENTERPRISE / B2B LEADS APIS
+
+================================================================================
+1. AUTHENTICATION & PROFILE APIS
+================================================================================
+
+1.1 SEND OTP (PHONE / EMAIL)
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/send-otp
+Auth: None (Public)
+Description: Sends a 6-digit OTP to the customer's phone number or email for login/signup.
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+{
+  "phone": "9876543210"
+}
+(Also accepts: "phoneNumber", "mobile", or "email")
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "OTP sent successfully.",
+  "otp": "123456",
+  "phone": "9876543210",
+  "expiresIn": 300
+}
+
+
+1.2 RESEND OTP
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/resend-otp
+Auth: None (Public)
+Description: Resends the OTP to the specified phone number.
+
+Request Body:
+{
+  "phone": "9876543210"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "OTP resent successfully.",
+  "otp": "123456",
+  "expiresIn": 300
+}
+
+
+1.3 VERIFY OTP & LOGIN / SIGNUP (FIREBASE TOKEN OR DIRECT OTP)
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/verify-otp
+Auth: None (Public)
+Description: Verifies the customer via Firebase ID Token or direct OTP. Automatically provisions new users or logs in existing users, returning JWT accessToken and customer profile.
+
+Request Body (Option A - Firebase Auth Phone Token):
+{
+  "firebaseIdToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
+  "mode": "login",
+  "name": "Anusha Sharma"
+}
+
+Request Body (Option B - Direct Phone OTP):
+{
+  "phone": "9876543210",
+  "otp": "123456",
+  "mode": "login",
+  "name": "Anusha Sharma"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "1",
+    "name": "Anusha Sharma",
+    "phone": "9876543210",
+    "email": "anusha@example.com",
+    "role": "Customer",
+    "isPhoneVerified": true
+  }
+}
+
+
+1.4 PASSWORD LOGIN (OPTIONAL)
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/login
+Auth: None (Public)
+Description: Login using username/phone/email and password.
+
+Request Body:
+{
+  "username": "9876543210",
+  "password": "mySecurePassword123"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "accessToken": "eyJhbGciOiJIUzI1Ni...",
+  "token": "eyJhbGciOiJIUzI1Ni...",
+  "refreshToken": "eyJhbGciOiJIUzI1Ni...",
+  "user": {
+    "id": 1,
+    "name": "Anusha Sharma",
+    "email": "anusha@example.com",
+    "phone": "9876543210",
+    "role": "Customer",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=AnushaSharma"
+  }
+}
+
+
+1.5 SIGNUP (DIRECT REGISTRATION)
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/signup
+Auth: None (Public)
+Description: Creates a new user profile directly.
+
+Request Body:
+{
+  "name": "Anusha Sharma",
+  "email": "anusha@example.com",
+  "phone": "9876543210",
+  "password": "Password123",
+  "role": "Customer"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Account created successfully.",
+  "token": "eyJhbGciOiJIUzI1Ni...",
+  "user": {
+    "id": 1,
+    "name": "Anusha Sharma",
+    "email": "anusha@example.com",
+    "phone": "9876543210",
+    "role": "Customer"
+  }
+}
+
+
+1.6 FORGOT PASSWORD
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/forgot-password
+Auth: None (Public)
+
+Request Body:
+{
+  "email": "anusha@example.com"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "If an account with that email exists, a reset code has been sent."
+}
+
+
+1.7 RESET PASSWORD
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/reset-password
+Auth: None (Public)
+
+Request Body:
+{
+  "email": "anusha@example.com",
+  "newPassword": "NewPassword123"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Password reset successfully. You can now log in."
+}
+
+
+1.8 LOGOUT
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/logout
+Auth: None (Optional Bearer)
+
+Response (200 OK):
+{
+  "success": true
+}
+
+
+1.9 REGISTER FCM PUSH NOTIFICATION TOKEN
+--------------------------------------------------------------------------------
+Endpoint: POST /api/users/fcm-token
+Auth: Bearer <token>
+
+Request Body:
+{
+  "fcmToken": "fcm_device_token_string_here..."
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "FCM token registered"
+}
+
+
+================================================================================
+2. HOME FEED & BANNER APIS
+================================================================================
+
+2.1 HOME FEED (MAIN SCREEN AGGREGATOR)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/home
+Auth: Optional Bearer <token>
+Description: Returns all data needed for the Customer App Home Screen in a single fast call:
+- Default / last used pickup address
+- Active vehicle categories & pricing summary
+- Promo banners & announcements
+- Customer wallet balance & profile summary
+
+Response (200 OK):
+{
+  "success": true,
+  "defaultPickupAddress": {
+    "id": "addr_101",
+    "label": "Home",
+    "tag": "home",
+    "addressLine": "Flat 402, Sunshine Apts, Madhapur, Hyderabad",
+    "lat": 17.4483,
+    "lng": 78.3915
+  },
+  "services": [
+    {
+      "vehicleId": "2-wheeler",
+      "name": "2 Wheeler",
+      "description": "Up to 20 kg",
+      "iconUrl": "https://...",
+      "baseFare": 40.0,
+      "pricePerKm": 10.0
+    },
+    {
+      "vehicleId": "mini-truck",
+      "name": "Mini Truck",
+      "description": "Up to 500 kg",
+      "iconUrl": "https://...",
+      "baseFare": 200.0,
+      "pricePerKm": 15.0
+    },
+    {
+      "vehicleId": "full-truck",
+      "name": "Full Truck",
+      "description": "Up to 2000 kg",
+      "iconUrl": "https://...",
+      "baseFare": 500.0,
+      "pricePerKm": 20.0
+    }
+  ],
+  "announcements": [
+    {
+      "id": 1,
+      "title": "Flat 50% Off On First 3 Rides!",
+      "imageUrl": "https://...",
+      "targetAction": "APPLY_COUPON",
+      "targetValue": "FIRST50"
+    }
+  ],
+  "user": {
+    "id": 1,
+    "name": "Anusha Sharma",
+    "phone": "9876543210",
+    "walletBalance": 350.0
+  }
+}
+
+
+================================================================================
+3. VEHICLE CATALOG & PRICING APIS
+================================================================================
+
+3.1 LIST ACTIVE PRICING VEHICLES
+--------------------------------------------------------------------------------
+Endpoint: GET /api/pricing/vehicles
+Auth: Public / Optional Bearer
+Description: Returns all active transport vehicle tiers with pricing details.
+
+Response (200 OK):
+{
+  "success": true,
+  "vehicles": [
+    {
+      "vehicleId": "2-wheeler",
+      "name": "2 Wheeler",
+      "baseFare": 40.0,
+      "pricePerKm": 10.0,
+      "capacityKg": 20.0,
+      "iconUrl": "https://...",
+      "minFare": 40.0
+    },
+    {
+      "vehicleId": "mini-truck",
+      "name": "Tata Ace / Mini Truck",
+      "baseFare": 200.0,
+      "pricePerKm": 15.0,
+      "capacityKg": 750.0,
+      "iconUrl": "https://...",
+      "minFare": 200.0
+    }
+  ]
+}
+
+
+3.2 GET CATALOG VEHICLES
+--------------------------------------------------------------------------------
+Endpoint: GET /api/catalog/vehicles
+Auth: Public
+Description: Returns category vehicle catalog with subtitles and icon labels.
+
+Response (200 OK):
+[
+  {
+    "id": "2wheeler",
+    "name": "2 Wheeler",
+    "subtitle": "Light parcels and urgent documents",
+    "icon": "bicycle-outline",
+    "value": "2 Wheeler"
+  },
+  {
+    "id": "mini-truck",
+    "name": "Mini Truck",
+    "subtitle": "Compact loads for local shifting",
+    "icon": "cube-outline",
+    "value": "Mini Truck"
+  },
+  {
+    "id": "truck",
+    "name": "Truck",
+    "subtitle": "Heavy transport for business loads",
+    "icon": "bus-outline",
+    "value": "Truck"
+  }
+]
+
+
+3.3 GET CATALOG PACKERS & MOVERS SERVICES
+--------------------------------------------------------------------------------
+Endpoint: GET /api/catalog/packers
+Auth: Public
+Description: Returns catalog of house relocation and office shifting options.
+
+Response (200 OK):
+[
+  {
+    "id": "house-shifting",
+    "name": "Full House Shifting",
+    "subtitle": "Complete packing, loading, transport & unpacking",
+    "value": "House Shifting",
+    "basePrice": 2500,
+    "icon": "home-outline"
+  },
+  {
+    "id": "1bhk",
+    "name": "1 BHK Relocation",
+    "subtitle": "Ideal for small apartments & single rooms",
+    "value": "1 BHK Shifting",
+    "basePrice": 1800,
+    "icon": "cube-outline"
+  },
+  {
+    "id": "2bhk",
+    "name": "2 BHK Relocation",
+    "subtitle": "Complete apartment relocation service",
+    "value": "2 BHK Shifting",
+    "basePrice": 2800,
+    "icon": "home-outline"
+  }
+]
+
+
+3.4 CALCULATE SINGLE VEHICLE REAL-TIME PRICE
+--------------------------------------------------------------------------------
+Endpoint: POST /api/pricing/calculate
+Auth: Public / Optional Bearer
+Description: Calculates itemized breakdown for a selected vehicle, distance, helper count, and waiting time.
+
+Request Body:
+{
+  "vehicleId": "mini-truck",
+  "distanceKm": 8.5,
+  "helperCount": 1,
+  "weightKg": 250.0,
+  "waitingMins": 15.0,
+  "tollCharge": 0.0
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "vehicleId": "mini-truck",
+  "vehicleName": "Tata Ace",
+  "distanceKm": 8.5,
+  "currency": "INR",
+  "breakdown": {
+    "baseFare": 200.0,
+    "distanceFare": 97.5,
+    "helperCharge": 150.0,
+    "helperChargePerHead": 150.0,
+    "helperCount": 1,
+    "weightCharge": 0.0,
+    "waitingCharge": 0.0,
+    "tollCharge": 0.0,
+    "fuelCharge": 0.0,
+    "platformFee": 0.0,
+    "discount": 0.0,
+    "gst": 80.55,
+    "gstRate": 0.18,
+    "totalFare": 528.05
+  },
+  "totalFare": 528.05
+}
+
+
+3.5 ESTIMATE ALL VEHICLES AT ONCE (RIDE PICKER SCREEN)
+--------------------------------------------------------------------------------
+Endpoint: POST /api/pricing/estimate-all
+Auth: Public / Optional Bearer
+Description: Provides fare estimates and live arrival ETAs across all vehicle types for the pickup/drop distance.
+
+Request Body:
+{
+  "distanceKm": 10.2,
+  "helperCount": 1,
+  "pickupLat": 17.4483,
+  "pickupLng": 78.3915,
+  "dropLat": 17.4123,
+  "dropLng": 78.4732
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "distanceKm": 10.2,
+  "estimates": [
+    {
+      "vehicleId": "2-wheeler",
+      "vehicleName": "2 Wheeler",
+      "estimatedPrice": 142.0,
+      "baseFare": 40.0,
+      "distanceFare": 82.0,
+      "helperCharge": 0.0,
+      "gst": 20.0,
+      "etaMinutes": 5,
+      "currency": "INR",
+      "iconUrl": "https://...",
+      "capacityKg": 20.0
+    },
+    {
+      "vehicleId": "mini-truck",
+      "vehicleName": "Mini Truck",
+      "estimatedPrice": 380.0,
+      "baseFare": 200.0,
+      "distanceFare": 123.0,
+      "helperCharge": 150.0,
+      "gst": 57.96,
+      "etaMinutes": 8,
+      "currency": "INR",
+      "iconUrl": "https://...",
+      "capacityKg": 500.0
+    }
+  ]
+}
+
+
+3.6 PACKERS & MOVERS PRICE ESTIMATION
+--------------------------------------------------------------------------------
+Endpoint: POST /api/pricing/packers
+Auth: Public / Optional Bearer
+Description: Calculates comprehensive moving quotation based on distance, pickup/drop floors, elevator availability, and list of items.
+
+Request Body:
+{
+  "distanceKm": 12.0,
+  "pickupFloor": 2,
+  "dropFloor": 3,
+  "hasElevatorPickup": true,
+  "hasElevatorDrop": false,
+  "items": [
+    { "name": "Double Bed", "qty": 1 },
+    { "name": "Sofa 3-Seater", "qty": 1 },
+    { "name": "Refrigerator", "qty": 1 },
+    { "name": "Boxes", "qty": 6 }
+  ]
+}
+
+Response (200 OK):
+{
+  "baseFare": 2000.0,
+  "distanceFare": 300.0,
+  "laborCharge": 1175.0,
+  "packingCharge": 1125.0,
+  "floorCharge": 200.0,
+  "gst": 864.0,
+  "totalFare": 5664.0
+}
+
+
+3.7 GET SPECIFIC VEHICLE PRICING CONFIG
+--------------------------------------------------------------------------------
+Endpoint: GET /api/pricing/vehicle/:vehicleId
+Auth: Bearer <token> / Public
+Example: GET /api/pricing/vehicle/scooter-model
+
+Response (200 OK):
+{
+  "id": 1,
+  "vehicleId": "scooter-model",
+  "name": "Scooter Model",
+  "baseFare": 100.0,
+  "pricePerKm": 15.0,
+  "minFare": 100.0,
+  "maxFare": 5000.0,
+  "freeDistance": 2.0,
+  "minDistance": 2.0,
+  "maxDistance": 500.0,
+  "capacityKg": 500.0,
+  "status": true,
+  "priority": 1,
+  "commissionPercentage": 10.0,
+  "gstPercentage": 18.0,
+  "icon": "https://...",
+  "imageUrl": "https://..."
+}
+
+
+3.8 CREATE VEHICLE PRICING CONFIG
+--------------------------------------------------------------------------------
+Endpoint: POST /api/pricing
+Auth: Bearer <token>
+
+Request Body:
+{
+  "vehicleId": "scooter-model",
+  "name": "Scooter Model",
+  "baseFare": 100,
+  "pricePerKm": 15,
+  "minFare": 100,
+  "maxFare": 5000,
+  "freeDistance": 2,
+  "minDistance": 2,
+  "maxDistance": 500,
+  "capacityKg": 500,
+  "status": true,
+  "priority": 1,
+  "commissionPercentage": 10
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "vehicle": {
+    "id": 1,
+    "vehicleId": "scooter-model",
+    "name": "Scooter Model",
+    "baseFare": 100.0,
+    "pricePerKm": 15.0,
+    "minFare": 100.0,
+    "maxFare": 5000.0,
+    "freeDistance": 2.0,
+    "minDistance": 2.0,
+    "maxDistance": 500.0,
+    "capacityKg": 500.0,
+    "status": true,
+    "priority": 1,
+    "commissionPercentage": 10.0
+  }
+}
+
+
+3.9 UPDATE VEHICLE PRICING CONFIG
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/pricing/vehicle/:vehicleId
+Auth: Bearer <token>
+Example: PUT /api/pricing/vehicle/scooter-model
+
+Request Body:
+{
+  "vehicleId": "scooter-model",
+  "name": "Scooter Model Updated",
+  "baseFare": 120,
+  "pricePerKm": 18,
+  "minFare": 120,
+  "maxFare": 6000,
+  "freeDistance": 3,
+  "minDistance": 3,
+  "maxDistance": 600,
+  "capacityKg": 600,
+  "status": true,
+  "priority": 2,
+  "commissionPercentage": 12
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "vehicle": {
+    "id": 1,
+    "vehicleId": "scooter-model",
+    "name": "Scooter Model Updated",
+    "baseFare": 120.0,
+    "pricePerKm": 18.0,
+    "minFare": 120.0,
+    "maxFare": 6000.0,
+    "freeDistance": 3.0,
+    "minDistance": 3.0,
+    "maxDistance": 600.0,
+    "capacityKg": 600.0,
+    "status": true,
+    "priority": 2,
+    "commissionPercentage": 12.0
+  }
+}
+
+
+3.10 DELETE VEHICLE PRICING CONFIG
+--------------------------------------------------------------------------------
+Endpoint: DELETE /api/pricing/:vehicleId
+Auth: Bearer <token>
+Example: DELETE /api/pricing/scooter-model
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Vehicle pricing deleted successfully"
+}
+
+
+================================================================================
+4. LOCATION & GOOGLE PLACES APIS
+================================================================================
+
+4.1 SEARCH PLACES AUTOCOMPLETE
+--------------------------------------------------------------------------------
+Endpoint: GET /api/location/search?q={query}
+Auth: Public
+Example: GET /api/location/search?q=Hitec%20City
+
+Response (200 OK):
+{
+  "predictions": [
+    {
+      "description": "HITEC City, Hyderabad, Telangana, India",
+      "place_id": "ChIJb9x...Wb0"
+    }
+  ],
+  "status": "OK"
+}
+
+
+4.2 PLACE DETAILS (LAT / LNG GEOMETRY)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/location/details?place_id={place_id}
+Auth: Public
+Example: GET /api/location/details?place_id=ChIJb9x...Wb0
+
+Response (200 OK):
+{
+  "result": {
+    "geometry": {
+      "location": {
+        "lat": 17.4483,
+        "lng": 78.3915
+      }
+    }
+  },
+  "status": "OK"
+}
+
+
+4.3 REVERSE GEOCODING (COORDINATES TO ADDRESS)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/location/reverse?lat={lat}&lng={lng}
+Auth: Public
+Example: GET /api/location/reverse?lat=17.4483&lng=78.3915
+
+Response (200 OK):
+{
+  "results": [
+    {
+      "formatted_address": "Plot 12, Cyber Towers Rd, HITEC City, Hyderabad, Telangana 500081",
+      "place_id": "ChIJ..."
+    }
+  ],
+  "status": "OK"
+}
+
+
+================================================================================
+5. TIME SLOTS & BOOKING DRAFTS APIS
+================================================================================
+
+5.1 GET SCHEDULE TIME SLOTS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/slots?date={YYYY-MM-DD}&serviceId={serviceId}
+Auth: Public
+Example: GET /api/slots?date=2026-08-20&serviceId=house-shifting
+
+Response (200 OK):
+{
+  "date": "2026-08-20",
+  "slots": [
+    { "id": "slot-0900", "label": "09:00 AM - 11:00 AM", "available": true },
+    { "id": "slot-1400", "label": "02:00 PM - 04:00 PM", "available": true },
+    { "id": "slot-1800", "label": "06:00 PM - 08:00 PM", "available": true }
+  ]
+}
+
+
+5.2 CREATE BOOKING DRAFT
+--------------------------------------------------------------------------------
+Endpoint: POST /api/drafts
+Auth: Public / Bearer
+
+Request Body:
+{
+  "serviceType": "truck",
+  "pickup": { "address": "Madhapur", "lat": 17.4483, "lng": 78.3915 },
+  "drop": { "address": "Gachibowli", "lat": 17.4401, "lng": 78.3489 }
+}
+
+Response (200 OK):
+{
+  "draftId": "draft_1723612345678",
+  "expiresAt": "2026-08-15T11:45:00",
+  "status": "draft"
+}
+
+
+5.3 GET DRAFT
+--------------------------------------------------------------------------------
+Endpoint: GET /api/drafts/{id}
+Auth: Public / Bearer
+
+Response (200 OK):
+{
+  "id": "draft_1723612345678",
+  "status": "draft",
+  "expiresAt": "2026-08-15T11:45:00",
+  "payload": "{\"serviceType\":\"truck\",...}"
+}
+
+
+5.4 UPDATE DRAFT
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/drafts/{id}
+Auth: Public / Bearer
+
+Request Body:
+{
+  "serviceType": "truck",
+  "helpersCount": 2,
+  "scheduledDate": "2026-08-20"
+}
+
+Response (200 OK):
+{
+  "draftId": "draft_1723612345678",
+  "expiresAt": "2026-08-15T11:45:00",
+  "status": "draft"
+}
+
+
+================================================================================
+6. BOOKINGS & ORDER LIFECYCLE APIS
+================================================================================
+
+6.1 CREATE A NEW BOOKING
+--------------------------------------------------------------------------------
+Endpoint: POST /api/bookings
+Auth: Bearer <token>
+Description: Places a new delivery/ride order. Automatically generates a 4-digit Delivery OTP and initiates driver dispatch.
+
+Request Body:
+{
+  "serviceName": "Tata Ace",
+  "pickupAddress": "Flat 402, Sunshine Apts, Madhapur, Hyderabad",
+  "dropAddress": "Plot 18, Financial District, Gachibowli, Hyderabad",
+  "pickupLat": 17.4483,
+  "pickupLng": 78.3915,
+  "dropLat": 17.4123,
+  "dropLng": 78.3489,
+  "distanceKm": 8.5,
+  "amount": 528.05,
+  "baseFare": 200.0,
+  "distanceFare": 97.5,
+  "helperCharges": 150.0,
+  "gstAmount": 80.55,
+  "helpersCount": 1,
+  "paymentMethod": "UPI",
+  "scheduledDate": "Now",
+  "scheduledSlot": "Immediate",
+  "receiverName": "Rahul Verma",
+  "receiverPhone": "9876543219",
+  "goodsCategory": "Electronics / Home Appliances",
+  "houseSize": null,
+  "heavyItems": "No",
+  "loadAssist": "Yes"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "bookingId": "BK_1723619988776",
+  "status": "searching",
+  "amount": 528.05,
+  "currency": "INR"
+}
+
+
+6.2 GET CUSTOMER'S BOOKINGS HISTORY
+--------------------------------------------------------------------------------
+Endpoint: GET /api/bookings
+Auth: Bearer <token>
+Optional Query Param: ?status=active  (or completed, cancelled)
+
+Response (200 OK):
+{
+  "success": true,
+  "items": [
+    {
+      "bookingId": "BK_1723619988776",
+      "serviceName": "Tata Ace",
+      "amount": 528.05,
+      "status": "driver_assigned",
+      "pickupAddress": "Madhapur, Hyderabad",
+      "dropAddress": "Gachibowli, Hyderabad",
+      "paymentMethod": "UPI",
+      "dateLabel": "Recently",
+      "createdAt": "2026-08-14T11:45:00",
+      "trackable": true
+    }
+  ],
+  "page": 1,
+  "pageSize": 1,
+  "hasMore": false
+}
+
+
+6.3 GET SINGLE BOOKING DETAIL
+--------------------------------------------------------------------------------
+Endpoint: GET /api/bookings/{bookingId}
+Auth: Bearer <token>
+Example: GET /api/bookings/BK_1723619988776
+
+Response (200 OK):
+{
+  "success": true,
+  "bookingId": "BK_1723619988776",
+  "status": "driver_assigned",
+  "serviceName": "Tata Ace",
+  "amount": 528.05,
+  "paymentMethod": "UPI",
+  "paymentStatus": "paid",
+  "currency": "INR",
+  "customerName": "Rahul Verma",
+  "customerPhone": "9876543219",
+  "receiverName": "Rahul Verma",
+  "receiverPhone": "9876543219",
+  "deliveryOtp": "8813",
+  "goodsCategory": "Electronics / Home Appliances",
+  "helpersCount": 1,
+  "distanceKm": 8.5,
+  "pickup": {
+    "addressLine": "Flat 402, Sunshine Apts, Madhapur, Hyderabad",
+    "lat": 17.4483,
+    "lng": 78.3915
+  },
+  "drop": {
+    "addressLine": "Plot 18, Financial District, Gachibowli, Hyderabad",
+    "lat": 17.4123,
+    "lng": 78.3489
+  },
+  "schedule": {
+    "date": "Now",
+    "slotLabel": "Immediate"
+  },
+  "fareBreakdown": {
+    "baseFare": 200.0,
+    "distanceFare": 97.5,
+    "helperCharges": 150.0,
+    "gst": 80.55,
+    "total": 528.05
+  },
+  "driver": {
+    "name": "Venkat Rao",
+    "phone": "9876500001",
+    "vehicleNumber": "TS09AB1234",
+    "vehicleLabel": "Tata Ace",
+    "rating": 4.8
+  }
+}
+
+
+6.4 CANCEL A BOOKING
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/bookings/{bookingId}/cancel
+Auth: Bearer <token>
+
+Request Body:
+{
+  "reason": "Change of plans",
+  "remarks": "Driver took too long to arrive"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "bookingId": "BK_1723619988776",
+  "status": "cancelled",
+  "message": "Booking cancelled successfully"
+}
+
+
+================================================================================
+7. REAL-TIME TRACKING APIS
+================================================================================
+
+7.1 TRACK LIVE DRIVER LOCATION & STATUS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/bookings/{bookingId}/tracking
+Auth: Bearer <token>
+Description: Returns ride lifecycle timeline and real-time live driver GPS coordinates (lat/lng).
+
+Response (200 OK - When Driver is Assigned):
+{
+  "success": true,
+  "bookingId": "BK_1723619988776",
+  "status": "in_transit",
+  "timeline": [
+    {
+      "key": "booking_confirmed",
+      "label": "Booking Confirmed",
+      "completed": true,
+      "timestamp": "2026-08-14T11:45:00"
+    },
+    {
+      "key": "driver_assigned",
+      "label": "Driver Assigned",
+      "completed": true,
+      "timestamp": "2026-08-14T11:47:00"
+    },
+    {
+      "key": "pickup_started",
+      "label": "Driver Reached",
+      "completed": true,
+      "timestamp": null
+    },
+    {
+      "key": "in_transit",
+      "label": "In Transit",
+      "completed": true,
+      "timestamp": null
+    },
+    {
+      "key": "delivered",
+      "label": "Delivered",
+      "completed": false,
+      "timestamp": null
+    }
+  ],
+  "driver": {
+    "id": "DRV-1001",
+    "name": "Venkat Rao",
+    "phone": "9876500001",
+    "vehicleNumber": "TS09AB1234",
+    "vehicleLabel": "Tata Ace",
+    "rating": 4.8
+  },
+  "location": {
+    "lat": 17.4490,
+    "lng": 78.3920,
+    "updatedAt": "2026-08-14T11:50:30"
+  },
+  "pickup": {
+    "addressLine": "Flat 402, Sunshine Apts, Madhapur, Hyderabad"
+  },
+  "drop": {
+    "addressLine": "Plot 18, Financial District, Gachibowli, Hyderabad"
+  }
+}
+
+
+================================================================================
+8. PAYMENTS & GATEWAY APIS
+================================================================================
+
+8.1 INITIATE GATEWAY PAYMENT
+--------------------------------------------------------------------------------
+Endpoint: POST /api/payments/initiate
+Auth: Optional Bearer <token>
+Description: Creates a Razorpay/UPI gateway order for online payment.
+
+Request Body:
+{
+  "bookingId": "BK_1723619988776",
+  "amount": 528.05,
+  "currency": "INR"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "paymentId": "pay_1723612345678",
+  "gateway": "razorpay",
+  "gatewayOrderId": "order_1723612345678",
+  "bookingId": "BK_1723619988776",
+  "amount": 528.05,
+  "currency": "INR"
+}
+
+
+8.2 VERIFY PAYMENT SUCCESS
+--------------------------------------------------------------------------------
+Endpoint: POST /api/payments/verify
+Auth: Optional Bearer <token>
+Description: Verifies payment signature/token, marks order as paid, and confirms booking.
+
+Request Body:
+{
+  "bookingId": "BK_1723619988776",
+  "paymentId": "pay_1723612345678",
+  "status": "paid"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "bookingId": "BK_1723619988776",
+  "paymentId": "pay_1723612345678",
+  "status": "paid",
+  "message": "Payment verified successfully"
+}
+
+
+================================================================================
+9. COUPONS & PROMO CODES APIS
+================================================================================
+
+9.1 LIST ACTIVE COUPONS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/coupons
+Auth: Public / Bearer
+Description: Returns list of active promo codes eligible for customer discounts.
+
+Response (200 OK):
+{
+  "success": true,
+  "coupons": [
+    {
+      "id": 1,
+      "code": "SAVE10",
+      "description": "Get 10% off up to ₹250 on all rides",
+      "discountPercentage": 10.0,
+      "flatDiscount": null,
+      "maxDiscount": 250.0,
+      "minOrderAmount": 100.0
+    },
+    {
+      "id": 2,
+      "code": "FIRST50",
+      "description": "50% off up to ₹100 on your first booking",
+      "discountPercentage": 50.0,
+      "flatDiscount": null,
+      "maxDiscount": 100.0,
+      "minOrderAmount": 50.0
+    },
+    {
+      "id": 4,
+      "code": "PORTER100",
+      "description": "Flat ₹100 off on mini truck & full truck bookings",
+      "discountPercentage": null,
+      "flatDiscount": 100.0,
+      "maxDiscount": null,
+      "minOrderAmount": 300.0
+    }
+  ]
+}
+
+
+9.2 VALIDATE AND APPLY COUPON
+--------------------------------------------------------------------------------
+Endpoint: POST /api/coupons/validate
+Auth: Public / Bearer
+Description: Validates coupon against cart total and returns calculated discount + net payable amount.
+
+Request Body:
+{
+  "couponCode": "SAVE10",
+  "amount": 500.0
+}
+
+Response (200 OK - Success):
+{
+  "success": true,
+  "applied": true,
+  "code": "SAVE10",
+  "description": "Get 10% off up to ₹250 on all rides",
+  "message": "Coupon 'SAVE10' applied successfully!",
+  "discount": 50.0,
+  "originalAmount": 500.0,
+  "finalAmount": 450.0,
+  "currency": "INR"
+}
+
+Response (200 OK - Below Min Amount or Invalid):
+{
+  "success": false,
+  "applied": false,
+  "code": "SAVE10",
+  "message": "Minimum order amount of ₹100 required to use this coupon.",
+  "discount": 0.0,
+  "originalAmount": 80.0,
+  "finalAmount": 80.0
+}
+
+
+================================================================================
+10. SAVED ADDRESSES APIS
+================================================================================
+
+10.1 GET SAVED ADDRESSES
+--------------------------------------------------------------------------------
+Endpoint: GET /api/addresses
+Auth: Bearer <token>
+
+Response (200 OK):
+{
+  "success": true,
+  "addresses": [
+    {
+      "id": "addr_101",
+      "label": "Home",
+      "tag": "home",
+      "addressLine": "Flat 402, Sunshine Apts, Madhapur, Hyderabad",
+      "lat": 17.4483,
+      "lng": 78.3915
+    },
+    {
+      "id": "addr_102",
+      "label": "Office",
+      "tag": "work",
+      "addressLine": "Building 3A, Mindspace IT Park, Hitec City",
+      "lat": 17.4401,
+      "lng": 78.3802
+    }
+  ]
+}
+
+
+10.2 CREATE SAVED ADDRESS
+--------------------------------------------------------------------------------
+Endpoint: POST /api/addresses
+Auth: Bearer <token>
+
+Request Body:
+{
+  "label": "Warehouse",
+  "tag": "other",
+  "addressLine": "Plot 55, IDA Cherlapally, Hyderabad",
+  "lat": 17.4680,
+  "lng": 78.6010
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "id": "addr_103",
+  "label": "Warehouse",
+  "tag": "other",
+  "addressLine": "Plot 55, IDA Cherlapally, Hyderabad",
+  "lat": 17.4680,
+  "lng": 78.6010
+}
+
+
+10.3 UPDATE SAVED ADDRESS
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/addresses/{id}
+Auth: Bearer <token>
+Example: PUT /api/addresses/103
+
+Request Body:
+{
+  "label": "Main Warehouse",
+  "tag": "work",
+  "addressLine": "Plot 55 & 56, IDA Cherlapally, Hyderabad",
+  "lat": 17.4682,
+  "lng": 78.6012
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "id": "addr_103",
+  "label": "Main Warehouse",
+  "tag": "work",
+  "addressLine": "Plot 55 & 56, IDA Cherlapally, Hyderabad"
+}
+
+
+10.4 DELETE SAVED ADDRESS
+--------------------------------------------------------------------------------
+Endpoint: DELETE /api/addresses/{id}
+Auth: Bearer <token>
+Example: DELETE /api/addresses/103
+
+Response (200 OK):
+{
+  "success": true
+}
+
+
+================================================================================
+11. GST DETAILS APIS (BUSINESS CUSTOMERS)
+================================================================================
+
+11.1 GET USER GST DETAILS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/user/gst
+Auth: Bearer <token>
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "id": "gst_1723612345",
+    "gstin": "36AAAAA0000A1Z5",
+    "businessName": "Anusha Logistics Pvt Ltd",
+    "companyName": "Anusha Logistics Pvt Ltd",
+    "billingAddress": "H.No 4-50, Jubilee Hills, Hyderabad 500033",
+    "registeredAddress": "H.No 4-50, Jubilee Hills, Hyderabad 500033"
+  }
+}
+
+
+11.2 CREATE OR UPDATE GST DETAILS
+--------------------------------------------------------------------------------
+Endpoint: POST /api/user/gst
+Auth: Bearer <token>
+
+Request Body:
+{
+  "gstin": "36AAAAA0000A1Z5",
+  "companyName": "Anusha Logistics Pvt Ltd",
+  "registeredAddress": "H.No 4-50, Jubilee Hills, Hyderabad 500033"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "id": "gst_1723612345",
+    "gstin": "36AAAAA0000A1Z5",
+    "businessName": "Anusha Logistics Pvt Ltd",
+    "companyName": "Anusha Logistics Pvt Ltd",
+    "billingAddress": "H.No 4-50, Jubilee Hills, Hyderabad 500033",
+    "registeredAddress": "H.No 4-50, Jubilee Hills, Hyderabad 500033"
+  }
+}
+
+
+11.3 UPDATE GST RECORD BY ID
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/user/gst/{id}
+Auth: Bearer <token>
+
+Request Body:
+{
+  "gstin": "36AAAAA0000A1Z5",
+  "companyName": "Anusha Logistics Enterprise Ltd",
+  "billingAddress": "Plot 10, HITEC City, Hyderabad"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "id": "gst_1723612345",
+    "gstin": "36AAAAA0000A1Z5",
+    "businessName": "Anusha Logistics Enterprise Ltd",
+    "companyName": "Anusha Logistics Enterprise Ltd",
+    "billingAddress": "Plot 10, HITEC City, Hyderabad",
+    "registeredAddress": "Plot 10, HITEC City, Hyderabad"
+  }
+}
+
+
+================================================================================
+12. WALLET & TOP-UP APIS
+================================================================================
+
+12.1 GET WALLET BALANCE & TRANSACTIONS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/wallet
+Auth: Bearer <token>
+
+Response (200 OK):
+{
+  "success": true,
+  "balance": 350.0,
+  "currency": "INR",
+  "transactions": [
+    {
+      "id": "f5a2b3c4-...",
+      "amount": 350.0,
+      "type": "CREDIT",
+      "description": "Wallet Top-up",
+      "date": "2026-08-13T10:30:00"
+    }
+  ]
+}
+
+
+12.2 TOP UP WALLET
+--------------------------------------------------------------------------------
+Endpoint: POST /api/wallet/topup
+Auth: Bearer <token>
+
+Request Body:
+{
+  "amount": 500.0
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "balance": 850.0
+}
+
+
+================================================================================
+13. NOTIFICATIONS APIS
+================================================================================
+
+13.1 GET CUSTOMER NOTIFICATIONS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/notifications
+Auth: Bearer <token>
+
+Response (200 OK):
+[
+  {
+    "id": "NTF-101",
+    "notificationId": 1,
+    "title": "Driver Arrived!",
+    "message": "Your Tata Ace driver Venkat Rao has reached the pickup location.",
+    "audience": "all",
+    "date": "2026-08-14T11:48:00",
+    "read": false,
+    "isRead": false,
+    "bookingId": "BK_1723619988776"
+  }
+]
+
+
+13.2 MARK NOTIFICATION AS READ
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/notifications/{id}/read
+(Also accepts POST /api/notifications/{id}/read)
+Auth: Bearer <token>
+Example: PUT /api/notifications/1/read
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Notification marked as read"
+}
+
+
+13.3 MARK ALL NOTIFICATIONS AS READ
+--------------------------------------------------------------------------------
+Endpoint: POST /api/notifications/read-all
+Auth: Bearer <token>
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "All notifications marked as read"
+}
+
+
+================================================================================
+14. CUSTOMER SUPPORT & TICKETS APIS
+================================================================================
+
+14.1 GET SUPPORT TOPICS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/support/topics
+Auth: Public
+
+Response (200 OK):
+[
+  { "id": "topic_booking", "title": "Booking Help" },
+  { "id": "topic_payment", "title": "Payment Issue" },
+  { "id": "topic_driver", "title": "Driver Complaint" },
+  { "id": "topic_general", "title": "General Support" }
+]
+
+
+14.2 SUBMIT SUPPORT TICKET
+--------------------------------------------------------------------------------
+Endpoint: POST /api/support/tickets
+(Also accepts POST /api/support/ticket)
+Auth: Bearer <token>
+
+Request Body:
+{
+  "subject": "Driver Complaint",
+  "bookingId": "BK_1723619988776",
+  "description": "Driver arrived 20 minutes late and asked for extra cash"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "ticketId": "TCK-4821",
+  "id": "TCK-4821",
+  "subject": "Driver Complaint",
+  "message": "Support ticket created successfully",
+  "status": "open"
+}
+
+
+14.3 GET USER SUPPORT TICKETS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/support/tickets
+Auth: Bearer <token>
+
+Response (200 OK):
+{
+  "success": true,
+  "tickets": [
+    {
+      "id": "TCK-4821",
+      "topicId": "Driver Complaint",
+      "bookingId": "BK_1723619988776",
+      "message": "Driver arrived 20 minutes late and asked for extra cash",
+      "status": "open"
+    }
+  ]
+}
+
+
+================================================================================
+15. REFERRAL & REWARDS APIS
+================================================================================
+
+15.1 GET USER REFERRAL DETAILS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/user/referral
+Auth: Bearer <token> / Public
+
+Response (200 OK):
+{
+  "referralCode": "PORTER50",
+  "totalEarned": 250.0,
+  "successfulReferrals": 5,
+  "totalRewards": 250.0,
+  "totalInvites": 5
+}
+
+
+15.2 SHARE INVITE
+--------------------------------------------------------------------------------
+Endpoint: POST /api/user/referral/invite
+Auth: Public
+
+Response (200 OK):
+{
+  "success": true
+}
+
+
+================================================================================
+16. FILE & IMAGE UPLOADS (AWS S3)
+================================================================================
+
+16.1 UPLOAD IMAGE TO AWS S3
+--------------------------------------------------------------------------------
+Endpoint: POST /api/upload/image
+Auth: Bearer <token> / Public
+Content-Type: multipart/form-data
+
+Form Data:
+  file: <binary image file> (e.g. item_photo.jpg)
+  category: "goods" (or "profile", "misc")
+
+Response (200 OK):
+{
+  "url": "https://my-default-bucket.s3.ap-south-2.amazonaws.com/goods/d3b07384-d113-4...jpg"
+}
+
+
+================================================================================
+17. ENTERPRISE / B2B LEADS APIS
+================================================================================
+
+17.1 SUBMIT ENTERPRISE / CORPORATE LEAD
+--------------------------------------------------------------------------------
+Endpoint: POST /api/enterprise/leads
+Auth: Public
+
+Request Body:
+{
+  "companyName": "TechCorp Solutions",
+  "contactPerson": "Suresh Reddy",
+  "phone": "9876543210",
+  "email": "suresh@techcorp.com",
+  "city": "Hyderabad",
+  "monthlyVolume": "50+ trips/month",
+  "requirementDetails": "Daily intra-city goods transportation"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "leadId": 1,
+  "lead": {
+    "id": 1,
+    "companyName": "TechCorp Solutions",
+    "contactPerson": "Suresh Reddy",
+    "phone": "9876543210",
+    "email": "suresh@techcorp.com",
+    "city": "Hyderabad",
+    "monthlyVolume": "50+ trips/month"
+  }
+}
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
