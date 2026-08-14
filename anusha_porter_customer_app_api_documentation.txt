@@ -1568,6 +1568,129 @@ Response (200 OK):
   }
 }
 
+
+================================================================================
+18. USER PREFERENCES & LANGUAGE APIS
+================================================================================
+
+18.1 GET USER PREFERENCES
+--------------------------------------------------------------------------------
+Endpoint: GET /api/users/preferences
+Auth: Bearer <token>
+Description: Fetches customer preferences including saved app language, theme, and notifications settings.
+
+Response (200 OK):
+{
+  "success": true,
+  "preferences": {
+    "language": "en",
+    "theme": "system",
+    "notificationsEnabled": true
+  }
+}
+
+
+18.2 UPDATE USER PREFERENCES & LANGUAGE
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/users/preferences
+Auth: Bearer <token>
+Description: Saves the customer's selected language (e.g. "en", "hi", "te") and settings to their backend profile.
+
+Request Body:
+{
+  "language": "te",
+  "theme": "dark",
+  "notificationsEnabled": true
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Preferences updated successfully",
+  "preferences": {
+    "language": "te",
+    "theme": "dark",
+    "notificationsEnabled": true
+  }
+}
+
+
+================================================================================
+19. DYNAMIC CONTENT & LEGAL POLICIES APIS
+================================================================================
+
+19.1 GET DYNAMIC CONTENT / LEGAL POLICIES
+--------------------------------------------------------------------------------
+Endpoint: GET /api/content/:slug
+Auth: Public
+Supported Slugs:
+  - terms (or terms-and-conditions)
+  - privacy (or privacy-policy)
+  - about (or about-us)
+  - refund-policy (or cancellation)
+
+Example: GET /api/content/terms
+
+Response (200 OK):
+{
+  "success": true,
+  "slug": "terms",
+  "title": "Terms & Conditions",
+  "content": "Welcome to Anusha Porter. By using our application, you agree to our standard terms of logistics, transport, and parcel delivery services.",
+  "lastUpdated": "2026-08-01"
+}
+
+Example: GET /api/content/privacy
+
+Response (200 OK):
+{
+  "success": true,
+  "slug": "privacy",
+  "title": "Privacy Policy",
+  "content": "Anusha Porter values your privacy. We collect GPS location for live tracking, order history, and contact numbers for delivery coordination.",
+  "lastUpdated": "2026-08-01"
+}
+
+
+================================================================================
+20. INVOICE & RESCHEDULING AUXILIARY APIS
+================================================================================
+
+20.1 GET / DOWNLOAD TRIP PDF INVOICE
+--------------------------------------------------------------------------------
+Endpoint: GET /api/bookings/:bookingId/invoice
+Auth: Bearer <token>
+Example: GET /api/bookings/BK_1723619988776/invoice
+
+Response (200 OK):
+{
+  "success": true,
+  "bookingId": "BK_1723619988776",
+  "downloadUrl": "https://api.anushaporter.com/invoices/BK_1723619988776.pdf"
+}
+
+
+20.2 RESCHEDULE A SCHEDULED BOOKING
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/bookings/:bookingId/reschedule
+Auth: Bearer <token>
+Example: PUT /api/bookings/BK_1723619988776/reschedule
+
+Request Body:
+{
+  "scheduledDate": "2026-08-25",
+  "scheduledSlot": "02:00 PM - 04:00 PM"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Booking rescheduled successfully",
+  "scheduledDate": "2026-08-25",
+  "scheduledSlot": "02:00 PM - 04:00 PM"
+}
+
+
 ================================================================================
 END OF DOCUMENTATION
 ================================================================================

@@ -21,6 +21,7 @@ public class AppUser {
     private String otp; // used for password reset via email
     private java.time.LocalDateTime otpExpiry;
     private Double walletBalance;
+    private String language;
     @Column(name = "fcm_token", length = 512)
     private String fcmToken;
     public Long getId() { return id; }
@@ -45,6 +46,8 @@ public class AppUser {
     public void setOtpExpiry(java.time.LocalDateTime otpExpiry) { this.otpExpiry = otpExpiry; }
     public Double getWalletBalance() { return walletBalance; }
     public void setWalletBalance(Double walletBalance) { this.walletBalance = walletBalance; }
+    public String getLanguage() { return language != null ? language : "en"; }
+    public void setLanguage(String language) { this.language = language; }
     public String getFcmToken() { return fcmToken; }
     public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
 
