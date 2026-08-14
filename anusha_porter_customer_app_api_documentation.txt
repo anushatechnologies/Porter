@@ -1877,6 +1877,218 @@ Response fields:
 
 
 ================================================================================
+23. "OUR SERVICES" DYNAMIC MANAGEMENT API (ADMIN & CUSTOMER)
+================================================================================
+
+23.1 GET ACTIVE SERVICES (CUSTOMER APP HOME GRID)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/services (or GET /api/home -> featuredServices)
+Auth: Optional / Public
+Description: Returns only active services (isActive = true), sorted by display_order.
+
+Query Parameters (Optional):
+- category: Filter by category ('vehicle', 'two_wheeler', 'packers', 'intercity')
+- city: Filter by city name (e.g. 'Hyderabad')
+
+Response (200 OK):
+{
+  "success": true,
+  "count": 3,
+  "featuredServices": [
+    {
+      "id": "two-wheeler",
+      "serviceId": "two-wheeler",
+      "name": "2 Wheeler",
+      "label": "2 Wheeler",
+      "category": "two_wheeler",
+      "subtitle": "Fast courier & small parcel delivery",
+      "description": "Fast courier & small parcel delivery",
+      "baseFare": 49.0,
+      "basePrice": 49.0,
+      "baseKm": 2.0,
+      "perKmRate": 12.0,
+      "pricePerKm": 12.0,
+      "helperRate": 0.0,
+      "capacityKg": 20,
+      "capacity": "20 Kg",
+      "capacityLabel": "20 Kg",
+      "dimensions": null,
+      "etaLabel": "5-10 mins",
+      "iconUrl": "https://cdn.anushaporter.com/services/bike.png",
+      "imageUrl": "https://cdn.anushaporter.com/services/bike.png",
+      "bgTint": "#EEF4FF",
+      "isActive": true,
+      "order": 1,
+      "displayOrder": 1,
+      "availableCities": "[\"ALL\"]"
+    },
+    {
+      "id": "mini-truck",
+      "serviceId": "mini-truck",
+      "name": "Mini Truck (Ace)",
+      "label": "Mini Truck (Ace)",
+      "category": "vehicle",
+      "subtitle": "Ideal for 1-2 BHK house shifting or small businesses",
+      "description": "Ideal for 1-2 BHK house shifting or small businesses",
+      "baseFare": 249.0,
+      "basePrice": 249.0,
+      "baseKm": 2.0,
+      "perKmRate": 22.0,
+      "pricePerKm": 22.0,
+      "helperRate": 300.0,
+      "capacityKg": 750,
+      "capacity": "750 Kg",
+      "capacityLabel": "750 Kg",
+      "dimensions": "{\"length\": \"7 ft\", \"width\": \"4.5 ft\", \"height\": \"5 ft\"}",
+      "etaLabel": "10-15 mins",
+      "iconUrl": "https://cdn.anushaporter.com/services/tata-ace.png",
+      "imageUrl": "https://cdn.anushaporter.com/services/tata-ace.png",
+      "bgTint": "#F0FDF4",
+      "isActive": true,
+      "order": 2,
+      "displayOrder": 2,
+      "availableCities": "[\"Hyderabad\", \"Secunderabad\"]"
+    }
+  ]
+}
+
+
+23.2 GET VEHICLE TRUCKS (TRUCK SELECTION SCREEN)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/services/trucks (or GET /api/services/vehicles)
+Auth: Optional / Public
+Description: Returns active vehicles and trucks for booking selection.
+
+Response (200 OK):
+{
+  "success": true,
+  "count": 2,
+  "vehicles": [ ... ]
+}
+
+
+23.3 ADMIN: GET ALL SERVICES (ACTIVE & INACTIVE)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/admin/services
+Auth: Bearer <ADMIN_JWT_TOKEN>
+Query Params: category (optional), status (optional: 'active'/'inactive'), search (optional)
+
+Response (200 OK):
+{
+  "success": true,
+  "count": 4,
+  "services": [ ... ]
+}
+
+
+23.4 ADMIN: CREATE NEW SERVICE
+--------------------------------------------------------------------------------
+Endpoint: POST /api/admin/services
+Auth: Bearer <ADMIN_JWT_TOKEN>
+
+Request Body:
+{
+  "serviceId": "tata-ace-750kg",
+  "name": "Tata Ace (Chota Hathi)",
+  "label": "Tata Ace",
+  "category": "vehicle",
+  "subtitle": "Ideal for 1-2 BHK house shifting or small businesses",
+  "baseFare": 249.0,
+  "baseKm": 2.0,
+  "perKmRate": 22.50,
+  "helperRate": 300.0,
+  "capacityKg": 750,
+  "capacityLabel": "750 Kg",
+  "dimensions": "{\"length\": \"7 ft\", \"width\": \"4.5 ft\", \"height\": \"5 ft\"}",
+  "etaLabel": "10-15 mins",
+  "iconUrl": "https://cdn.anushaporter.com/services/tata-ace.png",
+  "bgTint": "#EEF4FF",
+  "isActive": true,
+  "displayOrder": 1,
+  "availableCities": "[\"Hyderabad\", \"Secunderabad\"]"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Service created successfully",
+  "service": { ... }
+}
+
+
+23.5 ADMIN: UPDATE SERVICE
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/admin/services/:id
+Auth: Bearer <ADMIN_JWT_TOKEN>
+
+Request Body: (All fields to update)
+{
+  "name": "Tata Ace (Chota Hathi) Updated",
+  "baseFare": 269.0,
+  "perKmRate": 24.0,
+  "capacityKg": 800
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Service updated successfully",
+  "service": { ... }
+}
+
+
+23.6 ADMIN: TOGGLE ACTIVE / INACTIVE STATUS
+--------------------------------------------------------------------------------
+Endpoint: PATCH /api/admin/services/:id/toggle-status
+Auth: Bearer <ADMIN_JWT_TOKEN>
+
+Request Body (Optional):
+{
+  "isActive": false
+}
+// Or leave body empty for instant toggle
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Service status updated to Inactive",
+  "isActive": false,
+  "service": { ... }
+}
+
+
+23.7 ADMIN: REORDER SERVICES
+--------------------------------------------------------------------------------
+Endpoint: PATCH /api/admin/services/reorder
+Auth: Bearer <ADMIN_JWT_TOKEN>
+
+Request Body:
+{
+  "serviceIds": ["two-wheeler", "mini-truck", "pickup-8ft", "packers-movers"]
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Services reordered successfully",
+  "services": [ ... ]
+}
+
+
+23.8 ADMIN: DELETE SERVICE
+--------------------------------------------------------------------------------
+Endpoint: DELETE /api/admin/services/:id
+Auth: Bearer <ADMIN_JWT_TOKEN>
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Service deleted successfully"
+}
+
+
+================================================================================
 END OF DOCUMENTATION
 ================================================================================
+
 

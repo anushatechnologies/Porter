@@ -33,12 +33,13 @@ public class HomeFeedController {
     @Autowired private AppUserRepository userRepository;
     @Autowired private SavedAddressRepository addressRepository;
     @Autowired private PricingVehicleRepository vehicleRepository;
+    @Autowired private com.anushaporter.backend.repository.PorterServiceRepository porterServiceRepository;
     @Autowired private BannerRepository bannerRepository;
     @Autowired private JwtUtil jwtUtil;
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> getHomeFeed(HttpServletRequest request) {
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> response = new LinkedHashMap<>();
 
         // ── Auth ──────────────────────────────────────────────────────────────
         String authHeader = request.getHeader("Authorization");
@@ -56,13 +57,12 @@ public class HomeFeedController {
         Map<String, Object> defaultPickup = null;
         if (user != null) {
             List<SavedAddress> addresses = addressRepository.findByUserEmailOrderByCreatedAtDesc(user.getEmail());
-            // Prefer "home" tagged address, otherwise use the first one
             Optional<SavedAddress> homeAddr = addresses.stream()
                     .filter(a -> "home".equalsIgnoreCase(a.getTag()))
                     .findFirst();
             SavedAddress addr = homeAddr.orElse(addresses.isEmpty() ? null : addresses.get(0));
             if (addr != null) {
-                defaultPickup = new HashMap<>();
+                defaultPickup = new LinkedHashMap<>();
                 defaultPickup.put("id", "addr_" + addr.getId());
                 defaultPickup.put("label", addr.getLabel());
                 defaultPickup.put("tag", addr.getTag());
@@ -72,29 +72,78 @@ public class HomeFeedController {
             }
         }
 
-        // ── Active Services (vehicle types) ──────────────────────────────────
-        List<PricingVehicle> vehicles = vehicleRepository.findByStatus(true);
-        List<Map<String, Object>> services = vehicles.stream().map(v -> {
-            Map<String, Object> svc = new HashMap<>();
-            svc.put("vehicleId", v.getVehicleId());
-            svc.put("name", v.getName());
-            svc.put("description", v.getCapacityKg() != null ? "Up to " + v.getCapacityKg().intValue() + " kg" : "");
-            svc.put("iconUrl", v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
-            svc.put("baseFare", v.getBaseFare() != null ? v.getBaseFare() : 0.0);
-            svc.put("pricePerKm", v.getPricePerKm() != null ? v.getPricePerKm() : 0.0);
-            return svc;
-        }).collect(Collectors.toList());
+        // ── Dynamic "Our Services" & Fleet ─────────────────────────────────────
+        List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
+        List<Map<String, Object>> featuredServices = new ArrayList<>();
 
-        // If no vehicles configured yet, return sensible defaults
-        if (services.isEmpty()) {
-            services = List.of(
-                    Map.of("vehicleId", "2-wheeler", "name", "2 Wheeler",
-                            "description", "Up to 20 kg", "iconUrl", "", "baseFare", 40.0, "pricePerKm", 10.0),
-                    Map.of("vehicleId", "mini-truck", "name", "Mini Truck",
-                            "description", "Up to 500 kg", "iconUrl", "", "baseFare", 200.0, "pricePerKm", 15.0),
-                    Map.of("vehicleId", "full-truck", "name", "Full Truck",
-                            "description", "Up to 2000 kg", "iconUrl", "", "baseFare", 500.0, "pricePerKm", 20.0)
-            );
+        if (!dynamicServices.isEmpty()) {
+            for (com.anushaporter.backend.model.PorterService s : dynamicServices) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
+                item.put("serviceId", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
+                item.put("name", s.getName() != null ? s.getName() : "");
+                item.put("label", s.getLabel() != null ? s.getLabel() : (s.getName() != null ? s.getName() : ""));
+                item.put("category", s.getCategory() != null ? s.getCategory() : "vehicle");
+                item.put("subtitle", s.getSubtitle() != null ? s.getSubtitle() : "");
+                item.put("description", s.getSubtitle() != null ? s.getSubtitle() : "");
+                item.put("baseFare", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
+                item.put("basePrice", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
+                item.put("baseKm", s.getBaseKm() != null ? s.getBaseKm() : 2.0);
+                item.put("perKmRate", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
+                item.put("pricePerKm", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
+                item.put("helperRate", s.getHelperRate() != null ? s.getHelperRate() : 0.0);
+                item.put("capacityKg", s.getCapacityKg() != null ? s.getCapacityKg() : 0);
+                item.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
+                item.put("capacityLabel", s.getCapacityLabel() != null ? s.getCapacityLabel() : "");
+                item.put("dimensions", s.getDimensions());
+                item.put("etaLabel", s.getEtaLabel() != null ? s.getEtaLabel() : "10-15 mins");
+                item.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+                item.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+                item.put("bgTint", s.getBgTint() != null ? s.getBgTint() : "#EEF4FF");
+                item.put("isActive", Boolean.TRUE.equals(s.getIsActive()));
+                item.put("order", s.getDisplayOrder() != null ? s.getDisplayOrder() : 1);
+                item.put("displayOrder", s.getDisplayOrder() != null ? s.getDisplayOrder() : 1);
+                featuredServices.add(item);
+            }
+        } else {
+            // Fallback to PricingVehicle or default list
+            List<PricingVehicle> vehicles = vehicleRepository.findByStatus(true);
+            if (!vehicles.isEmpty()) {
+                int order = 1;
+                for (PricingVehicle v : vehicles) {
+                    Map<String, Object> svc = new LinkedHashMap<>();
+                    svc.put("id", v.getVehicleId());
+                    svc.put("serviceId", v.getVehicleId());
+                    svc.put("name", v.getName());
+                    svc.put("label", v.getName());
+                    svc.put("category", "vehicle");
+                    svc.put("subtitle", v.getCapacityKg() != null ? "Up to " + v.getCapacityKg().intValue() + " kg" : "");
+                    svc.put("description", v.getCapacityKg() != null ? "Up to " + v.getCapacityKg().intValue() + " kg" : "");
+                    svc.put("baseFare", v.getBaseFare() != null ? v.getBaseFare() : 0.0);
+                    svc.put("basePrice", v.getBaseFare() != null ? v.getBaseFare() : 0.0);
+                    svc.put("perKmRate", v.getPricePerKm() != null ? v.getPricePerKm() : 0.0);
+                    svc.put("pricePerKm", v.getPricePerKm() != null ? v.getPricePerKm() : 0.0);
+                    svc.put("capacityKg", v.getCapacityKg() != null ? v.getCapacityKg().intValue() : 500);
+                    svc.put("capacity", v.getCapacityKg() != null ? v.getCapacityKg().intValue() + " kg" : "500 kg");
+                    svc.put("imageUrl", v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
+                    svc.put("iconUrl", v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
+                    svc.put("isActive", true);
+                    svc.put("order", order++);
+                    featuredServices.add(svc);
+                }
+            } else {
+                featuredServices = List.of(
+                        Map.of("id", "two-wheeler", "label", "2 Wheeler", "category", "two_wheeler",
+                                "basePrice", 49.0, "perKmRate", 12.0, "capacity", "20 Kg",
+                                "imageUrl", "https://cdn.anushaporter.com/services/bike.png", "isActive", true, "order", 1),
+                        Map.of("id", "mini-truck", "label", "Mini Truck (Ace)", "category", "vehicle",
+                                "basePrice", 249.0, "perKmRate", 22.0, "capacity", "750 Kg",
+                                "imageUrl", "https://cdn.anushaporter.com/services/tata-ace.png", "isActive", true, "order", 2),
+                        Map.of("id", "packers-movers", "label", "Packers & Movers", "category", "packers",
+                                "basePrice", 1499.0, "perKmRate", 35.0, "capacity", "Complete House Shifting",
+                                "imageUrl", "https://cdn.anushaporter.com/services/packers.png", "isActive", true, "order", 3)
+                );
+            }
         }
 
         // ── Announcements / Banners ───────────────────────────────────────────
@@ -102,7 +151,7 @@ public class HomeFeedController {
                 .findByActiveTrueOrderByDisplayOrderAsc()
                 .stream()
                 .map(b -> {
-                    Map<String, Object> ann = new HashMap<>();
+                    Map<String, Object> ann = new LinkedHashMap<>();
                     ann.put("id", b.getId());
                     ann.put("title", b.getTitle() != null ? b.getTitle() : "");
                     ann.put("imageUrl", b.getImageUrl() != null ? b.getImageUrl() : "");
@@ -115,7 +164,7 @@ public class HomeFeedController {
         // ── Quick User Profile ─────────────────────────────────────────────────
         Map<String, Object> userProfile = null;
         if (user != null) {
-            userProfile = new HashMap<>();
+            userProfile = new LinkedHashMap<>();
             userProfile.put("id", user.getId());
             userProfile.put("name", user.getName() != null ? user.getName() : "");
             userProfile.put("phone", user.getPhone() != null ? user.getPhone() : "");
@@ -125,7 +174,8 @@ public class HomeFeedController {
         // ── Assemble Response ─────────────────────────────────────────────────
         response.put("success", true);
         response.put("defaultPickupAddress", defaultPickup);
-        response.put("services", services);
+        response.put("featuredServices", featuredServices);
+        response.put("services", featuredServices);
         response.put("announcements", announcements);
         if (userProfile != null) response.put("user", userProfile);
 
