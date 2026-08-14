@@ -19,14 +19,20 @@ import java.util.UUID;
 @Service
 public class MockSandboxPaymentProvider implements PaymentProvider {
 
-    @Value("${anusha.payment.merchant-vpa:anushaporter@icici}")
+    @Value("${payment.gateway.vpa:${anusha.payment.merchant-vpa:anushaporter@icici}}")
     private String merchantVpa;
 
-    @Value("${anusha.payment.merchant-name:Anusha Porter Logistics}")
+    @Value("${payment.gateway.merchant_name:${anusha.payment.merchant-name:Anusha Porter Logistics}}")
     private String merchantName;
 
-    @Value("${anusha.payment.webhook-secret:sandbox_secret_key_porter_2026}")
+    @Value("${payment.gateway.webhook_secret:${anusha.payment.webhook-secret:sandbox_secret_key_porter_2026}}")
     private String webhookSecret;
+
+    @Value("${payment.gateway.key_id:${RAZORPAY_KEY_ID:rzp_test_mock_12345}}")
+    private String keyId;
+
+    @Value("${payment.gateway.key_secret:${RAZORPAY_KEY_SECRET:mock_secret_key_12345}}")
+    private String keySecret;
 
     @Override
     public Map<String, Object> createPaymentOrder(PaymentOrder order) {
