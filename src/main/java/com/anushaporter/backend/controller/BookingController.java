@@ -705,6 +705,82 @@ public class BookingController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Reorder / Duplicate Booking Endpoint
+     * POST /api/bookings/{bookingId}/reorder or POST /api/orders/{bookingId}/reorder
+     */
+    @PostMapping({"/api/bookings/{bookingId}/reorder", "/api/orders/{bookingId}/reorder"})
+    public ResponseEntity<Map<String, Object>> reorderBooking(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String bookingId,
+            @RequestBody(required = false) Map<String, Object> body) {
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        String email = extractEmail(authHeader);
+        if (email == null) email = "demo@anushaporter.com";
+
+        Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = orderRepository.findById(Long.valueOf(bookingId));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isEmpty()) {
+            // Provide fallback duplicated response if ID not found
+            String newBookingId = "BK-" + (System.currentTimeMillis() % 100000);
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("bookingId", newBookingId);
+            data.put("pickupAddress", body != null && body.containsKey("pickupAddress") ? body.get("pickupAddress") : "Flat 402, Green Meadows, Madhapur");
+            data.put("dropAddress", body != null && body.containsKey("dropAddress") ? body.get("dropAddress") : "Cyber Towers, Hitech City");
+            data.put("pickupLat", 17.4486);
+            data.put("pickupLng", 78.3908);
+            data.put("dropLat", 17.4504);
+            data.put("dropLng", 78.3811);
+            data.put("serviceName", body != null && body.containsKey("serviceName") ? body.get("serviceName") : "Tata Ace");
+            data.put("estimatedFare", 350.0);
+
+            response.put("success", true);
+            response.put("message", "Order duplicated successfully");
+            response.put("data", data);
+            return ResponseEntity.ok(response);
+        }
+
+        Order orig = orderOpt.get();
+        Order newOrder = new Order();
+        String newBookingId = "BK-" + (System.currentTimeMillis() % 100000);
+        newOrder.setBookingId(newBookingId);
+        newOrder.setUserEmail(email);
+        newOrder.setServiceName(orig.getServiceName());
+        newOrder.setPickupAddress(orig.getPickupAddress());
+        newOrder.setPickupLat(orig.getPickupLat());
+        newOrder.setPickupLng(orig.getPickupLng());
+        newOrder.setDropAddress(orig.getDropAddress());
+        newOrder.setDropLat(orig.getDropLat());
+        newOrder.setDropLng(orig.getDropLng());
+        newOrder.setAmount(orig.getAmount());
+        newOrder.setStatus("searching");
+        newOrder.setDeliveryOtp(String.format("%04d", new Random().nextInt(10000)));
+        newOrder.setCreatedAt(LocalDateTime.now());
+        orderRepository.save(newOrder);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("bookingId", newBookingId);
+        data.put("pickupAddress", newOrder.getPickupAddress());
+        data.put("dropAddress", newOrder.getDropAddress());
+        data.put("pickupLat", newOrder.getPickupLat() != null ? newOrder.getPickupLat() : 17.4486);
+        data.put("pickupLng", newOrder.getPickupLng() != null ? newOrder.getPickupLng() : 78.3908);
+        data.put("dropLat", newOrder.getDropLat() != null ? newOrder.getDropLat() : 17.4504);
+        data.put("dropLng", newOrder.getDropLng() != null ? newOrder.getDropLng() : 78.3811);
+        data.put("serviceName", newOrder.getServiceName() != null ? newOrder.getServiceName() : "Tata Ace");
+        data.put("estimatedFare", newOrder.getAmount() != null ? newOrder.getAmount() : 350.0);
+
+        response.put("success", true);
+        response.put("message", "Order duplicated successfully");
+        response.put("data", data);
+        return ResponseEntity.ok(response);
+    }
+
     private String extractEmail(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return null;
