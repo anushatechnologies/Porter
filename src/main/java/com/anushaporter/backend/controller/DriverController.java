@@ -96,7 +96,10 @@ public class DriverController {
             return ResponseEntity.ok(response);
         }
 
-        return ResponseEntity.ok(Map.of("success", true, "order", null));
+        Map<String, Object> emptyResponse = new LinkedHashMap<>();
+        emptyResponse.put("success", true);
+        emptyResponse.put("order", null);
+        return ResponseEntity.ok(emptyResponse);
     }
 
     @GetMapping("/{email}/orders/history")
