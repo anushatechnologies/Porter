@@ -55,4 +55,43 @@ public class FranchiseController {
         response.put("franchise", saved);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * PUT /api/franchises/{id}
+     * Updates an existing regional partner franchise depot.
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<?> update(@PathVariable String id, @RequestBody Franchise entity) {
+        Long numericId = parseFranchiseId(id);
+        if (numericId != null && repository.existsById(numericId)) {
+            entity.setId(numericId);
+            Franchise saved = repository.save(entity);
+            return ResponseEntity.ok(Map.of("success", true, "franchise", saved));
+        }
+        return ResponseEntity.status(404).body(Map.of("success", false, "message", "Franchise not found"));
+    }
+
+    /**
+     * DELETE /api/franchises/{id}
+     * Deletes a regional partner franchise depot.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> delete(@PathVariable String id) {
+        Long numericId = parseFranchiseId(id);
+        if (numericId != null && repository.existsById(numericId)) {
+            repository.deleteById(numericId);
+            return ResponseEntity.ok(Map.of("success", true, "message", "Franchise deleted successfully"));
+        }
+        return ResponseEntity.status(404).body(Map.of("success", false, "message", "Franchise not found"));
+    }
+
+    private Long parseFranchiseId(String id) {
+        if (id == null) return null;
+        String clean = id.replace("FRN-", "").trim();
+        try {
+            return Long.parseLong(clean);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

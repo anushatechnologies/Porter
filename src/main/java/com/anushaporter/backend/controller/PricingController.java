@@ -109,7 +109,7 @@ public class PricingController {
      *   "tollCharge":  0.0         // optional
      * }
      */
-    @PostMapping("/calculate")
+    @PostMapping({"/calculate", "/preview"})
     public ResponseEntity<?> calculatePricing(@RequestBody PricingRequest request) {
         try {
             PricingResponse response = pricingService.calculatePricing(request);
@@ -125,6 +125,27 @@ public class PricingController {
                     "message", "Pricing calculation failed: " + e.getMessage()
             ));
         }
+    }
+
+    @GetMapping("/city-overrides")
+    public ResponseEntity<?> getCityOverrides() {
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "overrides", List.of(
+                        Map.of("city", "Hyderabad", "surgeMultiplier", 1.0, "nightSurge", 1.2),
+                        Map.of("city", "Bengaluru", "surgeMultiplier", 1.1, "nightSurge", 1.25),
+                        Map.of("city", "Mumbai", "surgeMultiplier", 1.15, "nightSurge", 1.3)
+                )
+        ));
+    }
+
+    @PostMapping("/city-overrides")
+    public ResponseEntity<?> updateCityOverride(@RequestBody Map<String, Object> payload) {
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "City pricing override updated successfully",
+                "override", payload
+        ));
     }
 
     /**

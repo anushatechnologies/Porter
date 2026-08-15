@@ -13,7 +13,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(telemetryWebSocketHandler(), "/ws", "/ws/telemetry")
+        registry.addHandler(telemetryWebSocketHandler(), "/ws", "/ws/telemetry", "/ws/tracking")
                 .setAllowedOriginPatterns("*");
     }
 

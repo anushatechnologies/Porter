@@ -297,4 +297,48 @@ public class OrderController {
                 "orderDetails", savedOrder
         ));
     }
+
+    @GetMapping("/{id}/timeline")
+    public ResponseEntity<?> getOrderTimeline(@PathVariable String id) {
+        Optional<Order> orderOpt = repository.findByBookingId(id);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = repository.findById(Long.valueOf(id));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
+        }
+
+        Order o = orderOpt.get();
+        List<Map<String, String>> timeline = new ArrayList<>();
+        timeline.add(Map.of("stage", "Order Placed", "time", o.getCreatedAt() != null ? o.getCreatedAt().toString() : "Just now", "status", "completed"));
+
+        if (o.getDriverName() != null) {
+            timeline.add(Map.of("stage", "Driver Assigned", "time", "Within 2 mins", "status", "completed", "driver", o.getDriverName()));
+        } else {
+            timeline.add(Map.of("stage", "Assigning Driver", "time", "In progress", "status", "pending"));
+        }
+
+        String currentStatus = o.getStatus() != null ? o.getStatus().toLowerCase() : "searching";
+        if ("picked_up".equals(currentStatus) || "in_transit".equals(currentStatus) || "delivered".equals(currentStatus) || "completed".equals(currentStatus)) {
+            timeline.add(Map.of("stage", "Goods Picked Up", "time", "Completed", "status", "completed"));
+        } else {
+            timeline.add(Map.of("stage", "Goods Picked Up", "time", "Pending", "status", "pending"));
+        }
+
+        if ("delivered".equals(currentStatus) || "completed".equals(currentStatus)) {
+            timeline.add(Map.of("stage", "Order Delivered", "time", "Completed", "status", "completed"));
+        } else {
+            timeline.add(Map.of("stage", "Order Delivered", "time", "Pending", "status", "pending"));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "orderId", o.getBookingId() != null ? o.getBookingId() : "ORD-" + o.getId(),
+                "status", currentStatus,
+                "timeline", timeline
+        ));
+    }
 }

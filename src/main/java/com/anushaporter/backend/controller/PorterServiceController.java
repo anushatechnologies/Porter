@@ -142,6 +142,29 @@ public class PorterServiceController {
         ));
     }
 
+    /**
+     * GET /api/services/grouped
+     * Returns active services grouped by category for mobile app category tabs.
+     */
+    @GetMapping("/grouped")
+    public ResponseEntity<?> getGroupedServices() {
+        List<PorterService> services = serviceRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
+        if (services.isEmpty()) {
+            services = getDefaultFallbackServices();
+        }
+
+        Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        for (PorterService s : services) {
+            String cat = s.getCategory() != null ? s.getCategory().toLowerCase() : "vehicle";
+            grouped.computeIfAbsent(cat, k -> new ArrayList<>()).add(formatServiceForApp(s));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "grouped", grouped
+        ));
+    }
+
     public Map<String, Object> formatServiceForApp(PorterService s) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
