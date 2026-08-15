@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/location")
-public class LocationController {
+@RequestMapping("/api/places")
+public class PlacesController {
 
     @Autowired
     private LocationService locationService;
@@ -33,19 +33,11 @@ public class LocationController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<?> search(
-            @RequestParam(name = "q", required = false) String q,
-            @RequestParam(name = "input", required = false) String input) {
-        String query = (q != null && !q.trim().isEmpty()) ? q : input;
-        if (query == null) {
-            query = "";
-        }
+    public ResponseEntity<Map<String, Object>> search(
+            @RequestParam(name = "input", required = false) String input,
+            @RequestParam(name = "q", required = false) String q) {
+        String query = (input != null && !input.trim().isEmpty()) ? input : q;
         Map<String, Object> result = locationService.getAutocomplete(query);
         return ResponseEntity.ok(result);
-    }
-
-    @GetMapping("/reverse")
-    public ResponseEntity<String> reverse(@RequestParam double lat, @RequestParam double lng) {
-        return locationService.reverseGeocode(lat, lng);
     }
 }
