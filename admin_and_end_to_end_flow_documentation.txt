@@ -1,0 +1,134 @@
+===================================================================
+ANUSHA PORTER - COMPLETE END-TO-END & ADMIN FLOW DOCUMENTATION
+===================================================================
+Base URL: https://api.anushaporter.com
+GitHub Repository: https://github.com/anushatechnologies/Porter.git
+Last Updated: 2026-08-15
+
+-------------------------------------------------------------------
+1. END-TO-END FLOW ARCHITECTURE & STAGES
+-------------------------------------------------------------------
+
+PHASE 1: CATEGORY & PRICING CONFIGURATION (ADMIN)
+-------------------------------------------------
+1. Admin opens Admin Panel (/admin/services or /admin/pricing).
+2. Admin configures vehicle categories (Tata Ace, 2 Wheeler, Packers & Movers)
+   via POST /api/admin/services.
+3. Admin sets base fares, per-KM rates, helper charges, and surge multipliers
+   via POST /api/pricing or PUT /api/pricing/vehicle/{vehicleId}.
+4. Admin publishes promotional banners via POST /api/banners.
+
+PHASE 2: APP LAUNCH & SERVICE DISCOVERY (CUSTOMER)
+--------------------------------------------------
+1. Customer opens Mobile App.
+2. Customer app fetches active vehicles & services via GET /api/services
+   or grouped categories via GET /api/services/grouped.
+3. Customer app fetches active promotional banners via GET /api/banners.
+4. Customer searches pickup/drop locations via GET /api/location/autocomplete.
+5. Customer selects place & retrieves lat/lng via GET /api/location/details.
+6. Customer app requests price estimates via POST /api/pricing/estimate-all
+   (or POST /api/pricing/calculate or /api/pricing/preview).
+7. Backend returns category-wise fare breakdown (e.g. ₹72 for Bike, ₹313 for Tata Ace).
+
+PHASE 3: BOOKING & DISPATCH FLOW (CUSTOMER -> ADMIN -> DRIVER)
+--------------------------------------------------------------
+1. Customer clicks "Book Now" -> POST /api/bookings.
+2. Backend creates order in "searching" status.
+3. Admin Panel receives order via WebSocket (/ws/tracking) or GET /api/orders.
+4. Driver App receives broadcast request or fetches open orders via GET /api/driver/orders/available.
+5. Driver accepts ride via POST /api/orders/{id}/accept.
+6. (Optional) Admin manually dispatches/assigns driver via POST /api/orders/{id}/assign.
+
+PHASE 4: LIVE TRACKING & TRIP EXECUTION (DRIVER -> CUSTOMER -> ADMIN)
+---------------------------------------------------------------------
+1. Driver streams location updates via POST /api/drivers/location or WebSocket /ws/tracking.
+2. Backend updates live driver position and calculates ETA.
+3. Customer app receives real-time driver movement & map marker updates.
+4. Admin panel live map (/admin/tracking) updates positions.
+5. Driver arrives at pickup -> PUT /api/orders/{id}/status { "status": "picked_up" }.
+6. Driver arrives at drop location -> Customer provides 4-digit OTP.
+7. Driver submits OTP -> POST /api/driver/orders/{id}/verify-otp { "otp": "4829" }
+   or PUT /api/orders/{id}/status { "status": "delivered", "otp": "4829" }.
+
+PHASE 5: SETTLEMENT & SUPPORT (ADMIN & CUSTOMER)
+------------------------------------------------
+1. Admin releases driver earnings via POST /api/payouts/{id}/release.
+2. Customer creates support ticket via POST /api/tickets.
+3. Admin responds/resolves ticket via POST /api/tickets/{id}/message.
+
+-------------------------------------------------------------------
+2. COMPLETE BACKEND ENDPOINT REFERENCE & VERIFIED MATRIX
+-------------------------------------------------------------------
+
+[SECTION A] Category & Services Management
+------------------------------------------
+GET    /api/services                     - List active services for Customer App
+GET    /api/services?category=vehicle   - Filter services by category
+GET    /api/services/grouped             - Grouped services array by category
+GET    /api/services/trucks              - List vehicle options for app
+GET    /api/services/packers             - List packers options for app
+GET    /api/admin/services               - Admin listing (all active & inactive)
+POST   /api/admin/services              - Create new service
+PUT    /api/admin/services/{id}          - Update service details
+PATCH  /api/admin/services/{id}/toggle-status - Single click toggle active/inactive
+PATCH  /api/admin/services/reorder       - Drag-and-drop display order reordering
+DELETE /api/admin/services/{id}          - Delete/archive service
+
+[SECTION B] Dynamic Pricing & Estimation
+----------------------------------------
+GET    /api/pricing/vehicles             - Active vehicle pricing config
+GET    /api/pricing/vehicle/{vehicleId}  - Specific vehicle pricing rules
+POST   /api/pricing                      - Add new vehicle pricing rules
+PUT    /api/pricing/vehicle/{vehicleId}  - Update vehicle base fare, per km, helper rates
+POST   /api/pricing/calculate            - Itemized price calculation
+POST   /api/pricing/preview              - Route price breakdown simulation
+POST   /api/pricing/estimate-all         - Customer app fare estimation for all categories
+GET    /api/pricing/city-overrides       - Get city-specific price multipliers
+POST   /api/pricing/city-overrides      - Save city-specific price multipliers
+
+[SECTION C] Location & Places Search
+------------------------------------
+GET    /api/location/autocomplete?input={query} - Google Places autocomplete search
+GET    /api/places/autocomplete?input={query}   - Alias autocomplete search route
+GET    /api/location/details?placeId={placeId}   - Google Place details (lat, lng, address)
+GET    /api/places/details?placeId={placeId}     - Alias place details route
+GET    /api/location/reverse?lat={lat}&lng={lng} - Reverse geocoding
+
+[SECTION D] Orders & Dispatch
+-----------------------------
+GET    /api/orders                       - Admin & dispatcher order queue
+GET    /api/orders/{id}/timeline         - Order activity audit trail
+POST   /api/bookings                     - Customer creates new booking
+POST   /api/orders/{id}/assign           - Dispatcher/admin assigns driver
+PUT    /api/orders/{id}/status           - Update order status (with OTP check on completion)
+POST   /api/orders/{id}/accept           - Driver accepts available order
+GET    /api/bookings/{id}/invoice        - Downloadable PDF booking invoice
+
+[SECTION E] Drivers, Telemetry & KYC
+-----------------------------------
+GET    /api/admin/drivers                - Admin driver directory & status filter
+PUT    /api/admin/drivers/{driverId}/kyc  - Approve/Reject driver KYC documents
+POST   /api/drivers/location             - Driver location ping
+WS     /ws/tracking                      - WebSocket real-time driver tracking & telemetry
+
+[SECTION F] Admin Analytics & Finance
+-------------------------------------
+GET    /api/admin/metrics                - Admin dashboard KPI summary
+GET    /api/admin/analytics              - Revenue, order volume & vehicle distribution
+GET    /api/payouts                      - Admin payout requests roster
+POST   /api/payouts/{id}/release         - Release earnings payout to driver
+GET    /api/franchises                   - List regional partner franchise hubs
+POST   /api/franchises                   - Create franchise depot
+PUT    /api/franchises/{id}              - Update franchise depot
+DELETE /api/franchises/{id}              - Delete franchise depot
+
+[SECTION G] Customer Care & Notifications
+-----------------------------------------
+POST   /api/notifications/broadcast      - Push alert to customers or drivers
+GET    /api/tickets                      - Support tickets roster
+POST   /api/tickets                      - Create new support ticket
+POST   /api/tickets/{id}/message         - Support agent response in ticket thread
+
+===================================================================
+All backend endpoints are verified, implemented, and pushed to GitHub main branch.
+===================================================================
