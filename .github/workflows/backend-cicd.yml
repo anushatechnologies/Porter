@@ -185,18 +185,24 @@ jobs:
           # 1. Authenticate with ECR
           echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-          # 2. Pull the new image
-          echo "📦 Pulling new image..."
-          docker pull "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker tag  "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-                      "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
-
-          # 3. Stop and remove old containers (graceful)
-          echo "🛑 Stopping old containers..."
+          # 2. Free up disk space BEFORE pulling (prevents "no space left on device")
+          echo "🧹 Cleaning up disk space before pull..."
           docker stop anusha-backend  2>/dev/null || true
           docker rm   anusha-backend  2>/dev/null || true
           docker stop backend-app     2>/dev/null || true
           docker rm   backend-app     2>/dev/null || true
+          docker container prune -f   2>/dev/null || true
+          docker image prune -af      2>/dev/null || true
+          docker volume prune -f      2>/dev/null || true
+          docker network prune -f     2>/dev/null || true
+          df -h /
+          echo "✅ Disk cleanup done"
+
+          # 3. Pull the new image
+          echo "📦 Pulling new image..."
+          docker pull "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag  "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+                      "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
           # 4. Start new container with all secrets injected
           echo "🚀 Starting new container..."
