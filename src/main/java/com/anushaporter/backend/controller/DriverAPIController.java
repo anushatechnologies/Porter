@@ -305,42 +305,60 @@ public class DriverAPIController {
     public ResponseEntity<?> registerDriver(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
         AppUser appUser = getAuthenticatedAppUser(request);
         if (appUser == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+            return ResponseEntity.status(401).body(Map.of("success", false, "error", "Unauthorized", "message", "Your session has expired. Please login again."));
         }
 
         String phone = appUser.getPhone();
         Driver driver = driverRepository.findByPhone(phone).orElse(new Driver());
 
+        // Check if KYC application already exists (HTTP 409)
+        if (driver.getId() != null && driver.getKyc() != null &&
+                ("pending".equalsIgnoreCase(driver.getKyc()) || "verified".equalsIgnoreCase(driver.getKyc()) || "approved".equalsIgnoreCase(driver.getKyc()))) {
+            return ResponseEntity.status(409).body(Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists."));
+        }
+
+        String name = text(payload, "name");
         String aadhaar = text(payload, "aadhaarNumber");
         String pincode = text(payload, "pincode");
         String ifsc = text(payload, "ifscCode");
-        if (aadhaar != null && !aadhaar.matches("\\d{12}")) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "aadhaarNumber must contain exactly 12 digits"));
+        String accountNumber = text(payload, "accountNumber");
+        String licenseNumber = text(payload, "licenseNumber");
+        String rcNumber = text(payload, "rcNumber");
+
+        // Strict Backend Validation Checks (HTTP 400)
+        if (name != null && !name.matches("^[a-zA-Z\\s]{2,50}$")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Name must contain only alphabets and spaces (2-50 characters)."));
         }
-        if (pincode != null && !pincode.matches("\\d{6}")) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "pincode must contain exactly 6 digits"));
+        if (aadhaar != null && !aadhaar.replaceAll("\\s+", "").matches("^\\d{12}$")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Aadhaar number must contain exactly 12 digits."));
         }
-        if (ifsc != null && !ifsc.matches("[A-Za-z0-9]{11}")) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "ifscCode must contain exactly 11 letters or digits"));
+        if (pincode != null && !pincode.matches("^\\d{6}$")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Pincode must contain exactly 6 digits."));
+        }
+        if (ifsc != null && !ifsc.toUpperCase().matches("^[A-Z]{4}0[A-Z0-9]{6}$")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid IFSC code format (e.g. HDFC0001234)."));
+        }
+        if (accountNumber != null && !accountNumber.matches("^\\d{9,18}$")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Bank Account number must contain 9 to 18 digits."));
         }
 
         driver.setPhone(phone);
         driver.setEmail(text(payload, "email") != null ? text(payload, "email") : appUser.getEmail());
-        driver.setName(text(payload, "name"));
+        driver.setName(name);
         driver.setDob(text(payload, "dob"));
         driver.setGender(text(payload, "gender"));
         driver.setVehicleType(text(payload, "vehicleType"));
         driver.setVehicleNumber(text(payload, "vehicleNumber"));
         driver.setAadhaarNumber(aadhaar);
-        driver.setRcNumber(text(payload, "rcNumber"));
-        driver.setLicenseNumber(text(payload, "licenseNumber"));
+        driver.setRcNumber(rcNumber);
+        driver.setLicenseNumber(licenseNumber);
         driver.setAddressLine1(text(payload, "addressLine1"));
         driver.setCity(text(payload, "city"));
         driver.setState(text(payload, "state"));
         driver.setPincode(pincode);
         driver.setBankName(text(payload, "bankName"));
         driver.setAccountHolderName(text(payload, "accountHolderName"));
-        driver.setAccountNumber(text(payload, "accountNumber"));
+        driver.setAccountNumber(accountNumber);
         driver.setIfscCode(ifsc);
         driver.setKyc("pending");
         driver.setStatus("offline"); // initial status

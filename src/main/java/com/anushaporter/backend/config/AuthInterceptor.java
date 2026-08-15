@@ -31,8 +31,8 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.getWriter().write("{\"error\": \"Unauthorized - Invalid or missing token\"}");
         response.setContentType("application/json");
+        response.getWriter().write("{\"success\": false, \"error\": \"Unauthorized\", \"message\": \"Your session has expired. Please login again.\"}");
         return false;
     }
 }

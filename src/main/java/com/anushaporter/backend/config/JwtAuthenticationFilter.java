@@ -64,7 +64,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("{\"error\": \"Missing or invalid Authorization header\"}");
+            response.setContentType("application/json");
+            response.getWriter().write("{\"success\": false, \"error\": \"Unauthorized\", \"message\": \"Your session has expired. Please login again.\"}");
             return;
         }
 
@@ -72,7 +73,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (!jwtUtil.validateToken(token)) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("{\"error\": \"Invalid or expired JWT token\"}");
+            response.setContentType("application/json");
+            response.getWriter().write("{\"success\": false, \"error\": \"Unauthorized\", \"message\": \"Your session has expired. Please login again.\"}");
             return;
         }
 
