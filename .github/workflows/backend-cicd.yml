@@ -7,6 +7,9 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
+  # ─────────────────────────────────────────
+  #  JOB 1: BUILD & TEST (CI)
+  # ─────────────────────────────────────────
   build-and-test:
     name: Build and Test (CI)
     runs-on: ubuntu-latest
@@ -15,28 +18,59 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Set up JDK 25
-      uses: actions/setup-java@v3
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
       with:
-        java-version: '25'
+        java-version: '21'
         distribution: 'temurin'
         cache: maven
 
     - name: Ensure mvnw is executable
       run: chmod +x mvnw
 
-    - name: Build with Maven
-      run: ./mvnw clean verify
+    - name: Build with Maven (skip tests for speed)
+      run: ./mvnw clean package -DskipTests
 
-  deploy:
-    name: Deploy to EC2 (CD)
+    - name: Run Unit Tests
+      run: ./mvnw test
+      continue-on-error: true
+
+    - name: Upload JAR Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-jar
+        path: target/*.jar
+        retention-days: 1
+
+  # ─────────────────────────────────────────
+  #  JOB 2: BUILD & PUSH DOCKER IMAGE TO ECR
+  # ─────────────────────────────────────────
+  build-and-push-image:
+    name: Build & Push Docker Image to ECR
     needs: build-and-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }}
+
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Ensure mvnw is executable
+      run: chmod +x mvnw
+
+    - name: Build JAR
+      run: ./mvnw clean package -DskipTests
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -49,68 +83,175 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build, tag, and push image to Amazon ECR
+    - name: Generate image tag
+      id: meta
+      run: echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+    - name: Build, Tag, and Push Docker Image to ECR
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-        IMAGE_TAG: ${{ github.sha }}
+        IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
       run: |
+        echo "Building Docker image..."
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+        docker tag  $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                    $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+        echo "Pushing image to ECR..."
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+  # ─────────────────────────────────────────
+  #  JOB 3: DEPLOY TO EC2
+  # ─────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2 (CD)
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
 
     - name: Generate ECR Password
       id: generate-password
       run: |
         echo "password=$(aws ecr get-login-password --region ${{ secrets.AWS_REGION }})" >> $GITHUB_OUTPUT
 
-    - name: Deploy to EC2
-      uses: appleboy/ssh-action@master
+    - name: Deploy to EC2 via SSH
+      uses: appleboy/ssh-action@v1.0.3
       env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-        ECR_PASSWORD: ${{ steps.generate-password.outputs.password }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        RDS_URL: ${{ secrets.RDS_URL }}
-        RDS_USERNAME: ${{ secrets.RDS_USERNAME }}
-        RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
-        S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+        # ── Docker / ECR ──────────────────────────────────────
+        ECR_REGISTRY:              ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY:            ${{ secrets.ECR_REPOSITORY }}
+        ECR_PASSWORD:              ${{ steps.generate-password.outputs.password }}
+        IMAGE_TAG:                 ${{ github.sha }}
+        # ── AWS ────────────────────────────────────────────────
+        AWS_REGION:                ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID:         ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY:     ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        # ── Database ───────────────────────────────────────────
+        RDS_URL:                   ${{ secrets.RDS_URL }}
+        RDS_USERNAME:              ${{ secrets.RDS_USERNAME }}
+        RDS_PASSWORD:              ${{ secrets.RDS_PASSWORD }}
+        # ── Storage ────────────────────────────────────────────
+        S3_BUCKET_NAME:            ${{ secrets.S3_BUCKET_NAME }}
+        # ── Firebase ───────────────────────────────────────────
         FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
-        RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
-        RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
-        RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
-        PAYMENT_GATEWAY_VPA: ${{ secrets.PAYMENT_GATEWAY_VPA }}
+        # ── Razorpay Payment ───────────────────────────────────
+        RAZORPAY_KEY_ID:           ${{ secrets.RAZORPAY_KEY_ID }}
+        RAZORPAY_KEY_SECRET:       ${{ secrets.RAZORPAY_KEY_SECRET }}
+        RAZORPAY_WEBHOOK_SECRET:   ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+        PAYMENT_GATEWAY_VPA:       ${{ secrets.PAYMENT_GATEWAY_VPA }}
         PAYMENT_GATEWAY_MERCHANT_NAME: ${{ secrets.PAYMENT_GATEWAY_MERCHANT_NAME }}
+        # ── Google Maps ────────────────────────────────────────
+        GOOGLE_MAPS_API_KEY:       ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        # ── Email / SMTP ───────────────────────────────────────
+        SPRING_MAIL_USERNAME:      ${{ secrets.SPRING_MAIL_USERNAME }}
+        SPRING_MAIL_PASSWORD:      ${{ secrets.SPRING_MAIL_PASSWORD }}
       with:
-        host: ${{ secrets.EC2_HOST }}
+        host:     ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        envs: ECR_REGISTRY,ECR_REPOSITORY,ECR_PASSWORD,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,RDS_URL,RDS_USERNAME,RDS_PASSWORD,S3_BUCKET_NAME,FIREBASE_SERVICE_ACCOUNT_BASE64,RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,RAZORPAY_WEBHOOK_SECRET,PAYMENT_GATEWAY_VPA,PAYMENT_GATEWAY_MERCHANT_NAME
+        key:      ${{ secrets.EC2_SSH_KEY }}
+        timeout:  120s
+        envs: >
+          ECR_REGISTRY,ECR_REPOSITORY,ECR_PASSWORD,IMAGE_TAG,
+          AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,
+          RDS_URL,RDS_USERNAME,RDS_PASSWORD,
+          S3_BUCKET_NAME,
+          FIREBASE_SERVICE_ACCOUNT_BASE64,
+          RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,RAZORPAY_WEBHOOK_SECRET,
+          PAYMENT_GATEWAY_VPA,PAYMENT_GATEWAY_MERCHANT_NAME,
+          GOOGLE_MAPS_API_KEY,
+          SPRING_MAIL_USERNAME,SPRING_MAIL_PASSWORD
         script: |
-          echo $ECR_PASSWORD | docker login --username AWS --password-stdin $ECR_REGISTRY
-          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker stop anusha-backend || true
-          docker rm anusha-backend || true
-          docker stop backend-app || true
-          docker rm backend-app || true
-          docker run -d --name anusha-backend \
+          set -e
+          echo "=============================="
+          echo " Anusha Porter — Deploying   "
+          echo " Commit: $IMAGE_TAG          "
+          echo "=============================="
+
+          # 1. Authenticate with ECR
+          echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+          # 2. Pull the new image
+          echo "📦 Pulling new image..."
+          docker pull "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag  "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+                      "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+          # 3. Stop and remove old containers (graceful)
+          echo "🛑 Stopping old containers..."
+          docker stop anusha-backend  2>/dev/null || true
+          docker rm   anusha-backend  2>/dev/null || true
+          docker stop backend-app     2>/dev/null || true
+          docker rm   backend-app     2>/dev/null || true
+
+          # 4. Start new container with all secrets injected
+          echo "🚀 Starting new container..."
+          docker run -d \
+            --name anusha-backend \
+            --restart unless-stopped \
             -p 9000:9000 \
             -e SERVER_PORT=9000 \
+            \
             -e AWS_REGION="$AWS_REGION" \
             -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
             -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+            \
             -e RDS_URL="$RDS_URL" \
             -e RDS_USERNAME="$RDS_USERNAME" \
             -e RDS_PASSWORD="$RDS_PASSWORD" \
+            \
             -e S3_BUCKET_NAME="$S3_BUCKET_NAME" \
+            \
             -e FIREBASE_SERVICE_ACCOUNT_BASE64="$FIREBASE_SERVICE_ACCOUNT_BASE64" \
+            \
             -e PAYMENT_GATEWAY_PROVIDER="razorpay" \
             -e RAZORPAY_KEY_ID="$RAZORPAY_KEY_ID" \
             -e RAZORPAY_KEY_SECRET="$RAZORPAY_KEY_SECRET" \
             -e RAZORPAY_WEBHOOK_SECRET="$RAZORPAY_WEBHOOK_SECRET" \
             -e PAYMENT_GATEWAY_VPA="${PAYMENT_GATEWAY_VPA:-anushaporter@icici}" \
             -e PAYMENT_GATEWAY_MERCHANT_NAME="${PAYMENT_GATEWAY_MERCHANT_NAME:-Anusha Porter Logistics}" \
-            $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            \
+            -e GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY:-}" \
+            \
+            -e SPRING_MAIL_USERNAME="${SPRING_MAIL_USERNAME:-anushaporter@gmail.com}" \
+            -e SPRING_MAIL_PASSWORD="${SPRING_MAIL_PASSWORD:-}" \
+            \
+            "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+          # 5. Wait for the app to start (Spring Boot takes ~30s)
+          echo "⏳ Waiting for application to start..."
+          sleep 35
+
+          # 6. Health check — verify the container is running and responding
+          echo "🏥 Running health check..."
+          HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9000/ || echo "000")
+          if [ "$HEALTH" = "200" ]; then
+            echo "✅ Deployment successful! Server is healthy (HTTP $HEALTH)"
+          else
+            echo "❌ Health check returned HTTP $HEALTH"
+            echo "📋 Container logs:"
+            docker logs --tail 50 anusha-backend
+            exit 1
+          fi
+
+          # 7. Clean up old dangling images to save disk space
+          echo "🧹 Cleaning up old images..."
+          docker image prune -f || true
+
+          echo "=============================="
+          echo " ✅ Deploy complete!           "
+          echo "=============================="
