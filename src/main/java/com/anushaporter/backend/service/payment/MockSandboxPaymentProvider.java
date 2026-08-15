@@ -44,8 +44,8 @@ public class MockSandboxPaymentProvider implements PaymentProvider {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private boolean isRealRazorpayConfigured() {
-        return keyId != null && !keyId.isBlank() && !keyId.contains("mock")
-                && keySecret != null && !keySecret.isBlank() && !keySecret.contains("mock");
+        return keyId != null && !keyId.isBlank() && !keyId.equals("rzp_test_mock_12345")
+                && keySecret != null && !keySecret.isBlank() && !keySecret.equals("mock_secret_key_12345");
     }
 
     private HttpHeaders createRazorpayHeaders() {
