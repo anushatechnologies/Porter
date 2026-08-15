@@ -56,7 +56,7 @@ public class LocationService {
         String query = input.trim();
 
         try {
-            String url = UriComponentsBuilder.fromHttpUrl("https://maps.googleapis.com/maps/api/place/autocomplete/json")
+            String url = UriComponentsBuilder.fromUriString("https://maps.googleapis.com/maps/api/place/autocomplete/json")
                     .queryParam("input", query)
                     .queryParam("components", "country:in")
                     .queryParam("location", "17.3850,78.4867")
@@ -120,7 +120,7 @@ public class LocationService {
         }
 
         try {
-            String url = UriComponentsBuilder.fromHttpUrl("https://maps.googleapis.com/maps/api/place/details/json")
+            String url = UriComponentsBuilder.fromUriString("https://maps.googleapis.com/maps/api/place/details/json")
                     .queryParam("place_id", placeId)
                     .queryParam("fields", "geometry,formatted_address,name")
                     .queryParam("key", apiKey)
