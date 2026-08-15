@@ -12,9 +12,28 @@ public class PricingRequest {
     private Double waitingMins;
     private Double tollCharge;
 
+    private String serviceId;
+    private String vehicleType;
+    private String id;
+
     // Getters and Setters
-    public String getVehicleId() { return vehicleId; }
+    public String getVehicleId() {
+        if (vehicleId != null && !vehicleId.isBlank()) return vehicleId;
+        if (serviceId != null && !serviceId.isBlank()) return serviceId;
+        if (vehicleType != null && !vehicleType.isBlank()) return vehicleType;
+        if (id != null && !id.isBlank()) return id;
+        return null;
+    }
     public void setVehicleId(String vehicleId) { this.vehicleId = vehicleId; }
+
+    public String getServiceId() { return serviceId; }
+    public void setServiceId(String serviceId) { this.serviceId = serviceId; }
+
+    public String getVehicleType() { return vehicleType; }
+    public void setVehicleType(String vehicleType) { this.vehicleType = vehicleType; }
+
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
     public Double getDistanceKm() { return distanceKm; }
     public void setDistanceKm(Double distanceKm) { this.distanceKm = distanceKm; }
