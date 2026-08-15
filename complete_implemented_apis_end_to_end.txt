@@ -1,0 +1,667 @@
+===================================================================
+ANUSHA PORTER — COMPLETE IMPLEMENTED APIS END-TO-END SPECIFICATION
+===================================================================
+Base URL: https://api.anushaporter.com
+GitHub Repository: https://github.com/anushatechnologies/Porter.git
+Format: Standard HTTP / JSON (UTF-8)
+
+===================================================================
+1. AUTHENTICATION & USER PROFILE
+===================================================================
+
+1.1 Verify Firebase Phone OTP & Login
+-------------------------------------------------------------------
+POST /api/auth/verify-otp
+Headers: Content-Type: application/json
+Request Body:
+{
+  "firebaseIdToken": "<Firebase ID Token>",
+  "mode": "login",
+  "name": "Sravan Kumar"
+}
+Response (200 OK):
+{
+  "success": true,
+  "accessToken": "eyJhbGci...",
+  "refreshToken": "eyJhbGci...",
+  "user": {
+    "id": 101,
+    "name": "Sravan Kumar",
+    "phone": "8106970384",
+    "email": "sravan@anushaporter.com",
+    "role": "customer"
+  }
+}
+
+1.2 Refresh JWT Token
+-------------------------------------------------------------------
+POST /api/auth/refresh-token
+Request Body:
+{
+  "refreshToken": "eyJhbGci..."
+}
+Response (200 OK):
+{
+  "success": true,
+  "accessToken": "eyJhbGci..."
+}
+
+1.3 Get Customer Profile
+-------------------------------------------------------------------
+GET /api/users/profile
+Headers: Authorization: Bearer <accessToken>
+Response (200 OK):
+{
+  "success": true,
+  "profile": {
+    "id": 101,
+    "name": "Sravan Kumar",
+    "phone": "8106970384",
+    "email": "sravan@anushaporter.com"
+  }
+}
+
+===================================================================
+2. OPERATIONAL CITIES & SERVICE CATEGORIES
+===================================================================
+
+2.1 List Operational Cities
+-------------------------------------------------------------------
+GET /api/cities (or GET /api/franchises/cities)
+Response (200 OK):
+{
+  "success": true,
+  "count": 5,
+  "cities": [
+    { "id": "hyderabad", "name": "Hyderabad", "isPrimary": true, "state": "Telangana" },
+    { "id": "warangal", "name": "Warangal", "isPrimary": false, "state": "Telangana" },
+    { "id": "bengaluru", "name": "Bengaluru", "isPrimary": false, "state": "Karnataka" },
+    { "id": "mumbai", "name": "Mumbai", "isPrimary": false, "state": "Maharashtra" },
+    { "id": "chennai", "name": "Chennai", "isPrimary": false, "state": "Tamil Nadu" }
+  ]
+}
+
+2.2 Get Active Services (Customer Home Screen)
+-------------------------------------------------------------------
+GET /api/services?category=vehicle
+Response (200 OK):
+{
+  "success": true,
+  "count": 3,
+  "services": [
+    {
+      "id": "two-wheeler",
+      "serviceId": "two-wheeler",
+      "name": "2 Wheeler",
+      "category": "two_wheeler",
+      "baseFare": 40.0,
+      "pricePerKm": 8.0,
+      "capacity": "20 Kg",
+      "etaLabel": "5-10 mins",
+      "iconUrl": "https://anusha-porter-app-images.s3.amazonaws.com/bike.png"
+    },
+    {
+      "id": "tata-ace",
+      "serviceId": "tata-ace",
+      "name": "Tata Ace",
+      "category": "vehicle",
+      "baseFare": 250.0,
+      "pricePerKm": 25.0,
+      "capacity": "750 Kg",
+      "etaLabel": "10-15 mins",
+      "iconUrl": "https://anusha-porter-app-images.s3.amazonaws.com/tata_ace.png"
+    }
+  ]
+}
+
+2.3 Get Grouped Services by Category
+-------------------------------------------------------------------
+GET /api/services/grouped
+Response (200 OK):
+{
+  "success": true,
+  "grouped": {
+    "two_wheeler": [ ... ],
+    "vehicle": [ ... ],
+    "packers": [ ... ]
+  }
+}
+
+===================================================================
+3. LOCATION & GOOGLE PLACES SEARCH
+===================================================================
+
+3.1 Place Autocomplete Search
+-------------------------------------------------------------------
+GET /api/location/autocomplete?input=Cyber%20Towers
+(or GET /api/places/autocomplete?input=Cyber%20Towers)
+Response (200 OK):
+{
+  "success": true,
+  "predictions": [
+    {
+      "placeId": "ChIJbU60yXA_zjsRkW54uoW_aN4",
+      "primaryText": "Cyber Towers",
+      "secondaryText": "Hitech City, Madhapur, Hyderabad, Telangana",
+      "fullText": "Cyber Towers, Hitech City, Madhapur, Hyderabad, Telangana"
+    },
+    {
+      "placeId": "ChIJD7fiBh9NyzsRSc0un6448zo",
+      "primaryText": "DLF Cyber City",
+      "secondaryText": "Gachibowli, Hyderabad, Telangana",
+      "fullText": "DLF Cyber City, Gachibowli, Hyderabad, Telangana"
+    }
+  ]
+}
+
+3.2 Place Details & Coordinates
+-------------------------------------------------------------------
+GET /api/location/details?placeId=ChIJbU60yXA_zjsRkW54uoW_aN4
+(or GET /api/places/details?placeId=ChIJbU60yXA_zjsRkW54uoW_aN4)
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "placeId": "ChIJbU60yXA_zjsRkW54uoW_aN4",
+    "name": "Cyber Towers",
+    "formattedAddress": "Cyber Towers, Hitech City Main Rd, Patrika Nagar, HITEC City, Hyderabad, Telangana 500081",
+    "lat": 17.4504,
+    "lng": 78.3811
+  }
+}
+
+3.3 Reverse Geocoding
+-------------------------------------------------------------------
+GET /api/location/reverse?lat=17.4504&lng=78.3811
+Response (200 OK): Raw Google Geocoding JSON response object.
+
+===================================================================
+4. FARE ESTIMATION & PROMO CODES
+===================================================================
+
+4.1 Category-wise Fare Estimate (All Vehicles)
+-------------------------------------------------------------------
+POST /api/pricing/estimate-all
+Request Body:
+{
+  "distanceKm": 12.5,
+  "helperCount": 1
+}
+Response (200 OK):
+{
+  "success": true,
+  "vehicles": [
+    {
+      "vehicleId": "two-wheeler",
+      "name": "2 Wheeler",
+      "baseFare": 40.0,
+      "distanceFare": 84.0,
+      "helperCharge": 0.0,
+      "gst": 22.32,
+      "totalFare": 146.32,
+      "eta": "5-10 mins"
+    },
+    {
+      "vehicleId": "tata-ace",
+      "name": "Tata Ace",
+      "baseFare": 250.0,
+      "distanceFare": 262.5,
+      "helperCharge": 100.0,
+      "gst": 110.25,
+      "totalFare": 722.75,
+      "eta": "10-15 mins"
+    }
+  ]
+}
+
+4.2 Pricing Simulation / Route Preview
+-------------------------------------------------------------------
+POST /api/pricing/preview (or POST /api/pricing/calculate)
+Request Body:
+{
+  "vehicleId": "tata-ace",
+  "distanceKm": 12.5,
+  "helperCount": 1
+}
+Response (200 OK):
+{
+  "success": true,
+  "vehicleId": "tata-ace",
+  "baseFare": 250.0,
+  "distanceFare": 262.5,
+  "helperCharge": 100.0,
+  "subtotal": 612.5,
+  "gst": 110.25,
+  "totalAmount": 722.75
+}
+
+4.3 Apply Coupon / Promo Code
+-------------------------------------------------------------------
+POST /api/coupons/apply (or POST /api/coupons/validate)
+Request Body:
+{
+  "code": "FIRST50",
+  "amount": 350.0
+}
+Response (200 OK):
+{
+  "success": true,
+  "applied": true,
+  "code": "FIRST50",
+  "discount": 100.0,
+  "originalAmount": 350.0,
+  "finalAmount": 250.0,
+  "message": "Coupon FIRST50 applied successfully!"
+}
+
+===================================================================
+5. SAVED ADDRESSES
+===================================================================
+
+5.1 Fetch Saved Addresses
+-------------------------------------------------------------------
+GET /api/users/addresses (or GET /api/addresses)
+Headers: Authorization: Bearer <accessToken>
+Response (200 OK):
+{
+  "success": true,
+  "addresses": [
+    {
+      "id": "addr_12",
+      "numericId": 12,
+      "title": "Main Warehouse",
+      "label": "Main Warehouse",
+      "tag": "warehouse",
+      "addressLine": "Plot 42, Hitec City, Hyderabad",
+      "lat": 17.4483,
+      "lng": 78.3915
+    }
+  ]
+}
+
+5.2 Save New Address
+-------------------------------------------------------------------
+POST /api/users/addresses (or POST /api/addresses)
+Request Body:
+{
+  "title": "Main Warehouse",
+  "tag": "warehouse",
+  "addressLine": "Plot 42, Hitec City, Hyderabad",
+  "lat": 17.4483,
+  "lng": 78.3915
+}
+Response (200 OK):
+{
+  "success": true,
+  "id": "addr_12",
+  "numericId": 12,
+  "title": "Main Warehouse",
+  "label": "Main Warehouse",
+  "tag": "warehouse",
+  "addressLine": "Plot 42, Hitec City, Hyderabad",
+  "lat": 17.4483,
+  "lng": 78.3915
+}
+
+5.3 Delete Saved Address
+-------------------------------------------------------------------
+DELETE /api/users/addresses/12
+Response (200 OK):
+{
+  "success": true
+}
+
+===================================================================
+6. PAYMENTS & RAZORPAY / UPI INTEGRATION
+===================================================================
+
+6.1 Create Payment Order
+-------------------------------------------------------------------
+POST /api/payments/create-order (or POST /api/payments/create)
+Request Body:
+{
+  "bookingId": "BK_1042",
+  "paymentMethod": "UPI_QR"
+}
+Response (200 OK):
+{
+  "success": true,
+  "paymentId": "PAY_987123",
+  "bookingId": "BK_1042",
+  "invoiceId": "INV-2026-987123",
+  "amount": 313.0,
+  "currency": "INR",
+  "status": "CREATED",
+  "qrCodeData": "upi://pay?pa=anushaporter@icici&pn=Anusha%20Porter&am=313.00&tn=BK_1042",
+  "qrImageUrl": "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=...",
+  "gateway": "razorpay"
+}
+
+6.2 Verify Payment
+-------------------------------------------------------------------
+POST /api/payments/verify
+Request Body:
+{
+  "paymentId": "PAY_987123",
+  "bookingId": "BK_1042",
+  "gatewayPaymentId": "pay_P1o982312",
+  "transactionId": "TXN_77123891"
+}
+Response (200 OK):
+{
+  "success": true,
+  "message": "Payment verified and processed successfully",
+  "paymentId": "PAY_987123",
+  "status": "PAID",
+  "amount": 313.0
+}
+
+6.3 Payment Webhook
+-------------------------------------------------------------------
+POST /api/payments/webhook
+Headers: X-Razorpay-Signature: <signature>
+Raw Payload: { ... }
+Response (200 OK):
+{
+  "success": true,
+  "message": "Webhook processed successfully"
+}
+
+===================================================================
+7. BOOKINGS, ORDERS & LIVE TRACKING
+===================================================================
+
+7.1 Create Ride / Delivery Booking
+-------------------------------------------------------------------
+POST /api/bookings
+Headers: Authorization: Bearer <accessToken>
+Request Body:
+{
+  "serviceId": "tata-ace",
+  "serviceName": "Tata Ace",
+  "amount": 313.0,
+  "pickupAddress": "Cyber Towers, Hitech City, Hyderabad",
+  "pickupLat": 17.4504,
+  "pickupLng": 78.3811,
+  "dropAddress": "DLF Cyber City, Gachibowli, Hyderabad",
+  "dropLat": 17.4474,
+  "dropLng": 78.3565,
+  "receiverName": "Rajesh Kumar",
+  "receiverPhone": "9876543210",
+  "paymentMethod": "UPI_QR"
+}
+Response (200 OK):
+{
+  "success": true,
+  "bookingId": "BK-1042",
+  "orderId": 402,
+  "status": "searching",
+  "amount": 313.0,
+  "deliveryOtp": "4829"
+}
+
+7.2 Get Order Timeline Audit Trail
+-------------------------------------------------------------------
+GET /api/orders/BK-1042/timeline
+Response (200 OK):
+{
+  "success": true,
+  "orderId": "BK-1042",
+  "status": "accepted",
+  "timeline": [
+    { "stage": "Order Placed", "time": "2026-08-15T11:30:00", "status": "completed" },
+    { "stage": "Driver Assigned", "time": "Within 2 mins", "status": "completed", "driver": "Ramesh Singh" },
+    { "stage": "Goods Picked Up", "time": "Pending", "status": "pending" },
+    { "stage": "Order Delivered", "time": "Pending", "status": "pending" }
+  ]
+}
+
+7.3 Driver Accept Order
+-------------------------------------------------------------------
+POST /api/driver/orders/BK-1042/accept (or POST /api/orders/BK-1042/accept)
+Headers: Authorization: Bearer <driverToken>
+Response (200 OK):
+{
+  "success": true,
+  "message": "Order accepted successfully",
+  "bookingId": "BK-1042",
+  "status": "accepted"
+}
+
+7.4 Update Order Status (Pickup / Delivery OTP)
+-------------------------------------------------------------------
+PUT /api/orders/BK-1042/status
+Request Body:
+{
+  "status": "delivered",
+  "otp": "4829"
+}
+Response (200 OK):
+{
+  "success": true,
+  "message": "Delivery completed successfully",
+  "order": {
+    "bookingId": "BK-1042",
+    "status": "delivered"
+  }
+}
+
+7.5 Post-Ride Rating & Feedback
+-------------------------------------------------------------------
+POST /api/orders/BK-1042/rate (or POST /api/ratings)
+Request Body:
+{
+  "rating": 5,
+  "feedback": "Prompt delivery and courteous driver.",
+  "driverId": "DRV-102"
+}
+Response (200 OK):
+{
+  "success": true,
+  "message": "Rating submitted successfully"
+}
+
+===================================================================
+8. DRIVER MOBILE APP ENDPOINTS
+===================================================================
+
+8.1 Driver Online / Offline Status Toggle
+-------------------------------------------------------------------
+PUT /api/driver/status
+Request Body:
+{
+  "isOnline": true,
+  "lat": 17.4483,
+  "lng": 78.3915
+}
+Response (200 OK):
+{
+  "success": true,
+  "status": "online"
+}
+
+8.2 Driver Location Update Ping
+-------------------------------------------------------------------
+PUT /api/driver/location (or PUT /api/drivers/me/location)
+Request Body:
+{
+  "lat": 17.4483,
+  "lng": 78.3915,
+  "speed": 28.5,
+  "heading": 180.0
+}
+Response (200 OK):
+{
+  "success": true,
+  "latitude": 17.4483,
+  "longitude": 78.3915
+}
+
+8.3 Nearby Available Rides Broadcast Pool
+-------------------------------------------------------------------
+GET /api/driver/orders/available?lat=17.4483&lng=78.3915&radiusKm=5
+Response (200 OK):
+{
+  "success": true,
+  "count": 2,
+  "orders": [
+    {
+      "id": 402,
+      "bookingId": "BK-1042",
+      "serviceName": "Tata Ace",
+      "pickupAddress": "Cyber Towers, Hitech City, Hyderabad",
+      "dropAddress": "DLF Cyber City, Gachibowli, Hyderabad",
+      "amount": 313.0,
+      "distanceKm": 5.2,
+      "status": "available"
+    }
+  ]
+}
+
+8.4 Driver Earnings Overview
+-------------------------------------------------------------------
+GET /api/driver/earnings (or GET /api/drivers/me/earnings)
+Response (200 OK):
+{
+  "success": true,
+  "todayEarnings": 1450.0,
+  "weeklyEarnings": 7975.0,
+  "completedTrips": 6,
+  "pendingPayout": 580.0,
+  "availableBalance": 870.0
+}
+
+8.5 Submit Payout Request
+-------------------------------------------------------------------
+POST /api/driver/payout-request
+Request Body:
+{
+  "amount": 2500,
+  "bankAccount": "HDFC0001234",
+  "accountNumber": "50100012345678"
+}
+Response (200 OK):
+{
+  "success": true,
+  "message": "Payout request submitted successfully",
+  "payoutId": "PO-DRV-9871",
+  "amount": 2500.0,
+  "status": "pending_approval"
+}
+
+8.6 Driver KYC Document Upload
+-------------------------------------------------------------------
+POST /api/driver/documents/upload (or POST /api/upload)
+Multipart/Form-Data:
+  file: <drivingLicense.jpg>
+Response (200 OK):
+{
+  "success": true,
+  "url": "/uploads/a98f1234-license.jpg"
+}
+
+===================================================================
+9. ADMIN MANAGEMENT & CONTROL PANEL
+===================================================================
+
+9.1 Admin Dashboard Metrics
+-------------------------------------------------------------------
+GET /api/admin/metrics
+Response (200 OK):
+{
+  "totalDrivers": 45,
+  "pendingKyc": 3,
+  "activeOrders": 12,
+  "totalOrdersToday": 89,
+  "revenueToday": 28450.0
+}
+
+9.2 Admin Reorder Services Display Order
+-------------------------------------------------------------------
+PATCH /api/admin/services/reorder
+Request Body:
+{
+  "serviceIds": ["tata-ace", "pickup-8ft", "two-wheeler", "packers-movers"]
+}
+Response (200 OK):
+{
+  "success": true,
+  "message": "Services reordered successfully"
+}
+
+9.3 Admin Single-Click Toggle Service Active Status
+-------------------------------------------------------------------
+PATCH /api/admin/services/{id}/toggle-status
+Request Body:
+{
+  "isActive": true
+}
+Response (200 OK):
+{
+  "success": true,
+  "message": "Service status updated to Active",
+  "isActive": true
+}
+
+9.4 Admin Assign Driver to Order
+-------------------------------------------------------------------
+POST /api/orders/402/assign
+Request Body:
+{
+  "driverId": "10",
+  "driverName": "Ramesh Singh",
+  "driverPhone": "9876543210"
+}
+Response (200 OK):
+{
+  "success": true,
+  "order": {
+    "id": 402,
+    "status": "assigned",
+    "driverName": "Ramesh Singh"
+  }
+}
+
+9.5 Admin Release Driver Payout
+-------------------------------------------------------------------
+POST /api/payouts/PO-DRV-9871/release
+Response (200 OK):
+{
+  "success": true,
+  "message": "Payout released successfully",
+  "status": "RELEASED",
+  "utrNumber": "UTR202608159871"
+}
+
+9.6 Admin Regional Franchise CRUD
+-------------------------------------------------------------------
+GET    /api/franchises                   - List franchise depots
+POST   /api/franchises                   - Create franchise depot
+PUT    /api/franchises/{id}              - Update franchise depot
+DELETE /api/franchises/{id}              - Delete franchise depot
+
+===================================================================
+10. REAL-TIME WEBSOCKET TELEMETRY
+===================================================================
+WebSocket URL: ws://api.anushaporter.com/ws/tracking (or /ws/telemetry)
+Connected Client Message (Driver Location Broadcast):
+{
+  "type": "DRIVER_LOCATION",
+  "driverId": "10",
+  "lat": 17.4483,
+  "lng": 78.3915,
+  "heading": 180.0,
+  "speed": 28.5
+}
+Broadcast Event to Customer & Admin:
+{
+  "type": "LOCATION_UPDATE",
+  "driverId": "10",
+  "lat": 17.4483,
+  "lng": 78.3915,
+  "speed": 28.5
+}
+
+===================================================================
+100% End-to-End backend APIs verified, built, and pushed to GitHub main branch.
+===================================================================
