@@ -37,7 +37,7 @@ public class PaymentController {
      * POST /api/payments/create or POST /api/payments/initiate
      * Generates a unique payment ID, invoice ID, and dynamic UPI QR code.
      */
-    @PostMapping({"/create", "/initiate"})
+    @PostMapping({"/create", "/initiate", "/create-order"})
     public ResponseEntity<?> createPayment(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody Map<String, Object> payload

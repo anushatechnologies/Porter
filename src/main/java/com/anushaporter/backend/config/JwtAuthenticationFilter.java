@@ -25,6 +25,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             || path.startsWith("/h2-console") 
             || path.startsWith("/api/location/")
             || path.startsWith("/api/places/")
+            || path.startsWith("/api/cities")
             || path.startsWith("/api/admin/")
             || path.startsWith("/api/orders")
             || path.startsWith("/api/drivers")

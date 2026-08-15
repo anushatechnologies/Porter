@@ -44,6 +44,8 @@ public class RatingController {
     @PostMapping({
             "/bookings/{id}/rate",
             "/bookings/{id}/rating",
+            "/orders/{id}/rate",
+            "/orders/{id}/rating",
             "/driver/rate",
             "/ratings"
     })

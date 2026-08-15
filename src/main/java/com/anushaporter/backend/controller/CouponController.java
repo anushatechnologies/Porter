@@ -104,7 +104,7 @@ public class CouponController {
      *   "amount": 500.0         // original fare amount
      * }
      */
-    @PostMapping("/validate")
+    @PostMapping({"/validate", "/apply"})
     public ResponseEntity<Map<String, Object>> validateCoupon(@RequestBody Map<String, Object> payload) {
         String code = (String) payload.getOrDefault("couponCode", payload.get("code"));
         if (code == null || code.trim().isEmpty()) {
