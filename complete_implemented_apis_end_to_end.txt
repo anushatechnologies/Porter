@@ -461,6 +461,28 @@ Response (200 OK):
   "message": "Rating submitted successfully"
 }
 
+7.6 Reorder / Duplicate Booking Endpoint
+-------------------------------------------------------------------
+POST /api/orders/{bookingId}/reorder (or POST /api/bookings/{bookingId}/reorder)
+Headers: Authorization: Bearer <accessToken>
+Request Body: {} (empty or optional overrides)
+Response (200 OK):
+{
+  "success": true,
+  "message": "Order duplicated successfully",
+  "data": {
+    "bookingId": "BK-98231",
+    "pickupAddress": "Flat 402, Green Meadows, Madhapur",
+    "dropAddress": "Cyber Towers, Hitech City",
+    "pickupLat": 17.4486,
+    "pickupLng": 78.3908,
+    "dropLat": 17.4504,
+    "dropLng": 78.3811,
+    "serviceName": "Tata Ace",
+    "estimatedFare": 350.0
+  }
+}
+
 ===================================================================
 8. DRIVER MOBILE APP ENDPOINTS
 ===================================================================
