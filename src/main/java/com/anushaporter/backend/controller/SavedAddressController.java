@@ -33,7 +33,9 @@ public class SavedAddressController {
 
         List<SavedAddress> addresses = addressRepository.findByUserEmailOrderByCreatedAtDesc(email);
 
-        List<Map<String, Object>> items = addresses.stream().map(addr -> {
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (int i = 0; i < addresses.size(); i++) {
+            SavedAddress addr = addresses.get(i);
             Map<String, Object> item = new HashMap<>();
             item.put("id", "addr_" + addr.getId());
             item.put("numericId", addr.getId());
@@ -43,8 +45,9 @@ public class SavedAddressController {
             item.put("addressLine", addr.getAddressLine());
             item.put("lat", addr.getLat());
             item.put("lng", addr.getLng());
-            return item;
-        }).collect(Collectors.toList());
+            item.put("isDefault", i == 0);
+            items.add(item);
+        }
 
         response.put("success", true);
         response.put("addresses", items);

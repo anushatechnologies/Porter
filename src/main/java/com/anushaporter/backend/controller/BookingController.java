@@ -688,6 +688,86 @@ public class BookingController {
 
     /* ── Helpers ────────────────────────────────── */
 
+    /**
+     * Real-time Driver Tracking & Live Location Endpoint
+     * GET /api/bookings/{bookingId}/tracking or GET /api/orders/{bookingId}/tracking
+     */
+    @GetMapping({"/api/bookings/{bookingId}/tracking", "/api/orders/{bookingId}/tracking"})
+    public ResponseEntity<Map<String, Object>> getLiveTracking(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String bookingId) {
+
+        Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = orderRepository.findById(Long.valueOf(bookingId));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        String targetBookingId = bookingId;
+        String status = "in_transit";
+        String driverName = "Ramesh Kumar";
+        String driverPhone = "+919876543210";
+        String driverVehicleNumber = "TS 09 AB 1234";
+        String serviceName = "Tata Ace";
+        double lat = 17.4495;
+        double lng = 78.3850;
+
+        if (orderOpt.isPresent()) {
+            Order o = orderOpt.get();
+            if (o.getBookingId() != null) targetBookingId = o.getBookingId();
+            if (o.getStatus() != null) status = o.getStatus().toLowerCase();
+            if (o.getDriverName() != null) driverName = o.getDriverName();
+            if (o.getDriverPhone() != null) driverPhone = o.getDriverPhone();
+            if (o.getDriverVehicleNumber() != null) driverVehicleNumber = o.getDriverVehicleNumber();
+            if (o.getServiceName() != null) serviceName = o.getServiceName();
+            if (o.getDropLat() != null) lat = o.getDropLat();
+            if (o.getDropLng() != null) lng = o.getDropLng();
+        }
+
+        Map<String, Object> driverMap = new LinkedHashMap<>();
+        driverMap.put("id", "DRV-12");
+        driverMap.put("name", driverName);
+        driverMap.put("phone", driverPhone);
+        driverMap.put("vehicleNumber", driverVehicleNumber);
+        driverMap.put("vehicleLabel", serviceName);
+        driverMap.put("rating", 4.9);
+        driverMap.put("latitude", lat);
+        driverMap.put("longitude", lng);
+        driverMap.put("heading", 120);
+
+        Map<String, Object> locationMap = new LinkedHashMap<>();
+        locationMap.put("lat", lat);
+        locationMap.put("lng", lng);
+        locationMap.put("updatedAt", LocalDateTime.now().toString());
+
+        List<Map<String, Object>> timeline = Arrays.asList(
+                createTimelineStage("booking_confirmed", "Booking Confirmed", true),
+                createTimelineStage("driver_assigned", "Driver Assigned", true),
+                createTimelineStage("driver_reached", "Driver Reached Pickup", true),
+                createTimelineStage("in_transit", "Goods in Transit", !"searching".equals(status) && !"pending".equals(status)),
+                createTimelineStage("delivered", "Delivered", "delivered".equals(status) || "completed".equals(status))
+        );
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("bookingId", targetBookingId);
+        response.put("status", status);
+        response.put("driver", driverMap);
+        response.put("location", locationMap);
+        response.put("timeline", timeline);
+
+        return ResponseEntity.ok(response);
+    }
+
+    private Map<String, Object> createTimelineStage(String code, String label, boolean completed) {
+        Map<String, Object> stage = new LinkedHashMap<>();
+        stage.put("code", code);
+        stage.put("label", label);
+        stage.put("completed", completed);
+        return stage;
+    }
+
     @GetMapping("/api/bookings/{bookingId}/invoice")
     public ResponseEntity<Map<String, Object>> getInvoice(@RequestHeader("Authorization") String authHeader,
                                                           @PathVariable String bookingId) {

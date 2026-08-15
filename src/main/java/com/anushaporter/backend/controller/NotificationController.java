@@ -25,7 +25,7 @@ public class NotificationController {
     @Autowired private AppUserRepository userRepository;
     @Autowired private JwtUtil jwtUtil;
 
-    @PostMapping("/users/fcm-token")
+    @PostMapping({"/users/fcm-token", "/user/fcm-token", "/fcm-token"})
     public ResponseEntity<?> registerToken(HttpServletRequest request, @RequestBody Map<String, String> body) {
         Optional<AppUser> user = currentUser(request);
         String token = body.get("fcmToken");
