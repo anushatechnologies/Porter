@@ -11,7 +11,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
-
 public class SavedAddressController {
 
     @Autowired
@@ -22,7 +21,7 @@ public class SavedAddressController {
 
     /**
      * List user's saved addresses.
-     * GET /api/addresses
+     * GET /api/addresses, /api/users/addresses, /api/user/addresses
      */
     @GetMapping({"/api/addresses", "/api/users/addresses", "/api/user/addresses"})
     public ResponseEntity<Map<String, Object>> getAddresses(
@@ -54,7 +53,7 @@ public class SavedAddressController {
 
     /**
      * Create a saved address.
-     * POST /api/addresses
+     * POST /api/addresses, /api/users/addresses, /api/user/addresses
      */
     @PostMapping({"/api/addresses", "/api/users/addresses", "/api/user/addresses"})
     public ResponseEntity<Map<String, Object>> createAddress(
@@ -95,7 +94,7 @@ public class SavedAddressController {
 
     /**
      * Update a saved address.
-     * PUT /api/addresses/{id}
+     * PUT /api/addresses/{id}, /api/users/addresses/{id}, /api/user/addresses/{id}
      */
     @PutMapping({"/api/addresses/{id}", "/api/users/addresses/{id}", "/api/user/addresses/{id}"})
     public ResponseEntity<Map<String, Object>> updateAddress(
@@ -135,7 +134,7 @@ public class SavedAddressController {
 
     /**
      * Delete a saved address.
-     * DELETE /api/addresses/{id}
+     * DELETE /api/addresses/{id}, /api/users/addresses/{id}, /api/user/addresses/{id}
      */
     @DeleteMapping({"/api/addresses/{id}", "/api/users/addresses/{id}", "/api/user/addresses/{id}"})
     public ResponseEntity<Map<String, Object>> deleteAddress(
@@ -166,9 +165,6 @@ public class SavedAddressController {
         } catch (Exception e) {
             return null;
         }
-    }
-        response.put("success", true);
-        return ResponseEntity.ok(response);
     }
 
     private String extractEmail(String authHeader) {
