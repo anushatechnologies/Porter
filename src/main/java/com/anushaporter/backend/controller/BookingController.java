@@ -330,98 +330,7 @@ public class BookingController {
         }
     }
 
-    /**
-     * Get tracking info for a booking.
-     * GET /api/bookings/{bookingId}/tracking
-     */
-    @GetMapping("/api/bookings/{bookingId}/tracking")
-    public ResponseEntity<Map<String, Object>> getTracking(
-            @RequestHeader("Authorization") String authHeader,
-            @PathVariable String bookingId) {
 
-        Map<String, Object> response = new HashMap<>();
-
-        try {
-            String email = extractEmail(authHeader);
-            if (email == null) {
-                response.put("success", false);
-                response.put("message", "Unauthorized");
-                return ResponseEntity.status(401).body(response);
-            }
-
-            Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
-            if (orderOpt.isEmpty()) {
-                response.put("success", false);
-                response.put("message", "Booking not found");
-                return ResponseEntity.status(404).body(response);
-            }
-
-            Order order = orderOpt.get();
-            String status = order.getStatus() != null ? order.getStatus() : "searching";
-            String createdAt = order.getCreatedAt() != null ? order.getCreatedAt().toString() : LocalDateTime.now().toString();
-
-            response.put("success", true);
-            response.put("bookingId", bookingId);
-            response.put("status", status);
-
-            // Build timeline
-            List<Map<String, Object>> timeline = new ArrayList<>();
-            timeline.add(buildTimelineStep("booking_confirmed", "Booking Confirmed", true, createdAt));
-            timeline.add(buildTimelineStep("driver_assigned",
-                    "searching".equals(status) ? "Searching for Driver..." : "Driver Assigned",
-                    !"searching".equals(status),
-                    !"searching".equals(status) ? LocalDateTime.now().toString() : null));
-            timeline.add(buildTimelineStep("pickup_started", "Driver Reached",
-                    "pickup_started".equals(status) || "picked_up".equals(status) || "transit".equals(status) || "in_transit".equals(status) || "delivered".equals(status) || "completed".equals(status), null));
-            timeline.add(buildTimelineStep("in_transit", "In Transit",
-                    "transit".equals(status) || "in_transit".equals(status) || "delivered".equals(status) || "completed".equals(status), null));
-            timeline.add(buildTimelineStep("delivered", "Delivered",
-                    "delivered".equals(status) || "completed".equals(status), null));
-            response.put("timeline", timeline);
-
-            // Driver info & location nullability (Edge case rule #3)
-            boolean hasDriver = !"searching".equalsIgnoreCase(status)
-                             && !"confirmed".equalsIgnoreCase(status)
-                             && !"cancelled".equalsIgnoreCase(status)
-                             && order.getDriverName() != null
-                             && !order.getDriverName().trim().isEmpty();
-
-            if (hasDriver) {
-                Map<String, Object> driver = new HashMap<>();
-                driver.put("id", order.getDriverId() != null ? order.getDriverId() : "drv_001");
-                driver.put("name", order.getDriverName());
-                driver.put("phone", order.getDriverPhone() != null ? order.getDriverPhone() : "");
-                driver.put("vehicleNumber", order.getDriverVehicleNumber() != null ? order.getDriverVehicleNumber() : "");
-                driver.put("vehicleLabel", order.getServiceName() != null ? order.getServiceName() : "");
-                driver.put("rating", 4.5);
-                response.put("driver", driver);
-
-                Map<String, Object> location = new HashMap<>();
-                location.put("lat", order.getPickupLat() != null ? order.getPickupLat() : Double.valueOf(17.4483));
-                location.put("lng", order.getPickupLng() != null ? order.getPickupLng() : Double.valueOf(78.3915));
-                location.put("updatedAt", LocalDateTime.now().toString());
-                response.put("location", location);
-            } else {
-                response.put("driver", null);
-                response.put("location", null);
-            }
-
-            Map<String, String> pickup = new HashMap<>();
-            pickup.put("addressLine", order.getPickupAddress() != null ? order.getPickupAddress() : "");
-            response.put("pickup", pickup);
-
-            Map<String, String> drop = new HashMap<>();
-            drop.put("addressLine", order.getDropAddress() != null ? order.getDropAddress() : "");
-            response.put("drop", drop);
-
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            response.put("success", false);
-            response.put("message", "Failed to fetch tracking: " + e.getMessage());
-            return ResponseEntity.status(500).body(response);
-        }
-    }
 
     /**
      * Cancel a booking.
@@ -873,12 +782,5 @@ public class BookingController {
         }
     }
 
-    private Map<String, Object> buildTimelineStep(String code, String label, boolean completed, String timestamp) {
-        Map<String, Object> step = new HashMap<>();
-        step.put("code", code);
-        step.put("label", label);
-        step.put("completed", completed);
-        step.put("timestamp", timestamp);
-        return step;
-    }
 }
+
