@@ -94,6 +94,12 @@ public class Order {
     @Column(length = 128, unique = true)
     private String idempotencyKey;
 
+    /** Set to true by the verify-otp endpoint (Step 1). Checked by confirm-payment (Step 2). */
+    private Boolean otpVerified = false;
+
+    /** Set to true by the confirm-payment endpoint (Step 2) after successful payment confirmation. */
+    private Boolean paymentConfirmed = false;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
@@ -184,4 +190,8 @@ public class Order {
     public void setCompletedByDriverId(String completedByDriverId) { this.completedByDriverId = completedByDriverId; }
     public String getIdempotencyKey() { return idempotencyKey; }
     public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
+    public Boolean getOtpVerified() { return otpVerified != null && otpVerified; }
+    public void setOtpVerified(Boolean otpVerified) { this.otpVerified = otpVerified; }
+    public Boolean getPaymentConfirmed() { return paymentConfirmed != null && paymentConfirmed; }
+    public void setPaymentConfirmed(Boolean paymentConfirmed) { this.paymentConfirmed = paymentConfirmed; }
 }

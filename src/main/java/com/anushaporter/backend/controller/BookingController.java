@@ -464,14 +464,17 @@ public class BookingController {
     }
 
     /**
-     * Verify Customer Delivery OTP
+     * Verify Customer Delivery OTP — Step 1 of two-step completion.
      * POST /api/orders/{bookingId}/verify-delivery-otp
+     *
+     * Sets status to payment_confirmation_pending and otpVerified=true.
+     * Does NOT mark as delivered/completed.
      */
     @PostMapping("/api/orders/{bookingId}/verify-delivery-otp")
     public ResponseEntity<Map<String, Object>> verifyDeliveryOtp(
             @PathVariable String bookingId,
             @RequestBody Map<String, String> body) {
-        
+
         Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
         if (orderOpt.isEmpty()) {
             try {
@@ -484,6 +487,17 @@ public class BookingController {
         }
 
         Order order = orderOpt.get();
+
+        // Idempotency — if OTP already verified, just return current state
+        if (Boolean.TRUE.equals(order.getOtpVerified())) {
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "status", order.getStatus(),
+                    "otpVerified", true,
+                    "message", "OTP already verified. Awaiting driver payment confirmation."
+            ));
+        }
+
         String inputOtp = body != null ? body.get("otp") : null;
         if (inputOtp == null && body != null) inputOtp = body.get("deliveryOtp");
 
@@ -496,16 +510,19 @@ public class BookingController {
             ));
         }
 
-        order.setStatus("completed");
+        // ⚠️ Set to payment_confirmation_pending — NOT delivered/completed
+        order.setOtpVerified(true);
+        order.setStatus("payment_confirmation_pending");
         Order savedOrder = orderRepository.save(order);
         if (pushNotificationService != null) {
-            pushNotificationService.notifyOrderStatus(savedOrder, "completed");
+            pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
         }
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Delivery OTP verified successfully",
-                "order", savedOrder
+                "status", "payment_confirmation_pending",
+                "otpVerified", true,
+                "message", "OTP verified successfully. Awaiting driver payment confirmation."
         ));
     }
 
@@ -595,11 +612,12 @@ public class BookingController {
         }
     }
 
-    /* ── Helpers ────────────────────────────────── */
-
     /**
      * Real-time Driver Tracking & Live Location Endpoint
-     * GET /api/bookings/{bookingId}/tracking or GET /api/orders/{bookingId}/tracking
+     * GET /api/bookings/{bookingId}/tracking  or  GET /api/orders/{bookingId}/tracking
+     *
+     * Includes full 6-stage timeline so the Customer App can display live
+     * OTP-verified and payment-confirmation-pending states while polling.
      */
     @GetMapping({"/api/bookings/{bookingId}/tracking", "/api/orders/{bookingId}/tracking"})
     public ResponseEntity<Map<String, Object>> getLiveTracking(
@@ -621,18 +639,39 @@ public class BookingController {
         String serviceName = "Tata Ace";
         double lat = 17.4495;
         double lng = 78.3850;
+        boolean otpVerified = false;
+        boolean paymentConfirmed = false;
 
         if (orderOpt.isPresent()) {
             Order o = orderOpt.get();
-            if (o.getBookingId() != null) targetBookingId = o.getBookingId();
-            if (o.getStatus() != null) status = o.getStatus().toLowerCase();
-            if (o.getDriverName() != null) driverName = o.getDriverName();
-            if (o.getDriverPhone() != null) driverPhone = o.getDriverPhone();
+            if (o.getBookingId() != null)       targetBookingId    = o.getBookingId();
+            if (o.getStatus() != null)           status             = o.getStatus().toLowerCase();
+            if (o.getDriverName() != null)       driverName         = o.getDriverName();
+            if (o.getDriverPhone() != null)      driverPhone        = o.getDriverPhone();
             if (o.getDriverVehicleNumber() != null) driverVehicleNumber = o.getDriverVehicleNumber();
-            if (o.getServiceName() != null) serviceName = o.getServiceName();
-            if (o.getDropLat() != null) lat = o.getDropLat();
-            if (o.getDropLng() != null) lng = o.getDropLng();
+            if (o.getServiceName() != null)      serviceName        = o.getServiceName();
+            if (o.getDropLat() != null)          lat                = o.getDropLat();
+            if (o.getDropLng() != null)          lng                = o.getDropLng();
+            otpVerified      = Boolean.TRUE.equals(o.getOtpVerified());
+            paymentConfirmed = Boolean.TRUE.equals(o.getPaymentConfirmed());
         }
+
+        boolean isDelivered = "delivered".equals(status) || "completed".equals(status);
+        boolean isPaymentPending = "payment_confirmation_pending".equals(status);
+        boolean isOtpVerified  = otpVerified || isPaymentPending || isDelivered;
+        boolean isInTransit    = !"searching".equals(status) && !"pending".equals(status)
+                               && !"assigned".equals(status) && !"accepted".equals(status);
+        boolean driverReached  = "driver_reached".equals(status) || isOtpVerified || isDelivered;
+
+        // Full 6-stage timeline (Customer App polls this every 4 seconds)
+        List<Map<String, Object>> timeline = Arrays.asList(
+                createTimelineStage("booking_confirmed",            "Booking Confirmed",               true),
+                createTimelineStage("driver_assigned",              "Driver Assigned",                 true),
+                createTimelineStage("driver_reached",               "Driver Reached Drop Location",    driverReached),
+                createTimelineStage("otp_verified",                 "Delivery OTP Verified",           isOtpVerified),
+                createTimelineStage("payment_confirmation_pending", "Payment Confirmation",            isPaymentPending || isDelivered),
+                createTimelineStage("delivered",                    "Order Delivered",                 isDelivered)
+        );
 
         Map<String, Object> driverMap = new LinkedHashMap<>();
         driverMap.put("id", "DRV-12");
@@ -650,18 +689,14 @@ public class BookingController {
         locationMap.put("lng", lng);
         locationMap.put("updatedAt", LocalDateTime.now().toString());
 
-        List<Map<String, Object>> timeline = Arrays.asList(
-                createTimelineStage("booking_confirmed", "Booking Confirmed", true),
-                createTimelineStage("driver_assigned", "Driver Assigned", true),
-                createTimelineStage("driver_reached", "Driver Reached Pickup", true),
-                createTimelineStage("in_transit", "Goods in Transit", !"searching".equals(status) && !"pending".equals(status)),
-                createTimelineStage("delivered", "Delivered", "delivered".equals(status) || "completed".equals(status))
-        );
-
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("bookingId", targetBookingId);
         response.put("status", status);
+        // These flags let the Customer App update its UI without parsing status strings
+        response.put("otpVerified", isOtpVerified);
+        response.put("paymentConfirmed", paymentConfirmed || isDelivered);
+        response.put("paymentConfirmationPending", isPaymentPending);
         response.put("driver", driverMap);
         response.put("location", locationMap);
         response.put("timeline", timeline);
