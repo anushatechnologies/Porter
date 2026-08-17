@@ -78,14 +78,19 @@ public class HomeFeedController {
 
         if (!dynamicServices.isEmpty()) {
             for (com.anushaporter.backend.model.PorterService s : dynamicServices) {
+                String catId = s.getCategoryId() != null && !s.getCategoryId().isBlank() ? s.getCategoryId() : inferCategoryId(s.getCategory());
+                String catName = s.getCategoryName() != null && !s.getCategoryName().isBlank() ? s.getCategoryName() : inferCategoryName(s.getCategory());
+
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("id", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
                 item.put("serviceId", s.getServiceId() != null ? s.getServiceId() : "service-" + s.getId());
                 item.put("name", s.getName() != null ? s.getName() : "");
                 item.put("label", s.getLabel() != null ? s.getLabel() : (s.getName() != null ? s.getName() : ""));
                 item.put("category", s.getCategory() != null ? s.getCategory() : "vehicle");
+                item.put("categoryId", catId);
+                item.put("categoryName", catName);
                 item.put("subtitle", s.getSubtitle() != null ? s.getSubtitle() : "");
-                item.put("description", s.getSubtitle() != null ? s.getSubtitle() : "");
+                item.put("description", s.getDescription() != null ? s.getDescription() : (s.getSubtitle() != null ? s.getSubtitle() : ""));
                 item.put("baseFare", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
                 item.put("basePrice", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
                 item.put("baseKm", s.getBaseKm() != null ? s.getBaseKm() : 2.0);
@@ -96,10 +101,12 @@ public class HomeFeedController {
                 item.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
                 item.put("capacityLabel", s.getCapacityLabel() != null ? s.getCapacityLabel() : "");
                 item.put("dimensions", s.getDimensions());
-                item.put("etaLabel", s.getEtaLabel() != null ? s.getEtaLabel() : "10-15 mins");
+                item.put("eta", s.getEtaLabel() != null ? s.getEtaLabel() : "5-10 mins");
+                item.put("etaLabel", s.getEtaLabel() != null ? s.getEtaLabel() : "5-10 mins");
                 item.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
                 item.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
                 item.put("bgTint", s.getBgTint() != null ? s.getBgTint() : "#EEF4FF");
+                item.put("customerAppVisible", !Boolean.FALSE.equals(s.getCustomerAppVisible()));
                 item.put("isActive", Boolean.TRUE.equals(s.getIsActive()));
                 item.put("order", s.getDisplayOrder() != null ? s.getDisplayOrder() : 1);
                 item.put("displayOrder", s.getDisplayOrder() != null ? s.getDisplayOrder() : 1);
@@ -117,6 +124,8 @@ public class HomeFeedController {
                     svc.put("name", v.getName());
                     svc.put("label", v.getName());
                     svc.put("category", "vehicle");
+                    svc.put("categoryId", "1");
+                    svc.put("categoryName", "Porter Trucks & Fleet");
                     svc.put("subtitle", v.getCapacityKg() != null ? "Up to " + v.getCapacityKg().intValue() + " kg" : "");
                     svc.put("description", v.getCapacityKg() != null ? "Up to " + v.getCapacityKg().intValue() + " kg" : "");
                     svc.put("baseFare", v.getBaseFare() != null ? v.getBaseFare() : 0.0);
@@ -127,22 +136,47 @@ public class HomeFeedController {
                     svc.put("capacity", v.getCapacityKg() != null ? v.getCapacityKg().intValue() + " kg" : "500 kg");
                     svc.put("imageUrl", v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
                     svc.put("iconUrl", v.getImageUrl() != null ? v.getImageUrl() : (v.getIcon() != null ? v.getIcon() : ""));
+                    svc.put("eta", "5 mins");
+                    svc.put("customerAppVisible", true);
                     svc.put("isActive", true);
-                    svc.put("order", order++);
+                    svc.put("order", order);
+                    svc.put("displayOrder", order);
+                    order++;
                     featuredServices.add(svc);
                 }
             } else {
-                featuredServices = List.of(
-                        Map.of("id", "two-wheeler", "label", "2 Wheeler", "category", "two_wheeler",
-                                "basePrice", 49.0, "perKmRate", 12.0, "capacity", "20 Kg",
-                                "imageUrl", "https://cdn.anushaporter.com/services/bike.png", "isActive", true, "order", 1),
-                        Map.of("id", "mini-truck", "label", "Mini Truck (Ace)", "category", "vehicle",
-                                "basePrice", 249.0, "perKmRate", 22.0, "capacity", "750 Kg",
-                                "imageUrl", "https://cdn.anushaporter.com/services/tata-ace.png", "isActive", true, "order", 2),
-                        Map.of("id", "packers-movers", "label", "Packers & Movers", "category", "packers",
-                                "basePrice", 1499.0, "perKmRate", 35.0, "capacity", "Complete House Shifting",
-                                "imageUrl", "https://cdn.anushaporter.com/services/packers.png", "isActive", true, "order", 3)
-                );
+                featuredServices = PorterServiceController.getDefaultFallbackServices().stream()
+                        .map(s -> {
+                            Map<String, Object> item = new LinkedHashMap<>();
+                            item.put("id", s.getServiceId());
+                            item.put("serviceId", s.getServiceId());
+                            item.put("name", s.getName());
+                            item.put("label", s.getLabel());
+                            item.put("category", s.getCategory());
+                            item.put("categoryId", s.getCategoryId() != null ? s.getCategoryId() : inferCategoryId(s.getCategory()));
+                            item.put("categoryName", s.getCategoryName() != null ? s.getCategoryName() : inferCategoryName(s.getCategory()));
+                            item.put("subtitle", s.getSubtitle());
+                            item.put("description", s.getDescription());
+                            item.put("baseFare", s.getBaseFare());
+                            item.put("basePrice", s.getBaseFare());
+                            item.put("baseKm", s.getBaseKm());
+                            item.put("perKmRate", s.getPerKmRate());
+                            item.put("pricePerKm", s.getPerKmRate());
+                            item.put("helperRate", s.getHelperRate());
+                            item.put("capacityKg", s.getCapacityKg());
+                            item.put("capacity", s.getCapacityLabel());
+                            item.put("capacityLabel", s.getCapacityLabel());
+                            item.put("eta", s.getEtaLabel());
+                            item.put("etaLabel", s.getEtaLabel());
+                            item.put("imageUrl", s.getIconUrl());
+                            item.put("iconUrl", s.getIconUrl());
+                            item.put("customerAppVisible", !Boolean.FALSE.equals(s.getCustomerAppVisible()));
+                            item.put("isActive", Boolean.TRUE.equals(s.getIsActive()));
+                            item.put("order", s.getDisplayOrder());
+                            item.put("displayOrder", s.getDisplayOrder());
+                            return item;
+                        })
+                        .collect(Collectors.toList());
             }
         }
 
@@ -180,5 +214,21 @@ public class HomeFeedController {
         if (userProfile != null) response.put("user", userProfile);
 
         return ResponseEntity.ok(response);
+    }
+
+    private static String inferCategoryId(String cat) {
+        if (cat == null) return "1";
+        String lower = cat.toLowerCase();
+        if (lower.contains("bike") || lower.contains("two_wheeler")) return "2";
+        if (lower.contains("packer")) return "3";
+        return "1";
+    }
+
+    private static String inferCategoryName(String cat) {
+        if (cat == null) return "Porter Trucks & Fleet";
+        String lower = cat.toLowerCase();
+        if (lower.contains("bike") || lower.contains("two_wheeler")) return "2 Wheeler / Bike";
+        if (lower.contains("packer")) return "Packers & Movers";
+        return "Porter Trucks & Fleet";
     }
 }

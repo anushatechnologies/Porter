@@ -251,6 +251,8 @@ public class AdminPorterServiceController {
         map.put("name", s.getName() != null ? s.getName() : "");
         map.put("label", s.getLabel() != null ? s.getLabel() : (s.getName() != null ? s.getName() : ""));
         map.put("category", s.getCategory() != null ? s.getCategory() : "vehicle");
+        map.put("categoryId", s.getCategoryId() != null ? s.getCategoryId() : "");
+        map.put("categoryName", s.getCategoryName() != null ? s.getCategoryName() : "");
         map.put("subtitle", s.getSubtitle() != null ? s.getSubtitle() : "");
         map.put("description", s.getDescription() != null ? s.getDescription() : (s.getSubtitle() != null ? s.getSubtitle() : ""));
         map.put("baseFare", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
@@ -263,10 +265,12 @@ public class AdminPorterServiceController {
         map.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
         map.put("capacityLabel", s.getCapacityLabel() != null ? s.getCapacityLabel() : "");
         map.put("dimensions", s.getDimensions());
+        map.put("eta", s.getEtaLabel() != null ? s.getEtaLabel() : "10-15 mins");
         map.put("etaLabel", s.getEtaLabel() != null ? s.getEtaLabel() : "10-15 mins");
         map.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
         map.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
         map.put("bgTint", s.getBgTint() != null ? s.getBgTint() : "#EEF4FF");
+        map.put("customerAppVisible", !Boolean.FALSE.equals(s.getCustomerAppVisible()));
         map.put("isActive", Boolean.TRUE.equals(s.getIsActive()));
         map.put("order", s.getDisplayOrder() != null ? s.getDisplayOrder() : 1);
         map.put("displayOrder", s.getDisplayOrder() != null ? s.getDisplayOrder() : 1);
@@ -320,6 +324,15 @@ public class AdminPorterServiceController {
         if (payload.containsKey("category") && payload.get("category") != null) {
             target.setCategory(payload.get("category").toString().trim().toLowerCase());
         }
+        if (payload.containsKey("categoryId") && payload.get("categoryId") != null) {
+            target.setCategoryId(payload.get("categoryId").toString().trim());
+        }
+        if (payload.containsKey("categoryName") && payload.get("categoryName") != null) {
+            target.setCategoryName(payload.get("categoryName").toString().trim());
+        }
+        if (payload.containsKey("customerAppVisible") && payload.get("customerAppVisible") != null) {
+            target.setCustomerAppVisible(Boolean.parseBoolean(payload.get("customerAppVisible").toString()));
+        }
         if (payload.containsKey("subtitle")) {
             target.setSubtitle(payload.get("subtitle") != null ? payload.get("subtitle").toString().trim() : null);
         }
@@ -355,6 +368,8 @@ public class AdminPorterServiceController {
         }
         if (payload.containsKey("etaLabel")) {
             target.setEtaLabel(payload.get("etaLabel") != null ? payload.get("etaLabel").toString() : null);
+        } else if (payload.containsKey("eta")) {
+            target.setEtaLabel(payload.get("eta") != null ? payload.get("eta").toString() : null);
         }
         if (payload.containsKey("iconUrl") && payload.get("iconUrl") != null) {
             target.setIconUrl(payload.get("iconUrl").toString().trim());

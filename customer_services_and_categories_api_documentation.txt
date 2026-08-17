@@ -1,0 +1,268 @@
+================================================================================
+           ANUSHA PORTER - CUSTOMER SERVICES & CATEGORIES API SPECIFICATION
+================================================================================
+
+BASE URL: https://api.anushaporter.com
+AUTHENTICATION:
+- Customer endpoints: PUBLIC (No token required)
+- Admin endpoints: Protected (Authorization: Bearer <admin_jwt_token>)
+
+================================================================================
+1. PRIMARY ENDPOINT: GET /api/customer/services
+================================================================================
+
+HTTP METHOD: GET
+ENDPOINT: /api/customer/services
+ACCESS: Public (Guest & Authenticated Users)
+
+PURPOSE:
+Returns all active categories with their active, customer-visible services grouped
+together and sorted by displayOrder ASC. Ideal for home screens and dynamic category
+tabs.
+
+BACKEND LOGIC:
+1. Fetches all active categories (`isActive = true`), sorted by `displayOrder ASC`.
+2. Fetches all active services (`customerAppVisible = true` AND `isActive = true`),
+   sorted by `displayOrder ASC`.
+3. Groups services under their corresponding category.
+4. Filters out any categories that contain 0 visible services.
+5. Returns a structured JSON payload.
+
+SAMPLE REQUEST:
+GET /api/customer/services HTTP/1.1
+Host: api.anushaporter.com
+Accept: application/json
+
+SUCCESS RESPONSE (HTTP 200 OK):
+{
+  "success": true,
+  "categories": [
+    {
+      "id": "1",
+      "name": "Porter Trucks & Fleet",
+      "slug": "porter-trucks-fleet",
+      "icon": "truck-fast",
+      "displayOrder": 1,
+      "services": [
+        {
+          "id": "tata-ace",
+          "name": "Tata Ace – Mini Truck (750 Kg)",
+          "categoryId": "1",
+          "categoryName": "Porter Trucks & Fleet",
+          "description": "Most popular mini-truck for home shifting & commercial loads",
+          "imageUrl": "https://api.anushaporter.com/assets/trucks/tata-ace.png",
+          "capacity": "750 kg",
+          "capacityKg": 750,
+          "basePrice": 210.0,
+          "perKmRate": 18.0,
+          "eta": "5 mins",
+          "displayOrder": 1,
+          "customerAppVisible": true,
+          "isActive": true
+        },
+        {
+          "id": "3-wheeler",
+          "name": "3 Wheeler Cargo",
+          "categoryId": "1",
+          "categoryName": "Porter Trucks & Fleet",
+          "description": "Ideal for small items, light furniture & local moving",
+          "imageUrl": "https://api.anushaporter.com/assets/trucks/3-wheeler.png",
+          "capacity": "500 kg",
+          "capacityKg": 500,
+          "basePrice": 160.0,
+          "perKmRate": 15.0,
+          "eta": "5 mins",
+          "displayOrder": 2,
+          "customerAppVisible": true,
+          "isActive": true
+        },
+        {
+          "id": "pickup-8ft",
+          "name": "Pickup 8ft (1200 Kg)",
+          "categoryId": "1",
+          "categoryName": "Porter Trucks & Fleet",
+          "description": "Spacious flatbed truck for heavy commercial & industrial loads",
+          "imageUrl": "https://api.anushaporter.com/assets/trucks/pickup-8ft.png",
+          "capacity": "1200 kg",
+          "capacityKg": 1200,
+          "basePrice": 399.0,
+          "perKmRate": 26.0,
+          "eta": "12 mins",
+          "displayOrder": 3,
+          "customerAppVisible": true,
+          "isActive": true
+        },
+        {
+          "id": "tata-407-14ft",
+          "name": "Tata 407 (2500 Kg)",
+          "categoryId": "1",
+          "categoryName": "Porter Trucks & Fleet",
+          "description": "Heavy duty container truck for 2-3 BHK complete house shifting",
+          "imageUrl": "https://api.anushaporter.com/assets/trucks/tata-407.png",
+          "capacity": "2500 kg",
+          "capacityKg": 2500,
+          "basePrice": 699.0,
+          "perKmRate": 35.0,
+          "eta": "15 mins",
+          "displayOrder": 4,
+          "customerAppVisible": true,
+          "isActive": true
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "name": "2 Wheeler / Bike",
+      "slug": "2-wheeler-bike",
+      "icon": "motorbike",
+      "displayOrder": 2,
+      "services": [
+        {
+          "id": "two-wheeler",
+          "name": "2 Wheeler – Bike Courier",
+          "categoryId": "2",
+          "categoryName": "2 Wheeler / Bike",
+          "description": "Instant delivery for small packages & documents",
+          "imageUrl": "https://api.anushaporter.com/assets/bikes/2-wheeler.png",
+          "capacity": "20 kg",
+          "capacityKg": 20,
+          "basePrice": 50.0,
+          "perKmRate": 8.0,
+          "eta": "3 mins",
+          "displayOrder": 1,
+          "customerAppVisible": true,
+          "isActive": true
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "name": "Packers & Movers",
+      "slug": "packers-movers",
+      "icon": "truck-moving",
+      "displayOrder": 3,
+      "services": [
+        {
+          "id": "packers-movers",
+          "name": "Packers & Movers (Relocation)",
+          "categoryId": "3",
+          "categoryName": "Packers & Movers",
+          "description": "Hassle-free complete house & office relocation with packing & loading",
+          "imageUrl": "https://api.anushaporter.com/assets/packers/packers.png",
+          "capacity": "House Shifting",
+          "capacityKg": 3500,
+          "basePrice": 1499.0,
+          "perKmRate": 40.0,
+          "eta": "Slot Booking",
+          "displayOrder": 1,
+          "customerAppVisible": true,
+          "isActive": true
+        }
+      ]
+    }
+  ]
+}
+
+================================================================================
+2. ENRICHED FLAT ENDPOINTS (FALLBACKS & HOME FEED)
+================================================================================
+
+1) GET /api/services
+Returns flat list of all active services with enriched category info.
+Response includes:
+- `categoryId`: "1", "2", "3"
+- `categoryName`: "Porter Trucks & Fleet", "2 Wheeler / Bike", etc.
+- `customerAppVisible`: true / false
+- `displayOrder`: 1, 2, 3...
+- `imageUrl`: string
+- `capacityKg`: number
+- `basePrice`: number
+- `perKmRate`: number
+- `eta`: string
+
+2) GET /api/home
+Customer App main feed returning `featuredServices`, `services`, `announcements`,
+`defaultPickupAddress`, and `user` profile info.
+
+================================================================================
+3. CATEGORY MANAGEMENT ENDPOINTS (PUBLIC & ADMIN)
+================================================================================
+
+1) GET /api/categories OR GET /api/admin/categories
+Query params:
+- `all=true` : returns both active and inactive categories (Admin)
+- `all=false` (default): returns active categories only
+
+Response:
+{
+  "success": true,
+  "count": 3,
+  "categories": [
+    {
+      "id": 1,
+      "name": "Porter Trucks & Fleet",
+      "slug": "porter-trucks-fleet",
+      "icon": "truck-fast",
+      "description": "Mini trucks, tempos, and commercial flatbeds",
+      "displayOrder": 1,
+      "isActive": true
+    },
+    ...
+  ]
+}
+
+2) POST /api/admin/categories
+Headers: Authorization: Bearer <admin_token>
+Body:
+{
+  "name": "Heavy Machinery Transport",
+  "slug": "heavy-machinery",
+  "icon": "crane",
+  "description": "Transport for construction and heavy industrial equipment",
+  "displayOrder": 4,
+  "isActive": true
+}
+
+3) PUT /api/admin/categories/{id}
+Updates existing category properties.
+
+4) PATCH /api/admin/categories/{id}/toggle-status
+Toggles category isActive status.
+
+5) DELETE /api/admin/categories/{id}
+Deletes a category.
+
+================================================================================
+4. FIELD DICTIONARY
+================================================================================
+
+CATEGORY OBJECT:
+- `id` (String/Long)          : Unique identifier (e.g. "1")
+- `name` (String)             : Display name (e.g. "Porter Trucks & Fleet")
+- `slug` (String)             : URL-friendly identifier (e.g. "porter-trucks-fleet")
+- `icon` (String)             : Icon name or URL (e.g. "truck-fast", "motorbike")
+- `displayOrder` (Integer)    : Position index for sorting (1, 2, 3...)
+- `isActive` (Boolean)        : Category active/inactive status
+
+SERVICE OBJECT:
+- `id` / `serviceId` (String) : Service identifier (e.g. "tata-ace", "two-wheeler")
+- `name` (String)             : Full display name (e.g. "Tata Ace – Mini Truck (750 Kg)")
+- `categoryId` (String)       : Parent category ID ("1", "2", "3")
+- `categoryName` (String)     : Parent category name ("Porter Trucks & Fleet")
+- `description` (String)      : Customer-facing description
+- `imageUrl` / `iconUrl`      : Full image URL
+- `capacity` (String)         : Formatted capacity label (e.g. "750 kg", "20 kg")
+- `capacityKg` (Integer)      : Numeric payload weight limit in Kg (750, 20)
+- `basePrice` / `baseFare`    : Base booking fare in currency units (e.g. 210.0)
+- `perKmRate` / `pricePerKm`  : Distance rate per Km (e.g. 18.0)
+- `eta` / `etaLabel`          : Estimated arrival string (e.g. "5 mins")
+- `displayOrder` (Integer)    : Sorting order within category
+- `customerAppVisible` (Bool) : Whether shown in customer app (default true)
+- `isActive` (Boolean)        : Global service enable/disable flag
+
+================================================================================
+5. DATABASE MIGRATION SCRIPT
+================================================================================
+Available in file: `database/customer_services_categories_mysql.sql`
+Hibernate `ddl-auto: update` will also automatically apply these columns/tables.
+================================================================================

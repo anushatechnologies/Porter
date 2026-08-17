@@ -17,6 +17,9 @@ public class PorterService {
     private String name;
     private String label;
     private String category; // 'vehicle', 'two_wheeler', 'packers', 'intercity', 'how_it_works'
+    private String categoryId; // Foreign category ID e.g. "1", "2" or slug
+    private String categoryName; // Category Name e.g. "Porter Trucks & Fleet"
+    private Boolean customerAppVisible = true;
     
     @Column(length = 1000)
     private String subtitle;
@@ -61,6 +64,9 @@ public class PorterService {
         if (this.isActive == null) {
             this.isActive = true;
         }
+        if (this.customerAppVisible == null) {
+            this.customerAppVisible = true;
+        }
         if (this.displayOrder == null) {
             this.displayOrder = 1;
         }
@@ -92,6 +98,15 @@ public class PorterService {
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+
+    public String getCategoryId() { return categoryId; }
+    public void setCategoryId(String categoryId) { this.categoryId = categoryId; }
+
+    public String getCategoryName() { return categoryName; }
+    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
+
+    public Boolean getCustomerAppVisible() { return customerAppVisible; }
+    public void setCustomerAppVisible(Boolean customerAppVisible) { this.customerAppVisible = customerAppVisible; }
 
     public String getSubtitle() { return subtitle; }
     public void setSubtitle(String subtitle) { this.subtitle = subtitle; }
