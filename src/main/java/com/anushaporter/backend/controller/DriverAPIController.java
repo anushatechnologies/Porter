@@ -176,6 +176,15 @@ public class DriverAPIController {
         result.put("pickupAddress", order.getPickupAddress());
         result.put("dropAddress", order.getDropAddress());
         result.put("amount", order.getAmount());
+        // Include distance and coordinates so the driver app uses the actual route distance
+        // instead of falling back to a fare-based estimate (which clamps to 1.0 km for low fares)
+        result.put("distance", order.getDistanceKm() != null
+                ? String.format("%.1f", order.getDistanceKm()) : null);
+        result.put("distanceKm", order.getDistanceKm());
+        result.put("pickupLat", order.getPickupLat());
+        result.put("pickupLng", order.getPickupLng());
+        result.put("dropLat", order.getDropLat());
+        result.put("dropLng", order.getDropLng());
         return ResponseEntity.ok(Map.of("success", true, "order", result));
     }
 

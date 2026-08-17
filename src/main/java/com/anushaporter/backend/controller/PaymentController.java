@@ -31,6 +31,10 @@ public class PaymentController {
     @Autowired
     private PaymentProvider paymentProvider;
 
+    /** Reflects the active payment gateway (razorpay, cashfree, sandbox, etc.) */
+    @org.springframework.beans.factory.annotation.Value("${payment.gateway.provider:sandbox}")
+    private String activeGatewayProvider;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -183,7 +187,8 @@ public class PaymentController {
 
             PaymentWebhookEvent webhookEvent = new PaymentWebhookEvent();
             webhookEvent.setEventId(eventId);
-            webhookEvent.setGateway("sandbox");
+            // Use the configured gateway provider instead of hardcoding "sandbox"
+            webhookEvent.setGateway(activeGatewayProvider);
             webhookEvent.setEventType(eventType);
             webhookEvent.setPayloadRaw(rawPayload);
             webhookEvent.setSignature(signature);

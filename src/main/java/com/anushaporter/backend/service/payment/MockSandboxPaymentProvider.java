@@ -1,3 +1,14 @@
+7y
+
+
+
+
+
+
+
+
+
+
 package com.anushaporter.backend.service.payment;
 
 import com.anushaporter.backend.model.DriverPayoutAccount;
@@ -144,17 +155,26 @@ public class MockSandboxPaymentProvider implements PaymentProvider {
     @Override
     public String generateDynamicUpiQrData(PaymentOrder order) {
         String formattedAmount = String.format("%.2f", order.getAmount());
+        // URL-encode the transaction note and merchant name for safe URI embedding
         String transactionNote = URLEncoder.encode("Anusha Porter " + order.getBookingId(), StandardCharsets.UTF_8);
         String encodedName = URLEncoder.encode(merchantName, StandardCharsets.UTF_8);
 
-        // Standard NPCI UPI URI Specification
-        return String.format("upi://pay?pa=%s&pn=%s&mc=4214&tr=%s&tn=%s&am=%s&cu=%s",
+        // NPCI-compliant minimal UPI URI.
+        // NOTE: mc (Merchant Category Code) and tr (Transaction Reference) are intentionally
+        // omitted here. NPCI policy blocks UPI apps (PhonePe, GPay, Paytm) from sending
+        // these merchant-only parameters to personal / unregistered VPAs, causing the
+        // "Unable to scan QR" error. These fields are only safe when the QR payload is
+        // generated directly by a verified Payment Gateway (Razorpay, Cashfree, etc.)
+        // which cryptographically signs the request. In sandbox/fallback mode we emit
+        // the safe personal-VPA form. When live Razorpay keys are active, Razorpay's own
+        // qr_codes API is used and its QR data (which includes proper merchant params +
+        // signature) replaces this fallback entirely.
+        return String.format("upi://pay?pa=%s&pn=%s&am=%s&cu=%s&tn=%s",
                 merchantVpa,
                 encodedName,
-                order.getPaymentId(),
-                transactionNote,
                 formattedAmount,
-                order.getCurrency() != null ? order.getCurrency() : "INR"
+                order.getCurrency() != null ? order.getCurrency() : "INR",
+                transactionNote
         );
     }
 

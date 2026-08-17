@@ -107,16 +107,21 @@ public class PaymentLifecycleService {
         paymentOrder.setCurrency(order.getCurrency() != null ? order.getCurrency() : "INR");
         paymentOrder.setStatus(PaymentStatus.PENDING);
         paymentOrder.setPaymentMethod(paymentMethod != null ? paymentMethod : "UPI_QR");
-        paymentOrder.setGateway("sandbox");
         paymentOrder.setIdempotencyKey(idempotencyKey != null ? idempotencyKey : paymentId);
         paymentOrder.setFareBreakdownJson(fareJson);
         paymentOrder.setQrExpiresAt(LocalDateTime.now().plusMinutes(15));
 
-        // Generate Gateway Order & Dynamic QR Code Payload
+        // Generate Gateway Order & Dynamic QR Code Payload.
+        // The provider sets "gateway" to "razorpay" when live keys are active,
+        // or "sandbox" when falling back to the mock provider.
         Map<String, Object> gatewayRes = paymentProvider.createPaymentOrder(paymentOrder);
         paymentOrder.setGatewayOrderId((String) gatewayRes.get("gatewayOrderId"));
         paymentOrder.setQrCodeData((String) gatewayRes.get("qrCodeData"));
         paymentOrder.setQrImageUrl((String) gatewayRes.get("qrImageUrl"));
+        // Derive the gateway label from the provider result instead of hardcoding "sandbox"
+        String resolvedGateway = gatewayRes.containsKey("gateway")
+                ? String.valueOf(gatewayRes.get("gateway")) : "sandbox";
+        paymentOrder.setGateway(resolvedGateway);
 
         return paymentOrderRepository.save(paymentOrder);
     }
