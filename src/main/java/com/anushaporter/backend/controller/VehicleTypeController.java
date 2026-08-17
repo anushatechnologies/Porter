@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
  *   vehicleId in POST /api/drivers/register is validated against this table.
  */
 @RestController
-@RequestMapping("/api/vehicle-types")
+@RequestMapping({"/api/vehicle-types", "/api/driver/vehicles", "/api/drivers/vehicles", "/api/vehicles/types"})
 public class VehicleTypeController {
 
     @Autowired

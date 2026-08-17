@@ -21,12 +21,39 @@ public class VehicleController {
     @Autowired
     private PricingVehicleRepository pricingVehicleRepo;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.VehicleTypeRepository vehicleTypeRepository;
+
     /**
      * GET /api/vehicles
-     * Returns fleet vehicles joined with pricing configuration for User App and Admin Panel.
+     * If ?status=active is passed, returns active vehicle types for Driver Registration: { success: true, vehicles: [...] }.
+     * Otherwise returns fleet vehicles joined with pricing configuration for User App and Admin Panel: [...].
      */
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getAll() {
+    public ResponseEntity<?> getAll(@RequestParam(required = false) String status) {
+        if ("active".equalsIgnoreCase(status)) {
+            List<com.anushaporter.backend.model.VehicleType> list = vehicleTypeRepository != null
+                    ? vehicleTypeRepository.findByStatusOrderByPriorityAsc("active")
+                    : Collections.emptyList();
+
+            List<Map<String, Object>> vehicles = list.stream().map(v -> {
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("id",       v.getId());
+                map.put("name",     v.getName());
+                map.put("type",     v.getType());
+                map.put("capacity", v.getCapacity() != null ? v.getCapacity() : "");
+                map.put("status",   v.getStatus());
+                map.put("priority", v.getPriority() != null ? v.getPriority() : 1);
+                if (v.getImageUrl() != null) map.put("imageUrl", v.getImageUrl());
+                return map;
+            }).collect(Collectors.toList());
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("success", true);
+            response.put("vehicles", vehicles);
+            response.put("count", vehicles.size());
+            return ResponseEntity.ok(response);
+        }
         List<Vehicle> vehicles = repository.findAll();
         List<PricingVehicle> pricingList = pricingVehicleRepo.findAll();
 

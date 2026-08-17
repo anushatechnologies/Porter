@@ -53,7 +53,7 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.DriverAuthService driverAuthService;
 
-    private Driver getAuthenticatedDriver(HttpServletRequest request) {
+    public Driver getAuthenticatedDriver(HttpServletRequest request) {
         return driverAuthService.resolveAuthenticatedDriver(request);
     }
 
@@ -398,6 +398,21 @@ public class DriverAPIController {
         if (amount != null && order.getAmount() == null) order.setAmount(amount);
         orderRepository.save(order);
         pushNotificationService.notifyOrderStatus(order, order.getStatus());
+
+        // Call wallet service to process commission (5%) and net earnings (95%)
+        if (order.getAmount() != null && driver.getId() != null) {
+            try {
+                // Ensure autowiring is available via ApplicationContext if not directly injected
+                com.anushaporter.backend.service.DriverWalletService walletService = 
+                    org.springframework.web.context.support.WebApplicationContextUtils
+                    .getRequiredWebApplicationContext(request.getServletContext())
+                    .getBean(com.anushaporter.backend.service.DriverWalletService.class);
+                    
+                walletService.processOrderEarning(String.valueOf(driver.getId()), order.getBookingId(), order.getAmount());
+            } catch (Exception e) {
+                System.err.println("[Wallet] Error processing earnings for order " + order.getBookingId() + ": " + e.getMessage());
+            }
+        }
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
