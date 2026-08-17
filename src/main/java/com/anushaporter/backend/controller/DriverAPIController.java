@@ -424,29 +424,69 @@ public class DriverAPIController {
         ));
     }
 
-    // Fetch History
-    @GetMapping("/drivers/me/orders")
+    // Fetch full order history — matched by driverId OR driverEmail OR driverPhone
+    @GetMapping({"/drivers/me/orders", "/drivers/me/orders/history", "/drivers/me/orders/completed",
+                 "/driver/orders", "/driver/orders/history", "/driver/orders/completed"})
     public ResponseEntity<?> getOrderHistory(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized or Driver profile not found"));
+            return ResponseEntity.status(401).body(Map.of("success", false, "error", "Unauthorized or Driver profile not found"));
         }
 
+        String driverId   = driver.getId() != null ? driver.getId().toString() : "";
+        String driverEmail = driver.getEmail() != null ? driver.getEmail().toLowerCase().trim() : "";
+        String driverPhone = driver.getPhone() != null ? driverAuthService.normalizePhone(driver.getPhone()) : "";
+
+        // Union: match by driverId OR driverEmail OR driverPhone so no booking is missed
         List<Order> orders = orderRepository.findAll().stream()
-                .filter(o -> o.getDriverId() != null && o.getDriverId().equals(driver.getId().toString()))
+                .filter(o -> {
+                    boolean byId = !driverId.isEmpty() && driverId.equals(o.getDriverId());
+                    boolean byEmail = !driverEmail.isEmpty() && o.getDriverEmail() != null
+                            && driverEmail.equalsIgnoreCase(o.getDriverEmail().trim());
+                    boolean byPhone = !driverPhone.isEmpty() && o.getDriverPhone() != null
+                            && driverPhone.equals(driverAuthService.normalizePhone(o.getDriverPhone()));
+                    return byId || byEmail || byPhone;
+                })
+                .sorted((a, b) -> {
+                    if (a.getCreatedAt() == null && b.getCreatedAt() == null) return 0;
+                    if (a.getCreatedAt() == null) return 1;
+                    if (b.getCreatedAt() == null) return -1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
                 .collect(Collectors.toList());
 
-        List<Map<String, Object>> response = orders.stream().map(o -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("orderId", o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
-            map.put("status", o.getStatus());
-            map.put("fare", o.getAmount());
-            map.put("pickup", o.getPickupAddress());
-            map.put("dropoff", o.getDropAddress());
-            map.put("createdAt", o.getCreatedAt());
+        List<Map<String, Object>> orderList = orders.stream().map(o -> {
+            Map<String, Object> map = new java.util.LinkedHashMap<>();
+            map.put("orderId",       o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
+            map.put("bookingId",     o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
+            map.put("status",        o.getStatus() != null ? o.getStatus() : "unknown");
+            map.put("fare",          o.getAmount() != null ? o.getAmount() : 0.0);
+            map.put("amount",        o.getAmount() != null ? o.getAmount() : 0.0);
+            map.put("pickup",        o.getPickupAddress());
+            map.put("pickupAddress", o.getPickupAddress());
+            map.put("dropoff",       o.getDropAddress());
+            map.put("dropAddress",   o.getDropAddress());
+            map.put("serviceName",   o.getServiceName());
+            map.put("distanceKm",    o.getDistanceKm() != null ? o.getDistanceKm() : 0.0);
+            map.put("paymentMethod", o.getPaymentMethod());
+            map.put("createdAt",     o.getCreatedAt());
             return map;
         }).collect(Collectors.toList());
 
+        long completedCount = orders.stream()
+                .filter(o -> "delivered".equalsIgnoreCase(o.getStatus()) || "completed".equalsIgnoreCase(o.getStatus()))
+                .count();
+        double totalEarnings = orders.stream()
+                .filter(o -> "delivered".equalsIgnoreCase(o.getStatus()) || "completed".equalsIgnoreCase(o.getStatus()))
+                .mapToDouble(o -> o.getAmount() != null ? o.getAmount() * 0.80 : 0.0)
+                .sum();
+
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("success", true);
+        response.put("totalOrders", orders.size());
+        response.put("completedOrders", completedCount);
+        response.put("totalEarnings", Math.round(totalEarnings * 100.0) / 100.0);
+        response.put("orders", orderList);
         return ResponseEntity.ok(response);
     }
 
