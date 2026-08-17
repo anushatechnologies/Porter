@@ -3,10 +3,12 @@ package com.anushaporter.backend.controller;
 import com.anushaporter.backend.model.AppUser;
 import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.model.Order;
+import com.anushaporter.backend.model.VehicleType;
 import com.anushaporter.backend.repository.AppUserRepository;
 import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.repository.OrderRepository;
 import com.anushaporter.backend.repository.CustomerRepository;
+import com.anushaporter.backend.repository.VehicleTypeRepository;
 import com.anushaporter.backend.service.PushNotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,9 @@ public class DriverAPIController {
 
     @Autowired
     private CustomerRepository customerRepository;
+
+    @Autowired(required = false)
+    private VehicleTypeRepository vehicleTypeRepository;
 
     @Autowired
     private PushNotificationService pushNotificationService;
@@ -473,6 +478,21 @@ public class DriverAPIController {
         }
         if (accountNumber != null && !accountNumber.matches("^\\d{9,18}$")) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Bank Account number must contain 9 to 18 digits."));
+        }
+
+        // ── Vehicle type validation ──────────────────────────────────────────
+        // If vehicleId is provided, verify it exists and is active in the DB
+        String vehicleId = text(payload, "vehicleId");
+        if (vehicleId != null && !vehicleId.isBlank() && vehicleTypeRepository != null) {
+            boolean isValid = vehicleTypeRepository
+                    .findByIdAndStatus(vehicleId, "active")
+                    .isPresent();
+            if (!isValid) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "Selected vehicle type is no longer available."
+                ));
+            }
         }
 
         driver.setPhone(phone);
