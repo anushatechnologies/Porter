@@ -9,7 +9,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 import jakarta.servlet.http.HttpServletRequest;
 import com.anushaporter.backend.model.AppUser;
+import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.repository.AppUserRepository;
+import com.anushaporter.backend.service.DeliveryCompletionService;
 import com.anushaporter.backend.service.PushNotificationService;
 
 /**
@@ -32,6 +34,9 @@ public class OrderController {
 
     @Autowired
     private com.anushaporter.backend.service.DriverAuthService driverAuthService;
+
+    @Autowired
+    private DeliveryCompletionService deliveryCompletionService;
 
     /**
      * GET /api/orders
@@ -193,15 +198,27 @@ public class OrderController {
         }
 
         // ── 2. OTP Verification for Delivery Completion ───────────────────────
-        if ("delivered".equalsIgnoreCase(targetStatus) || "completed".equalsIgnoreCase(targetStatus) || inputOtp != null) {
-            String validOtp = order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813";
-
-            if (inputOtp == null || !inputOtp.trim().equals(validOtp)) {
-                return ResponseEntity.status(400).body(Map.of(
+        //
+        // If the caller sends OTP, route to the dedicated verify-otp flow.
+        // Direct jumps to 'delivered'/'completed' without OTP_VERIFIED are blocked.
+        if ("delivered".equalsIgnoreCase(targetStatus) || "completed".equalsIgnoreCase(targetStatus)) {
+            String currentStatusLower = order.getStatus() != null ? order.getStatus().toLowerCase() : "";
+            boolean otpAlreadyVerified = currentStatusLower.equals("otp_verified")
+                    || currentStatusLower.equals("payment_confirmation_pending");
+            if (!otpAlreadyVerified) {
+                return ResponseEntity.status(422).body(Map.of(
                         "success", false,
-                        "message", "Incorrect Customer Delivery OTP. Verification failed."
+                        "message", "Direct completion blocked. Verify OTP first via POST /{orderId}/verify-otp, then confirm payment via POST /{orderId}/complete."
                 ));
             }
+        }
+
+        if (inputOtp != null && !inputOtp.isBlank()) {
+            Driver callerDriver = driverAuthService.resolveAuthenticatedDriver(request);
+            Map<String, Object> otpResult = deliveryCompletionService.verifyOtp(id, inputOtp, callerDriver);
+            int httpStatus = otpResult.containsKey("httpStatus") ? (int) otpResult.get("httpStatus") : 200;
+            otpResult.remove("httpStatus");
+            return ResponseEntity.status(httpStatus).body(otpResult);
         }
 
         if (targetStatus != null && !targetStatus.isBlank()) {
@@ -215,6 +232,66 @@ public class OrderController {
                 : "Status updated successfully";
 
         return ResponseEntity.ok(Map.of("success", true, "message", msg, "order", savedOrder));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Step 1 — POST /api/orders/:orderId/verify-otp
+    //
+    // Validates the customer-provided delivery OTP and transitions the order
+    // status to OTP_VERIFIED.  Does NOT mark the booking as delivered.
+    // ──────────────────────────────────────────────────────────────────────────
+    @RequestMapping(value = "/{id}/verify-otp", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<?> verifyDeliveryOtp(
+            @PathVariable String id,
+            @RequestBody(required = false) Map<String, String> payload,
+            HttpServletRequest request) {
+
+        String inputOtp = payload != null ? payload.get("otp") : null;
+        if (inputOtp == null && payload != null) inputOtp = payload.get("deliveryOtp");
+
+        Driver driver = driverAuthService.resolveAuthenticatedDriver(request);
+        Map<String, Object> result = deliveryCompletionService.verifyOtp(id, inputOtp, driver);
+
+        int httpStatus = result.containsKey("httpStatus") ? (int) result.get("httpStatus") : 200;
+        result.remove("httpStatus");
+        return ResponseEntity.status(httpStatus).body(result);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Step 2 — POST /api/orders/:orderId/complete
+    //
+    // Confirms payment and finalises the delivery.  Pre-requisite: order must
+    // be in OTP_VERIFIED or PAYMENT_CONFIRMATION_PENDING status.
+    // Idempotency-Key header prevents duplicate completions.
+    // ──────────────────────────────────────────────────────────────────────────
+    @RequestMapping(value = "/{id}/complete", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<?> completeDelivery(
+            @PathVariable String id,
+            @RequestBody(required = false) Map<String, Object> payload,
+            HttpServletRequest request) {
+
+        String idempotencyKey = request.getHeader("Idempotency-Key");
+
+        String paymentMethod = null;
+        Double amount        = null;
+        if (payload != null) {
+            paymentMethod = (String) payload.get("paymentMethod");
+            Object rawAmount = payload.get("amount");
+            if (rawAmount instanceof Number) {
+                amount = ((Number) rawAmount).doubleValue();
+            } else if (rawAmount instanceof String) {
+                try { amount = Double.parseDouble((String) rawAmount); } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        Driver driver = driverAuthService.resolveAuthenticatedDriver(request);
+        Map<String, Object> result = deliveryCompletionService.confirmPaymentAndComplete(
+                id, paymentMethod, amount, idempotencyKey, driver
+        );
+
+        int httpStatus = result.containsKey("httpStatus") ? (int) result.get("httpStatus") : 200;
+        result.remove("httpStatus");
+        return ResponseEntity.status(httpStatus).body(result);
     }
 
     @RequestMapping(value = {"/{id}/accept", "/{id}/accept-order"}, method = {RequestMethod.PUT, RequestMethod.POST})

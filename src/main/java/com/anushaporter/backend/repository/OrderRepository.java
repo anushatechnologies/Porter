@@ -42,5 +42,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("driverPhone") String driverPhone,
             @Param("driverVehicleNumber") String driverVehicleNumber
     );
+
+    /**
+     * Atomically transitions an order to OTP_VERIFIED status.
+     * Only succeeds if the current status allows OTP verification
+     * (i.e., driver has reached the drop location).
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("UPDATE Order o SET o.status = 'OTP_VERIFIED' WHERE o.id = :id AND o.status NOT IN ('OTP_VERIFIED', 'PAYMENT_CONFIRMATION_PENDING', 'completed', 'delivered', 'cancelled')")
+    int markOtpVerifiedById(@Param("id") Long id);
+
+    /** Looks up an order by idempotency key to short-circuit duplicate completion requests. */
+    Optional<Order> findByIdempotencyKey(String idempotencyKey);
 }
 

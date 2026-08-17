@@ -83,6 +83,17 @@ public class Order {
 
     private LocalDateTime createdAt;
 
+    /** Set when the driver confirms payment and completes delivery (Step 2) */
+    private LocalDateTime completedAt;
+
+    /** Driver ID who triggered the final completion (for audit) */
+    @Column(length = 64)
+    private String completedByDriverId;
+
+    /** Idempotency key to prevent duplicate completion calls from the Driver App */
+    @Column(length = 128, unique = true)
+    private String idempotencyKey;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
@@ -167,4 +178,10 @@ public class Order {
     public void setCancellationReason(String cancellationReason) { this.cancellationReason = cancellationReason; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getCompletedAt() { return completedAt; }
+    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public String getCompletedByDriverId() { return completedByDriverId; }
+    public void setCompletedByDriverId(String completedByDriverId) { this.completedByDriverId = completedByDriverId; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
 }
