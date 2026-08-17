@@ -5,8 +5,11 @@ import com.anushaporter.backend.model.DriverPayoutAccount;
 import com.anushaporter.backend.model.DriverPayoutRecord;
 import com.anushaporter.backend.model.PaymentOrder;
 import com.anushaporter.backend.model.PaymentRefund;
+import com.anushaporter.backend.repository.GlobalSettingsRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -26,8 +29,9 @@ import java.util.UUID;
 @Service
 public class MockSandboxPaymentProvider implements PaymentProvider {
 
+    /** Fallback VPA from application.properties / env variable PAYMENT_GATEWAY_VPA */
     @Value("${payment.gateway.vpa:${anusha.payment.merchant-vpa:anushaporter@icici}}")
-    private String merchantVpa;
+    private String merchantVpaFromConfig;
 
     @Value("${payment.gateway.merchant_name:${anusha.payment.merchant-name:Anusha Porter Logistics}}")
     private String merchantName;
@@ -40,6 +44,49 @@ public class MockSandboxPaymentProvider implements PaymentProvider {
 
     @Value("${payment.gateway.key_secret:${RAZORPAY_KEY_SECRET:mock_secret_key_12345}}")
     private String keySecret;
+
+    /**
+     * Reads the live merchant VPA from GlobalSettings DB (key = "MERCHANT_VPA").
+     * DB value takes priority over application.properties — admin can change it
+     * via POST /api/settings without redeploying the server.
+     */
+    @Autowired(required = false)
+    private GlobalSettingsRepository globalSettingsRepository;
+
+    /** Returns the active merchant VPA: DB setting wins over config file. */
+    private String resolveVpa() {
+        if (globalSettingsRepository != null) {
+            try {
+                return globalSettingsRepository
+                        .findBySettingKey("MERCHANT_VPA")
+                        .map(s -> s.getSettingValue())
+                        .filter(v -> v != null && !v.isBlank())
+                        .orElse(merchantVpaFromConfig);
+            } catch (Exception ignored) {}
+        }
+        return merchantVpaFromConfig;
+    }
+
+    @PostConstruct
+    public void warnIfPlaceholderVpa() {
+        String vpa = resolveVpa();
+        if (vpa == null || vpa.isBlank() || vpa.equalsIgnoreCase("anushaporter@icici")) {
+            System.err.println("\n" +
+                "╔══════════════════════════════════════════════════════════════════════╗\n" +
+                "║  ⚠️  UPI PAYMENT WARNING                                              ║\n" +
+                "║  Merchant VPA is set to the PLACEHOLDER: anushaporter@icici          ║\n" +
+                "║  UPI QR payments will be rejected by NPCI / ICICI Bank.              ║\n" +
+                "║                                                                      ║\n" +
+                "║  ✅ FIX (no redeployment needed):                                    ║\n" +
+                "║  POST /api/settings  { \"MERCHANT_VPA\": \"yourreal@upi\" }             ║\n" +
+                "║                                                                      ║\n" +
+                "║  OR set env variable:  PAYMENT_GATEWAY_VPA=yourreal@upi             ║\n" +
+                "╚══════════════════════════════════════════════════════════════════════╝\n");
+        } else {
+            System.out.println("[Payment] ✅ Merchant VPA configured: " + vpa);
+        }
+    }
+
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -144,6 +191,7 @@ public class MockSandboxPaymentProvider implements PaymentProvider {
 
     @Override
     public String generateDynamicUpiQrData(PaymentOrder order) {
+        String vpa = resolveVpa();  // DB-driven: hot-reloadable without redeployment
         String formattedAmount = String.format("%.2f", order.getAmount());
         // URL-encode the transaction note and merchant name for safe URI embedding
         String transactionNote = URLEncoder.encode("Anusha Porter " + order.getBookingId(), StandardCharsets.UTF_8);
@@ -160,7 +208,7 @@ public class MockSandboxPaymentProvider implements PaymentProvider {
         // qr_codes API is used and its QR data (which includes proper merchant params +
         // signature) replaces this fallback entirely.
         return String.format("upi://pay?pa=%s&pn=%s&am=%s&cu=%s&tn=%s",
-                merchantVpa,
+                vpa,
                 encodedName,
                 formattedAmount,
                 order.getCurrency() != null ? order.getCurrency() : "INR",
