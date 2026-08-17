@@ -68,8 +68,12 @@ public class PricingService {
         double requestWaitingMins = request.getWaitingMins() != null ? request.getWaitingMins() : 0.0;
 
         // Settings Map
-        Map<String, String> settings = settingsRepo.findAll().stream()
-                .collect(Collectors.toMap(s -> s.getSettingKey(), s -> s.getSettingValue(), (a, b) -> a));
+        Map<String, String> settings = new HashMap<>();
+        for (var s : settingsRepo.findAll()) {
+            if (s.getSettingKey() != null) {
+                settings.put(s.getSettingKey(), s.getSettingValue() != null ? s.getSettingValue() : "");
+            }
+        }
 
         // Distance Calculation (using Slabs if available, else per km rate after baseKm)
         double distanceFare = 0.0;

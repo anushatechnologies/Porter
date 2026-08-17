@@ -18,8 +18,13 @@ public class SettingsController {
 
     @GetMapping
     public Map<String, String> getSettings() {
-        return settingsRepo.findAll().stream()
-                .collect(Collectors.toMap(s -> s.getSettingKey(), s -> s.getSettingValue()));
+        Map<String, String> result = new java.util.HashMap<>();
+        for (GlobalSettings s : settingsRepo.findAll()) {
+            if (s.getSettingKey() != null) {
+                result.put(s.getSettingKey(), s.getSettingValue() != null ? s.getSettingValue() : "");
+            }
+        }
+        return result;
     }
 
     @PostMapping

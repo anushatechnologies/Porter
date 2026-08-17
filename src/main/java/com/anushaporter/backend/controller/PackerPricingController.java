@@ -29,6 +29,14 @@ public class PackerPricingController {
         return ResponseEntity.ok(result);
     }
     private double number(Map<String, Object> body, String key, double fallback) {
-        Object value = body.get(key); return value instanceof Number n ? n.doubleValue() : fallback;
+        if (body == null || !body.containsKey(key) || body.get(key) == null) return fallback;
+        Object value = body.get(key);
+        if (value instanceof Number n) return n.doubleValue();
+        if (value instanceof String s) {
+            try {
+                return Double.parseDouble(s.replaceAll("[^0-9.]", "").trim());
+            } catch (Exception ignored) {}
+        }
+        return fallback;
     }
 }
