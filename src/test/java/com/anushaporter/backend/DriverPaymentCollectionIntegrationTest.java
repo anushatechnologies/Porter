@@ -95,6 +95,7 @@ public class DriverPaymentCollectionIntegrationTest {
         assignedDriver.setVehicleType("Tata Ace");
         assignedDriver.setStatus("online");
         assignedDriver.setKyc("verified");
+        assignedDriver.setWalletBalance(100.00);
         assignedDriver = driverRepository.save(assignedDriver);
 
         // Initialise wallet
@@ -181,9 +182,9 @@ public class DriverPaymentCollectionIntegrationTest {
                 .andExpect(jsonPath("$.order.status", is("completed")))
                 .andExpect(jsonPath("$.order.paymentStatus", is("PAID")));
 
-        // Verify Driver Wallet credited in DB
+        // Verify Driver Wallet deducted 5% platform commission in DB
         DriverWallet walletInDb = driverWalletRepository.findByDriverId(String.valueOf(assignedDriver.getId())).orElseThrow();
-        assertEquals(100.00 + 807.50, walletInDb.getAvailableBalance());
+        assertEquals(100.00 - 42.50, walletInDb.getAvailableBalance());
         assertEquals(500.00 + 850.00, walletInDb.getTotalEarned());
         assertEquals(25.00 + 42.50, walletInDb.getPlatformCommission());
 

@@ -293,12 +293,12 @@ public class DeliveryCompletionService {
             }
         }
 
-        // ── 11. Credit Driver Wallet Balance (5% commission, 95% earning) ────
+        // ── 11. Deduct 5% Platform Commission from Driver Wallet ────────────
         if (grossFare > 0 && !driverId.isBlank()) {
             try {
-                driverWalletService.processOrderEarning(driverId, bookingId, grossFare);
+                driverWalletService.deductCommissionOnCompletion(driverId, bookingId, grossFare);
             } catch (Exception e) {
-                System.err.println("[Wallet] Warning: error crediting driver wallet: " + e.getMessage());
+                System.err.println("[Wallet] Warning: error deducting driver commission: " + e.getMessage());
             }
         }
 

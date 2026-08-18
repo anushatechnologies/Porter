@@ -129,10 +129,6 @@ public class OrderController {
                 return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Driver not found: " + driverIdStr));
             }
 
-            Double commissionRate = payload.get("commissionRate") != null
-                    ? Double.parseDouble(String.valueOf(payload.get("commissionRate")))
-                    : null;
-
             double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
             if (walletBalance <= 0.0) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -142,7 +138,7 @@ public class OrderController {
                 ));
             }
 
-            Map<String, Object> result = driverWalletService.assignOrderWithCommission(order, driver, commissionRate);
+            Map<String, Object> result = driverWalletService.assignOrder(order, driver);
             pushNotificationService.notifyOrderStatus(order, order.getStatus());
             return ResponseEntity.ok(result);
         } else {
@@ -247,6 +243,17 @@ public class OrderController {
 
         if (targetStatus != null && !targetStatus.isBlank()) {
             order.setStatus(targetStatus);
+            if ("completed".equalsIgnoreCase(targetStatus) || "delivered".equalsIgnoreCase(targetStatus)) {
+                String driverId = order.getDriverId();
+                if (driverId != null && !driverId.isBlank() && order.getAmount() != null && order.getAmount() > 0) {
+                    try {
+                        String bookingId = order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId());
+                        driverWalletService.deductCommissionOnCompletion(driverId, bookingId, order.getAmount());
+                    } catch (Exception e) {
+                        System.err.println("[Wallet] Warning: error deducting commission on status update: " + e.getMessage());
+                    }
+                }
+            }
         }
         Order savedOrder = repository.save(order);
         pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());

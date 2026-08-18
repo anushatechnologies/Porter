@@ -228,7 +228,7 @@ public class DriverWalletRechargeIntegrationTest {
                 .header("Authorization", "Bearer " + jwtToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.transactions", hasSize(3))) // 1 recharge + 1 earning + 1 commission
+                .andExpect(jsonPath("$.transactions", hasSize(2))) // 1 recharge + 1 commission deduction
                 .andExpect(jsonPath("$.transactions[0].transactionType", notNullValue()));
     }
 
@@ -298,13 +298,14 @@ public class DriverWalletRechargeIntegrationTest {
     }
 
     @Test
-    void testAssignOrderWithCommissionDeduction() throws Exception {
+    void testAssignOrderWithoutWalletDeductionAndDeductOnCompletion() throws Exception {
         Order order = new Order();
         order.setBookingId("BK_12131");
         order.setAmount(500.00);
         order.setStatus("placed");
         order = orderRepository.save(order);
 
+        // 1. Assign Driver - DO NOT touch wallet balance
         mockMvc.perform(post("/api/orders/" + order.getBookingId() + "/assign")
                 .header("Authorization", "Bearer " + adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -317,16 +318,32 @@ public class DriverWalletRechargeIntegrationTest {
                 .andExpect(jsonPath("$.orderId", is("BK_12131")))
                 .andExpect(jsonPath("$.driverId", is("DRV-" + testDriver.getId())))
                 .andExpect(jsonPath("$.orderFare", is(500.00)))
-                .andExpect(jsonPath("$.commissionDeducted", is(25.00)))
-                .andExpect(jsonPath("$.remainingWalletBalance", is(475.00)))
+                .andExpect(jsonPath("$.remainingWalletBalance", is(500.00)))
                 .andExpect(jsonPath("$.status", is("assigned")));
 
-        Driver updatedDriver = driverRepository.findById(testDriver.getId()).orElseThrow();
-        assertEquals(475.00, updatedDriver.getWalletBalance());
+        Driver driverAfterAssign = driverRepository.findById(testDriver.getId()).orElseThrow();
+        // Wallet balance remains 500.00 on assignment
+        assertEquals(500.00, driverAfterAssign.getWalletBalance());
 
         Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
         assertEquals("assigned", updatedOrder.getStatus());
         assertEquals(String.valueOf(testDriver.getId()), updatedOrder.getDriverId());
+
+        // 2. Complete Order - Deduct 5% Commission (500 * 0.05 = 25.00)
+        driverWalletService.deductCommissionOnCompletion(String.valueOf(testDriver.getId()), order.getBookingId(), 500.00);
+
+        Driver driverAfterCompletion = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals(475.00, driverAfterCompletion.getWalletBalance());
+
+        // Verify transaction logged
+        List<com.anushaporter.backend.model.WalletTransaction> txs = walletTransactionRepository.findAll();
+        com.anushaporter.backend.model.WalletTransaction commTx = txs.stream()
+                .filter(t -> "COMMISSION_DEDUCTION".equals(t.getTransactionType()))
+                .findFirst().orElseThrow();
+        assertEquals(-25.00, commTx.getAmount());
+        assertEquals(500.00, commTx.getBalanceBefore());
+        assertEquals(475.00, commTx.getBalanceAfter());
+        assertEquals("5% Platform Commission Cut on Ride Completion", commTx.getDescription());
     }
 
     @Test

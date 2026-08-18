@@ -260,48 +260,22 @@ public class DriverWalletService {
     }
 
     /**
-     * Assigns order to driver and deducts 5% commission from driver's wallet.
+     * Assigns order to driver after verifying active wallet balance (wallet_balance > 0.00).
+     * DO NOT deduct wallet balance or create wallet_transactions here.
      */
     @Transactional
-    public Map<String, Object> assignOrderWithCommission(Order order, Driver driver, Double commissionRate) {
-        double rate = commissionRate != null ? commissionRate : (getCommissionPercentage() / 100.0);
-        double orderFare = order.getAmount() != null ? order.getAmount() : 500.0;
-        double commission = Math.round(orderFare * rate * 100.0) / 100.0;
-
-        double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+    public Map<String, Object> assignOrder(Order order, Driver driver) {
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        double walletBalance = driver.getWalletBalance() != null && driver.getWalletBalance() > 0
+                ? driver.getWalletBalance()
+                : (wallet.getAvailableBalance() != null ? wallet.getAvailableBalance() : 0.0);
 
         // Check if wallet_balance <= 0
         if (walletBalance <= 0) {
             throw new IllegalStateException("Driver wallet balance is ₹0. Please recharge to accept orders.");
         }
 
-        double newBalance = Math.round((walletBalance - commission) * 100.0) / 100.0;
-        driver.setWalletBalance(newBalance);
-        driverRepository.save(driver);
-
-        // Sync DriverWallet
-        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
-        wallet.setAvailableBalance(newBalance);
-        wallet.setPlatformCommission(wallet.getPlatformCommission() + commission);
-        driverWalletRepository.save(wallet);
-
         String orderIdStr = order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId());
-        String txId = "TXN_W_" + System.currentTimeMillis();
-
-        // Log in wallet_transactions with type = 'COMMISSION_DEDUCTION'
-        WalletTransaction commTx = new WalletTransaction();
-        commTx.setId(txId);
-        commTx.setDriverId(String.valueOf(driver.getId()));
-        commTx.setOrderId(orderIdStr);
-        commTx.setTransactionType("COMMISSION_DEDUCTION");
-        commTx.setGrossAmount(orderFare);
-        commTx.setCommissionAmount(commission);
-        commTx.setAmount(-commission);
-        commTx.setBalanceBefore(walletBalance);
-        commTx.setBalanceAfter(newBalance);
-        commTx.setStatus("SUCCESS");
-        commTx.setDescription("Ride Commission Deduction (" + (rate * 100) + "%) - Order #" + orderIdStr);
-        walletTransactionRepository.save(commTx);
 
         // Update Order
         order.setDriverId(String.valueOf(driver.getId()));
@@ -316,86 +290,93 @@ public class DriverWalletService {
         response.put("success", true);
         response.put("orderId", orderIdStr);
         response.put("driverId", "DRV-" + driver.getId());
-        response.put("orderFare", orderFare);
-        response.put("commissionDeducted", commission);
-        response.put("remainingWalletBalance", newBalance);
+        response.put("orderFare", order.getAmount() != null ? order.getAmount() : 0.0);
         response.put("status", "assigned");
+        response.put("walletBalance", walletBalance);
+        response.put("remainingWalletBalance", walletBalance);
+        response.put("message", "Driver assigned successfully");
         return response;
     }
 
     /**
-     * Processes an order earning, deducting the platform commission and updating wallet metrics.
+     * Legacy signature forwarding to assignOrder.
      */
     @Transactional
-    public void processOrderEarning(String driverId, String orderId, double grossAmount) {
-        if (grossAmount <= 0) return;
+    public Map<String, Object> assignOrderWithCommission(Order order, Driver driver, Double commissionRate) {
+        return assignOrder(order, driver);
+    }
 
-        DriverWallet wallet = getWallet(driverId);
-        double commissionRate = getCommissionPercentage() / 100.0;
-        double platformCommission = Math.round(grossAmount * commissionRate * 100.0) / 100.0;
-        double netAmount = grossAmount - platformCommission;
-
-        double balanceBefore = wallet.getAvailableBalance();
-        double balanceAfter = balanceBefore + netAmount;
-
-        // Update Wallet
-        wallet.setAvailableBalance(balanceAfter);
-        wallet.setTotalEarned(wallet.getTotalEarned() + grossAmount);
-        wallet.setPlatformCommission(wallet.getPlatformCommission() + platformCommission);
-        driverWalletRepository.save(wallet);
-
-        // Sync Driver entity
-        Driver driver = findDriverEntity(driverId);
-        if (driver != null) {
-            driver.setWalletBalance(balanceAfter);
-            driverRepository.save(driver);
+    /**
+     * Deducts 5% Commission Cut on Order Completion / Confirm Payment:
+     * 1. Calculate 5% Commission Cut: commission = order.total_amount * 0.05
+     * 2. Deduct 5% from Driver's Wallet: wallet_balance = GREATEST(0.00, wallet_balance - commission)
+     * 3. Log the Transaction in wallet_transactions with type = 'COMMISSION_DEDUCTION'
+     */
+    @Transactional
+    public WalletTransaction deductCommissionOnCompletion(String driverIdStr, String orderId, double totalAmount) {
+        Driver driver = findDriverEntity(driverIdStr);
+        if (driver == null || totalAmount <= 0) {
+            return null;
         }
 
-        // Record Transaction: Gross Earning
-        String earnTxId = "TXN_W_" + System.currentTimeMillis();
-        WalletTransaction earningTx = new WalletTransaction();
-        earningTx.setId(earnTxId);
-        earningTx.setDriverId(driver != null ? String.valueOf(driver.getId()) : driverId);
-        earningTx.setOrderId(orderId);
-        earningTx.setTransactionType("ORDER_EARNING");
-        earningTx.setGrossAmount(grossAmount);
-        earningTx.setCommissionAmount(0.0);
-        earningTx.setAmount(grossAmount);
-        earningTx.setBalanceBefore(balanceBefore);
-        earningTx.setBalanceAfter(balanceBefore + grossAmount); // Temporary intermediate balance
-        earningTx.setStatus("SUCCESS");
-        earningTx.setDescription("Gross earnings for order " + orderId);
-        walletTransactionRepository.save(earningTx);
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        double commissionRate = getCommissionPercentage() / 100.0;
+        if (commissionRate <= 0) commissionRate = 0.05;
+        double commission = Math.round(totalAmount * commissionRate * 100.0) / 100.0;
 
-        // Record Transaction: Commission Deduction
-        String commTxId = "TXN_W_" + (System.currentTimeMillis() + 1);
-        WalletTransaction commissionTx = new WalletTransaction();
-        commissionTx.setId(commTxId);
-        commissionTx.setDriverId(driver != null ? String.valueOf(driver.getId()) : driverId);
-        commissionTx.setOrderId(orderId);
-        commissionTx.setTransactionType("COMMISSION");
-        commissionTx.setGrossAmount(grossAmount);
-        commissionTx.setCommissionAmount(platformCommission);
-        commissionTx.setAmount(-platformCommission);
-        commissionTx.setBalanceBefore(balanceBefore + grossAmount);
-        commissionTx.setBalanceAfter(balanceAfter);
-        commissionTx.setStatus("SUCCESS");
-        commissionTx.setDescription(String.format("Ride Commission (%.1f%%) - Order #%s", (commissionRate * 100), orderId));
-        walletTransactionRepository.save(commissionTx);
+        double balanceBefore = driver.getWalletBalance() != null && driver.getWalletBalance() > 0
+                ? driver.getWalletBalance()
+                : (wallet.getAvailableBalance() != null ? wallet.getAvailableBalance() : 0.0);
+        double balanceAfter = Math.max(0.00, Math.round((balanceBefore - commission) * 100.0) / 100.0);
+
+        driver.setWalletBalance(balanceAfter);
+        driverRepository.save(driver);
+
+        // Sync DriverWallet
+        wallet.setAvailableBalance(balanceAfter);
+        wallet.setPlatformCommission((wallet.getPlatformCommission() != null ? wallet.getPlatformCommission() : 0.0) + commission);
+        wallet.setTotalEarned((wallet.getTotalEarned() != null ? wallet.getTotalEarned() : 0.0) + totalAmount);
+        driverWalletRepository.save(wallet);
+
+        String txId = "TXN_W_" + System.currentTimeMillis();
+
+        // Log in wallet_transactions with type = 'COMMISSION_DEDUCTION'
+        WalletTransaction commTx = new WalletTransaction();
+        commTx.setId(txId);
+        commTx.setDriverId(String.valueOf(driver.getId()));
+        commTx.setOrderId(orderId);
+        commTx.setTransactionType("COMMISSION_DEDUCTION");
+        commTx.setGrossAmount(totalAmount);
+        commTx.setCommissionAmount(commission);
+        commTx.setAmount(-commission);
+        commTx.setBalanceBefore(balanceBefore);
+        commTx.setBalanceAfter(balanceAfter);
+        commTx.setStatus("SUCCESS");
+        commTx.setDescription("5% Platform Commission Cut on Ride Completion");
+        commTx.setCreatedAt(LocalDateTime.now());
+        WalletTransaction savedTx = walletTransactionRepository.save(commTx);
 
         // Check if Driver Balance < Minimum Required and Auto-Offline Trigger
         Map<String, Object> settings = getAdminWalletSettings();
         boolean autoOffline = Boolean.TRUE.equals(settings.get("autoOfflineWhenBalanceInsufficient"));
         double minRequired = getMinRequiredBalance();
 
-        if (autoOffline && wallet.getAvailableBalance() < minRequired) {
+        if (autoOffline && balanceAfter < minRequired) {
             try {
-                if (driver != null) {
-                    driver.setStatus("offline");
-                    driverRepository.save(driver);
-                }
+                driver.setStatus("offline");
+                driverRepository.save(driver);
             } catch (Exception ignored) {}
         }
+
+        return savedTx;
+    }
+
+    /**
+     * Processes order commission deduction on completion.
+     */
+    @Transactional
+    public void processOrderEarning(String driverId, String orderId, double grossAmount) {
+        deductCommissionOnCompletion(driverId, orderId, grossAmount);
     }
 
     /**

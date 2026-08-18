@@ -28,6 +28,9 @@ public class BookingController {
     @Autowired(required = false)
     private com.anushaporter.backend.service.PushNotificationService pushNotificationService;
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
+
     /**
      * Create a new booking.
      * POST /api/bookings
@@ -572,6 +575,63 @@ public class BookingController {
             response.put("success", false);
             response.put("message", "Failed to reschedule booking: " + e.getMessage());
             return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Assign driver to booking.
+     * POST /api/bookings/{bookingId}/assign
+     */
+    @PostMapping("/api/bookings/{bookingId}/assign")
+    public ResponseEntity<?> assignBookingDriver(
+            @PathVariable String bookingId,
+            @RequestBody(required = false) Map<String, Object> payload) {
+        Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = orderRepository.findById(Long.valueOf(bookingId));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Booking not found"));
+        }
+
+        Order order = orderOpt.get();
+        String driverIdStr = payload != null && payload.get("driverId") != null ? String.valueOf(payload.get("driverId")) : null;
+
+        if (driverIdStr != null && !driverIdStr.isBlank()) {
+            com.anushaporter.backend.model.Driver driver = driverWalletService.findDriverEntity(driverIdStr);
+            if (driver == null) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Driver not found: " + driverIdStr));
+            }
+
+            double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+            if (walletBalance <= 0.0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "error", "INSUFFICIENT_WALLET_BALANCE",
+                        "message", "Driver wallet balance is ₹0. Please recharge to accept orders."
+                ));
+            }
+
+            Map<String, Object> result = driverWalletService.assignOrder(order, driver);
+            if (pushNotificationService != null) {
+                pushNotificationService.notifyOrderStatus(order, order.getStatus());
+            }
+            return ResponseEntity.ok(result);
+        } else if (payload != null) {
+            order.setDriverName(payload.get("driverName") != null ? String.valueOf(payload.get("driverName")) : null);
+            order.setDriverPhone(payload.get("driverPhone") != null ? String.valueOf(payload.get("driverPhone")) : null);
+            order.setDriverVehicleNumber(payload.get("driverVehicleNumber") != null ? String.valueOf(payload.get("driverVehicleNumber")) : null);
+            order.setStatus("assigned");
+            Order savedOrder = orderRepository.save(order);
+            if (pushNotificationService != null) {
+                pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
+            }
+            return ResponseEntity.ok(Map.of("success", true, "order", savedOrder));
+        } else {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "driverId is required"));
         }
     }
 

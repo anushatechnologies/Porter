@@ -42,3 +42,4 @@ frontend/
 
 ### Secrets ###
 firebase-service-account.json
+*.log
