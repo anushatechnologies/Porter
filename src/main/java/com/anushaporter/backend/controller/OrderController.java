@@ -246,8 +246,12 @@ public class OrderController {
             @RequestBody(required = false) Map<String, String> payload,
             HttpServletRequest request) {
 
-        String inputOtp = payload != null ? payload.get("otp") : null;
-        if (inputOtp == null && payload != null) inputOtp = payload.get("deliveryOtp");
+        String inputOtp = null;
+        if (payload != null) {
+            inputOtp = payload.get("enteredOtp");
+            if (inputOtp == null) inputOtp = payload.get("otp");
+            if (inputOtp == null) inputOtp = payload.get("deliveryOtp");
+        }
 
         Driver driver = driverAuthService.resolveAuthenticatedDriver(request);
         Map<String, Object> result = deliveryCompletionService.verifyOtp(id, inputOtp, driver);
@@ -258,29 +262,37 @@ public class OrderController {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Step 2 — POST /api/orders/:orderId/complete
+    // Step 2 — POST /api/orders/:orderId/complete, /api/orders/:orderId/confirm-payment
     //
     // Confirms payment and finalises the delivery.  Pre-requisite: order must
     // be in OTP_VERIFIED or PAYMENT_CONFIRMATION_PENDING status.
     // Idempotency-Key header prevents duplicate completions.
     // ──────────────────────────────────────────────────────────────────────────
-    @RequestMapping(value = "/{id}/complete", method = {RequestMethod.POST, RequestMethod.PUT})
+    @RequestMapping(value = {"/{id}/complete", "/{id}/confirm-payment"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<?> completeDelivery(
             @PathVariable String id,
             @RequestBody(required = false) Map<String, Object> payload,
             HttpServletRequest request) {
 
         String idempotencyKey = request.getHeader("Idempotency-Key");
+        if (idempotencyKey == null) idempotencyKey = request.getHeader("idempotency-key");
+        if (idempotencyKey == null) idempotencyKey = request.getHeader("X-Idempotency-Key");
 
         String paymentMethod = null;
         Double amount        = null;
         if (payload != null) {
-            paymentMethod = (String) payload.get("paymentMethod");
+            paymentMethod = payload.get("paymentMethod") != null ? String.valueOf(payload.get("paymentMethod"))
+                    : payload.get("method") != null ? String.valueOf(payload.get("method")) : null;
+
             Object rawAmount = payload.get("amount");
             if (rawAmount instanceof Number) {
                 amount = ((Number) rawAmount).doubleValue();
-            } else if (rawAmount instanceof String) {
-                try { amount = Double.parseDouble((String) rawAmount); } catch (NumberFormatException ignored) {}
+            } else if (rawAmount != null) {
+                try { amount = Double.parseDouble(rawAmount.toString()); } catch (NumberFormatException ignored) {}
+            }
+
+            if (idempotencyKey == null && payload.get("idempotencyKey") != null) {
+                idempotencyKey = String.valueOf(payload.get("idempotencyKey"));
             }
         }
 

@@ -57,6 +57,30 @@ public class CustomerServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+
+        serviceRepository.deleteAll();
+        categoryRepository.deleteAll();
+
+        ServiceCategory cat = new ServiceCategory();
+        cat.setName("Porter Trucks & Fleet");
+        cat.setSlug("porter-trucks-fleet");
+        cat.setDescription("Mini trucks, tempos");
+        cat.setIsActive(true);
+        cat.setDisplayOrder(1);
+        cat = categoryRepository.save(cat);
+
+        PorterService svc = new PorterService();
+        svc.setServiceId("tata-ace");
+        svc.setName("Tata Ace");
+        svc.setCategory("vehicle");
+        svc.setCategoryId(String.valueOf(cat.getId()));
+        svc.setCategoryName(cat.getName());
+        svc.setBaseFare(150.0);
+        svc.setPerKmRate(25.0);
+        svc.setCustomerAppVisible(true);
+        svc.setIsActive(true);
+        svc.setDisplayOrder(1);
+        serviceRepository.save(svc);
     }
 
     @Test

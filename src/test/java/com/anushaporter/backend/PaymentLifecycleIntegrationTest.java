@@ -66,6 +66,12 @@ public class PaymentLifecycleIntegrationTest {
     private PaymentOrderRepository paymentOrderRepository;
 
     @Autowired
+    private PaymentWebhookEventRepository webhookEventRepository;
+
+    @Autowired
+    private PaymentRefundRepository refundRepository;
+
+    @Autowired
     private LedgerEntryRepository ledgerRepository;
 
     @Autowired
@@ -96,6 +102,8 @@ public class PaymentLifecycleIntegrationTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
 
         // Clear previous state for deterministic test run
+        refundRepository.deleteAll();
+        webhookEventRepository.deleteAll();
         payoutRecordRepository.deleteAll();
         payoutAccountRepository.deleteAll();
         driverEarningsRepository.deleteAll();

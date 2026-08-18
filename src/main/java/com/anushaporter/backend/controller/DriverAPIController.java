@@ -53,6 +53,9 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.DriverAuthService driverAuthService;
 
+    @Autowired
+    private com.anushaporter.backend.service.DeliveryCompletionService deliveryCompletionService;
+
     public Driver getAuthenticatedDriver(HttpServletRequest request) {
         return driverAuthService.resolveAuthenticatedDriver(request);
     }
@@ -277,7 +280,10 @@ public class DriverAPIController {
     // On success: status → payment_confirmation_pending, otpVerified = true.
     // The order is NOT yet marked as delivered/completed.
     // ─────────────────────────────────────────────────────────────────────────
-    @PostMapping({"/driver/orders/{bookingId}/verify-otp", "/drivers/orders/{bookingId}/verify-otp"})
+    @PostMapping({
+            "/driver/orders/{bookingId}/verify-otp",
+            "/drivers/orders/{bookingId}/verify-otp"
+    })
     public ResponseEntity<?> verifyDeliveryOtp(
             HttpServletRequest request,
             @PathVariable String bookingId,
@@ -288,57 +294,32 @@ public class DriverAPIController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized: driver profile not found"));
         }
 
-        Order order = orderRepository.findByBookingId(bookingId).orElse(null);
-        if (order == null) {
-            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
+        String inputOtp = null;
+        if (payload != null) {
+            inputOtp = payload.get("enteredOtp");
+            if (inputOtp == null) inputOtp = payload.get("otp");
+            if (inputOtp == null) inputOtp = payload.get("deliveryOtp");
         }
 
-        // Already verified — idempotent response
-        if (Boolean.TRUE.equals(order.getOtpVerified())) {
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "status", order.getStatus(),
-                    "otpVerified", true,
-                    "message", "OTP already verified. Awaiting driver payment confirmation."
-            ));
-        }
-
-        String inputOtp = payload != null ? payload.get("otp") : null;
-        if (inputOtp == null && payload != null) inputOtp = payload.get("deliveryOtp");
-
-        String validOtp = order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813";
-
-        if (inputOtp == null || !inputOtp.trim().equals(validOtp)) {
-            return ResponseEntity.status(400).body(Map.of(
-                    "success", false,
-                    "message", "Invalid delivery OTP. Please ask the customer for the correct OTP."
-            ));
-        }
-
-        // ── Transition: OTP_VERIFIED → PAYMENT_CONFIRMATION_PENDING ─────────
-        // ⚠️  DO NOT set status to delivered/completed here.
-        order.setOtpVerified(true);
-        order.setStatus("payment_confirmation_pending");
-        orderRepository.save(order);
-        pushNotificationService.notifyOrderStatus(order, order.getStatus());
-
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "status", "payment_confirmation_pending",
-                "otpVerified", true,
-                "message", "OTP verified. Awaiting driver payment confirmation."
-        ));
+        Map<String, Object> result = deliveryCompletionService.verifyOtp(bookingId, inputOtp, driver);
+        int httpStatus = result.containsKey("httpStatus") ? (int) result.get("httpStatus") : 200;
+        result.remove("httpStatus");
+        return ResponseEntity.status(httpStatus).body(result);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 2 — POST /api/driver/orders/:bookingId/confirm-payment
     //
-    // Driver confirms they collected payment (Cash / UPI / Online).
+    // Driver confirms collected payment (Cash / Online).
     // Pre-requisite: otpVerified must be true (Step 1 must have been done).
-    // On success: status → delivered, paymentStatus → PAID,
-    //             paymentConfirmed = true, completedAt = NOW().
+    // Validates amount, checks idempotency, calculates 5% commission, credits wallet.
     // ─────────────────────────────────────────────────────────────────────────
-    @PostMapping({"/driver/orders/{bookingId}/confirm-payment", "/drivers/orders/{bookingId}/confirm-payment"})
+    @PostMapping({
+            "/driver/orders/{bookingId}/confirm-payment",
+            "/drivers/orders/{bookingId}/confirm-payment",
+            "/driver/orders/{bookingId}/complete",
+            "/drivers/orders/{bookingId}/complete"
+    })
     public ResponseEntity<?> confirmPayment(
             HttpServletRequest request,
             @PathVariable String bookingId,
@@ -349,77 +330,76 @@ public class DriverAPIController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized: driver profile not found"));
         }
 
-        Order order = orderRepository.findByBookingId(bookingId).orElse(null);
-        if (order == null) {
-            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
-        }
+        String idempotencyKey = request.getHeader("Idempotency-Key");
+        if (idempotencyKey == null) idempotencyKey = request.getHeader("idempotency-key");
+        if (idempotencyKey == null) idempotencyKey = request.getHeader("X-Idempotency-Key");
 
-        // ── Idempotency: already confirmed ───────────────────────────────────
-        if (Boolean.TRUE.equals(order.getPaymentConfirmed()) ||
-                "delivered".equalsIgnoreCase(order.getStatus()) ||
-                "completed".equalsIgnoreCase(order.getStatus())) {
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "status", "delivered",
-                    "paymentConfirmed", true,
-                    "message", "Payment confirmed. Delivery completed."
-            ));
-        }
-
-        // ── Pre-requisite: OTP must have been verified (Step 1) ──────────────
-        if (!Boolean.TRUE.equals(order.getOtpVerified())) {
-            return ResponseEntity.status(400).body(Map.of(
-                    "success", false,
-                    "message", "Cannot confirm payment: delivery OTP has not been verified yet. " +
-                               "Complete Step 1 (verify-otp) first."
-            ));
-        }
-
-        // ── Parse payment details ────────────────────────────────────────────
-        String method = null;
+        String paymentMethod = null;
         Double amount = null;
         if (payload != null) {
-            method = payload.get("method") != null ? String.valueOf(payload.get("method"))
-                   : payload.get("paymentMethod") != null ? String.valueOf(payload.get("paymentMethod")) : null;
+            paymentMethod = payload.get("paymentMethod") != null ? String.valueOf(payload.get("paymentMethod"))
+                    : payload.get("method") != null ? String.valueOf(payload.get("method")) : null;
+
             Object rawAmt = payload.get("amount");
-            if (rawAmt instanceof Number) amount = ((Number) rawAmt).doubleValue();
-            else if (rawAmt != null) {
+            if (rawAmt instanceof Number) {
+                amount = ((Number) rawAmt).doubleValue();
+            } else if (rawAmt != null) {
                 try { amount = Double.parseDouble(rawAmt.toString()); } catch (NumberFormatException ignored) {}
             }
-        }
 
-        // ── Final transition: PAYMENT_CONFIRMATION_PENDING → delivered ───────
-        order.setStatus("delivered");
-        order.setPaymentConfirmed(true);
-        order.setPaymentStatus("PAID");
-        order.setCompletedAt(java.time.LocalDateTime.now());
-        order.setCompletedByDriverId(driver.getId() != null ? driver.getId().toString() : null);
-        if (method != null) order.setPaymentMethod(method);
-        if (amount != null && order.getAmount() == null) order.setAmount(amount);
-        orderRepository.save(order);
-        pushNotificationService.notifyOrderStatus(order, order.getStatus());
-
-        // Call wallet service to process commission (5%) and net earnings (95%)
-        if (order.getAmount() != null && driver.getId() != null) {
-            try {
-                // Ensure autowiring is available via ApplicationContext if not directly injected
-                com.anushaporter.backend.service.DriverWalletService walletService = 
-                    org.springframework.web.context.support.WebApplicationContextUtils
-                    .getRequiredWebApplicationContext(request.getServletContext())
-                    .getBean(com.anushaporter.backend.service.DriverWalletService.class);
-                    
-                walletService.processOrderEarning(String.valueOf(driver.getId()), order.getBookingId(), order.getAmount());
-            } catch (Exception e) {
-                System.err.println("[Wallet] Error processing earnings for order " + order.getBookingId() + ": " + e.getMessage());
+            if (idempotencyKey == null && payload.get("idempotencyKey") != null) {
+                idempotencyKey = String.valueOf(payload.get("idempotencyKey"));
             }
         }
 
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "status", "delivered",
-                "paymentConfirmed", true,
-                "message", "Payment confirmed. Delivery completed."
-        ));
+        Map<String, Object> result = deliveryCompletionService.confirmPaymentAndComplete(
+                bookingId, paymentMethod, amount, idempotencyKey, driver
+        );
+
+        int httpStatus = result.containsKey("httpStatus") ? (int) result.get("httpStatus") : 200;
+        result.remove("httpStatus");
+        return ResponseEntity.status(httpStatus).body(result);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Alternative routes with bookingId / orderId in Request Body
+    // ─────────────────────────────────────────────────────────────────────────
+    @PostMapping({
+            "/verify-otp",
+            "/driver/verify-otp",
+            "/orders/verify-otp"
+    })
+    public ResponseEntity<?> verifyDeliveryOtpFromBody(
+            HttpServletRequest request,
+            @RequestBody(required = false) Map<String, String> payload) {
+        if (payload == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Request body is missing"));
+        }
+        String bookingId = payload.get("bookingId") != null ? payload.get("bookingId")
+                : payload.get("orderId");
+        if (bookingId == null || bookingId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "bookingId or orderId is required"));
+        }
+        return verifyDeliveryOtp(request, bookingId, payload);
+    }
+
+    @PostMapping({
+            "/confirm-payment",
+            "/driver/confirm-payment",
+            "/orders/confirm-payment"
+    })
+    public ResponseEntity<?> confirmPaymentFromBody(
+            HttpServletRequest request,
+            @RequestBody(required = false) Map<String, Object> payload) {
+        if (payload == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Request body is missing"));
+        }
+        String bookingId = payload.get("bookingId") != null ? String.valueOf(payload.get("bookingId"))
+                : payload.get("orderId") != null ? String.valueOf(payload.get("orderId")) : null;
+        if (bookingId == null || bookingId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "bookingId or orderId is required"));
+        }
+        return confirmPayment(request, bookingId, payload);
     }
 
     // A. Upload Documents

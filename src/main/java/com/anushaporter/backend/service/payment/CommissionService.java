@@ -21,10 +21,10 @@ public class CommissionService {
     public void seedDefaultCommissionRules() {
         if (ruleRepository.count() == 0) {
             CommissionRule defaultRule = new CommissionRule();
-            defaultRule.setRuleId("RULE_DEFAULT_10");
+            defaultRule.setRuleId("RULE_DEFAULT_5");
             defaultRule.setServiceCategory("ALL");
             defaultRule.setCommissionType("PERCENTAGE");
-            defaultRule.setPercentageRate(10.0); // 10% platform commission
+            defaultRule.setPercentageRate(5.0); // 5% platform commission
             defaultRule.setFixedAmount(0.0);
             defaultRule.setMinCommission(5.0);
             defaultRule.setMaxCommission(1500.0);
