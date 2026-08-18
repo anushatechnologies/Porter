@@ -104,33 +104,57 @@ public class OrderController {
         return repository.save(entity);
     }
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
+
     @PostMapping("/{id}/assign")
-    public ResponseEntity<Map<String, Object>> assignDriver(@PathVariable Long id, @RequestBody Map<String, String> payload) {
-        return repository.findById(id).map(order -> {
-            String driverIdStr = payload.get("driverId");
-            if (driverIdStr != null) {
-                try {
-                    Long driverId = Long.valueOf(driverIdStr);
-                    driverRepository.findById(driverId).ifPresent(driver -> {
-                        order.setDriverId(driverId.toString());
-                        order.setDriverEmail(driver.getEmail());
-                        order.setDriverName(driver.getName());
-                        order.setDriverPhone(driver.getPhone());
-                        order.setDriverVehicleNumber(driver.getVehicleNumber());
-                    });
-                } catch (NumberFormatException e) {
-                    // Ignore or handle
-                }
-            } else {
-                order.setDriverName(payload.get("driverName"));
-                order.setDriverPhone(payload.get("driverPhone"));
-                order.setDriverVehicleNumber(payload.get("driverVehicleNumber"));
+    public ResponseEntity<?> assignDriver(@PathVariable String id, @RequestBody Map<String, Object> payload) {
+        Optional<Order> orderOpt = repository.findByBookingId(id);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = repository.findById(Long.valueOf(id));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
+        }
+
+        Order order = orderOpt.get();
+        String driverIdStr = payload.get("driverId") != null ? String.valueOf(payload.get("driverId")) : null;
+
+        if (driverIdStr != null && !driverIdStr.isBlank()) {
+            Driver driver = driverWalletService.findDriverEntity(driverIdStr);
+            if (driver == null) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Driver not found: " + driverIdStr));
             }
+
+            Double commissionRate = payload.get("commissionRate") != null
+                    ? Double.parseDouble(String.valueOf(payload.get("commissionRate")))
+                    : null;
+
+            double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+            if (walletBalance <= 0.0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "error", "INSUFFICIENT_WALLET_BALANCE",
+                        "message", "Driver wallet balance is ₹0. Please recharge to accept orders."
+                ));
+            }
+
+            Map<String, Object> result = driverWalletService.assignOrderWithCommission(order, driver, commissionRate);
+            pushNotificationService.notifyOrderStatus(order, order.getStatus());
+            return ResponseEntity.ok(result);
+        } else {
+            // Legacy / direct name assign fallback
+            order.setDriverName(payload.get("driverName") != null ? String.valueOf(payload.get("driverName")) : null);
+            order.setDriverPhone(payload.get("driverPhone") != null ? String.valueOf(payload.get("driverPhone")) : null);
+            order.setDriverVehicleNumber(payload.get("driverVehicleNumber") != null ? String.valueOf(payload.get("driverVehicleNumber")) : null);
             order.setStatus("assigned");
             Order savedOrder = repository.save(order);
             pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
             return ResponseEntity.ok(Map.of("success", true, "order", savedOrder));
-        }).orElse(ResponseEntity.notFound().build());
+        }
     }
 
     @RequestMapping(value = "/{id}/status", method = {RequestMethod.PUT, RequestMethod.POST})

@@ -110,15 +110,43 @@ public class DriverController {
     @Autowired
     private com.anushaporter.backend.service.StorageService storageService;
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
+
+    @Autowired
+    private com.anushaporter.backend.repository.WalletTransactionRepository walletTransactionRepository;
+
     /**
      * GET /api/drivers
      * Returns formatted list of drivers for Admin Drivers roster & Live Driver GPS tracking map.
+     * Supports filtering by status and minimum wallet balance.
      */
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getAll() {
+    public ResponseEntity<List<Map<String, Object>>> getAll(
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "minWallet", required = false) Double minWallet,
+            @RequestParam(value = "minBalance", required = false) Double minBalance
+    ) {
         List<Driver> drivers = repository.findAll();
 
-        List<Map<String, Object>> items = drivers.stream().map(d -> {
+        Double filterMinWallet = minWallet != null ? minWallet : minBalance;
+
+        List<Map<String, Object>> items = drivers.stream()
+                .filter(d -> {
+                    if (status != null && !status.isBlank()) {
+                        if (d.getStatus() == null || !d.getStatus().equalsIgnoreCase(status.trim())) {
+                            return false;
+                        }
+                    }
+                    if (filterMinWallet != null) {
+                        double bal = d.getWalletBalance() != null ? d.getWalletBalance() : 0.0;
+                        if (bal < filterMinWallet) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .map(d -> {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", d.getId() != null ? "DRV-" + d.getId() : "DRV-100");
             map.put("driverId", d.getId() != null ? d.getId().toString() : "100");
@@ -130,6 +158,8 @@ public class DriverController {
             map.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("rating", d.getRating() != null ? d.getRating() : "4.8");
+            map.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
+            map.put("wallet_balance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
             map.put("licenseUri", storageService.getPresignedOrSanitizedUrl(d.getLicenseUri()));
             map.put("rcUri", storageService.getPresignedOrSanitizedUrl(d.getRcUri()));
             map.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(d.getAadhaarUri()));
@@ -312,5 +342,65 @@ public class DriverController {
             return driverWalletController.getWalletTransactions(request);
         }
         return ResponseEntity.status(500).body(Map.of("success", false, "message", "Wallet service unavailable"));
+    }
+
+    /**
+     * POST /api/drivers/{driverId}/recharge
+     * Driver or Admin wallet top-up.
+     */
+    @PostMapping({"/{driverId}/recharge", "/recharge/{driverId}"})
+    public ResponseEntity<?> rechargeDriver(
+            @PathVariable String driverId,
+            @RequestBody Map<String, Object> payload
+    ) {
+        try {
+            Double amount = payload.get("amount") != null ? Double.parseDouble(String.valueOf(payload.get("amount"))) : 0.0;
+            String notes = (String) payload.getOrDefault("notes", payload.get("description"));
+            String paymentReference = (String) payload.getOrDefault("paymentReference", payload.get("payment_reference"));
+
+            Map<String, Object> res = driverWalletService.rechargeDriverWalletDirect(driverId, amount, paymentReference, notes);
+            return ResponseEntity.ok(res);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("success", false, "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * GET /api/drivers/{driverId}/wallet
+     * Fetches driver's current wallet balance and transaction ledger.
+     */
+    @GetMapping({"/{driverId}/wallet", "/wallet/{driverId}"})
+    public ResponseEntity<?> getDriverWalletById(@PathVariable String driverId) {
+        Driver driver = driverWalletService.findDriverEntity(driverId);
+        if (driver == null) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Driver not found"));
+        }
+
+        double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+        boolean isEligible = walletBalance > 0.0;
+
+        List<com.anushaporter.backend.model.WalletTransaction> txs =
+                walletTransactionRepository.findByDriverIdOrderByCreatedAtDesc(String.valueOf(driver.getId()));
+
+        List<Map<String, Object>> recentTx = txs.stream().map(tx -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", tx.getId());
+            m.put("type", tx.getTransactionType());
+            m.put("amount", tx.getAmount());
+            m.put("orderId", tx.getOrderId());
+            m.put("balanceAfter", tx.getBalanceAfter());
+            m.put("createdAt", tx.getCreatedAt());
+            return m;
+        }).collect(Collectors.toList());
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("driverId", "DRV-" + driver.getId());
+        response.put("walletBalance", walletBalance);
+        response.put("isEligibleForOrders", isEligible);
+        response.put("recentTransactions", recentTx);
+        return ResponseEntity.ok(response);
     }
 }

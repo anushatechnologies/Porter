@@ -131,6 +131,7 @@ public class DriverWalletRechargeIntegrationTest {
         testDriver.setKyc("verified");
         testDriver.setAccountNumber("1234567890");
         testDriver.setBankName("AU Small Finance Bank");
+        testDriver.setWalletBalance(500.00);
         testDriver = driverRepository.save(testDriver);
 
         // Seed Wallet with initial balance = 500.00
@@ -272,5 +273,131 @@ public class DriverWalletRechargeIntegrationTest {
         assertFalse(driverWalletService.isDriverEligibleForRides(String.valueOf(testDriver.getId())));
         assertEquals("Insufficient balance. Recharge wallet to accept rides.",
                 driverWalletService.getEligibilityReason(String.valueOf(testDriver.getId())));
+    }
+
+    @Test
+    void testDriverDirectRechargeEndpoint() throws Exception {
+        mockMvc.perform(post("/api/drivers/" + testDriver.getId() + "/recharge")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\n" +
+                        "  \"amount\": 500.00,\n" +
+                        "  \"notes\": \"Admin Wallet Top-up / UPI Payment Received\",\n" +
+                        "  \"paymentReference\": \"PAY_REF_987654\"\n" +
+                        "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.driverId", is("DRV-" + testDriver.getId())))
+                .andExpect(jsonPath("$.previousBalance", is(500.00)))
+                .andExpect(jsonPath("$.rechargedAmount", is(500.00)))
+                .andExpect(jsonPath("$.newWalletBalance", is(1000.00)))
+                .andExpect(jsonPath("$.transactionId", notNullValue()));
+
+        Driver updatedDriver = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals(1000.00, updatedDriver.getWalletBalance());
+    }
+
+    @Test
+    void testAssignOrderWithCommissionDeduction() throws Exception {
+        Order order = new Order();
+        order.setBookingId("BK_12131");
+        order.setAmount(500.00);
+        order.setStatus("placed");
+        order = orderRepository.save(order);
+
+        mockMvc.perform(post("/api/orders/" + order.getBookingId() + "/assign")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(String.format("{\n" +
+                        "  \"driverId\": \"%s\",\n" +
+                        "  \"commissionRate\": 0.05\n" +
+                        "}", testDriver.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.orderId", is("BK_12131")))
+                .andExpect(jsonPath("$.driverId", is("DRV-" + testDriver.getId())))
+                .andExpect(jsonPath("$.orderFare", is(500.00)))
+                .andExpect(jsonPath("$.commissionDeducted", is(25.00)))
+                .andExpect(jsonPath("$.remainingWalletBalance", is(475.00)))
+                .andExpect(jsonPath("$.status", is("assigned")));
+
+        Driver updatedDriver = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals(475.00, updatedDriver.getWalletBalance());
+
+        Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
+        assertEquals("assigned", updatedOrder.getStatus());
+        assertEquals(String.valueOf(testDriver.getId()), updatedOrder.getDriverId());
+    }
+
+    @Test
+    void testAssignOrderFailsWhenWalletBalanceZero() throws Exception {
+        // Set driver balance to 0.00
+        testDriver.setWalletBalance(0.00);
+        driverRepository.save(testDriver);
+
+        DriverWallet wallet = driverWalletRepository.findByDriverId(String.valueOf(testDriver.getId())).orElseThrow();
+        wallet.setAvailableBalance(0.00);
+        driverWalletRepository.save(wallet);
+
+        Order order = new Order();
+        order.setBookingId("BK_12132");
+        order.setAmount(500.00);
+        order.setStatus("placed");
+        order = orderRepository.save(order);
+
+        mockMvc.perform(post("/api/orders/" + order.getBookingId() + "/assign")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(String.format("{\n" +
+                        "  \"driverId\": \"%s\",\n" +
+                        "  \"commissionRate\": 0.05\n" +
+                        "}", testDriver.getId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")))
+                .andExpect(jsonPath("$.message", containsString("Driver wallet balance is ₹0")));
+    }
+
+    @Test
+    void testGetDriverWalletById() throws Exception {
+        // Add a recharge transaction
+        driverWalletService.rechargeDriverWalletDirect(String.valueOf(testDriver.getId()), 200.00, "REF_1", "Initial Top-up");
+
+        mockMvc.perform(get("/api/drivers/" + testDriver.getId() + "/wallet")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.driverId", is("DRV-" + testDriver.getId())))
+                .andExpect(jsonPath("$.walletBalance", is(700.00)))
+                .andExpect(jsonPath("$.isEligibleForOrders", is(true)))
+                .andExpect(jsonPath("$.recentTransactions", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.recentTransactions[0].type", is("RECHARGE")));
+    }
+
+    @Test
+    void testGetDriversWithMinWalletFilter() throws Exception {
+        // Driver 1 (testDriver) has 500.00 wallet balance and status online
+        testDriver.setWalletBalance(500.00);
+        testDriver.setStatus("online");
+        driverRepository.save(testDriver);
+
+        // Driver 2 with 0.00 balance
+        Driver d2 = new Driver();
+        d2.setName("Zero Balance Driver");
+        d2.setEmail("zero@driver.com");
+        d2.setPhone("9998887776");
+        d2.setStatus("online");
+        d2.setWalletBalance(0.00);
+        driverRepository.save(d2);
+
+        // GET /api/drivers?status=online&minWallet=0.01
+        mockMvc.perform(get("/api/drivers")
+                .header("Authorization", "Bearer " + adminToken)
+                .param("status", "online")
+                .param("minWallet", "0.01"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].driverId", is(String.valueOf(testDriver.getId()))))
+                .andExpect(jsonPath("$[0].walletBalance", is(500.00)));
     }
 }

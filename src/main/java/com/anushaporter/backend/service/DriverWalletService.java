@@ -3,6 +3,7 @@ package com.anushaporter.backend.service;
 import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.model.DriverWallet;
 import com.anushaporter.backend.model.GlobalSettings;
+import com.anushaporter.backend.model.Order;
 import com.anushaporter.backend.model.WalletTransaction;
 import com.anushaporter.backend.model.WithdrawalRequest;
 import com.anushaporter.backend.repository.DriverRepository;
@@ -127,15 +128,38 @@ public class DriverWalletService {
         return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_COMMISSION_PERCENTAGE;
     }
 
+    @Autowired
+    private com.anushaporter.backend.repository.OrderRepository orderRepository;
+
+    public Driver findDriverEntity(String driverIdStr) {
+        if (driverIdStr == null || driverIdStr.isBlank()) {
+            return null;
+        }
+        try {
+            Long id = Long.parseLong(driverIdStr.replaceAll("\\D+", ""));
+            Optional<Driver> opt = driverRepository.findById(id);
+            if (opt.isPresent()) return opt.get();
+        } catch (Exception ignored) {}
+
+        Optional<Driver> phoneOpt = driverRepository.findByPhone(driverIdStr);
+        if (phoneOpt.isPresent()) return phoneOpt.get();
+
+        return driverRepository.findByEmail(driverIdStr).orElse(null);
+    }
+
     public double getMinRequiredBalance() {
         Object val = getAdminWalletSettings().get("minRequiredBalance");
         return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_MIN_REQUIRED_BALANCE;
     }
 
     public boolean isDriverEligibleForRides(String driverId) {
-        DriverWallet wallet = getWallet(driverId);
+        Driver driver = findDriverEntity(driverId);
         double minRequired = getMinRequiredBalance();
-        return wallet.getAvailableBalance() >= minRequired;
+        if (driver != null && driver.getWalletBalance() != null) {
+            return driver.getWalletBalance() >= minRequired && driver.getWalletBalance() > 0.0;
+        }
+        DriverWallet wallet = getWallet(driverId);
+        return wallet.getAvailableBalance() >= minRequired && wallet.getAvailableBalance() > 0.0;
     }
 
     public String getEligibilityReason(String driverId) {
@@ -158,9 +182,18 @@ public class DriverWalletService {
         wallet.setAvailableBalance(balanceAfter);
         driverWalletRepository.save(wallet);
 
+        // Sync Driver entity
+        Driver driver = findDriverEntity(driverId);
+        if (driver != null) {
+            driver.setWalletBalance(balanceAfter);
+            driverRepository.save(driver);
+        }
+
         // Record Transaction: RECHARGE
+        String txId = "TXN_W_" + System.currentTimeMillis();
         WalletTransaction rechargeTx = new WalletTransaction();
-        rechargeTx.setDriverId(driverId);
+        rechargeTx.setId(txId);
+        rechargeTx.setDriverId(driver != null ? String.valueOf(driver.getId()) : driverId);
         rechargeTx.setTransactionType("RECHARGE");
         rechargeTx.setGrossAmount(amount);
         rechargeTx.setCommissionAmount(0.0);
@@ -173,6 +206,121 @@ public class DriverWalletService {
         walletTransactionRepository.save(rechargeTx);
 
         return wallet;
+    }
+
+    /**
+     * Direct driver wallet top-up / recharge by Admin or Driver
+     */
+    @Transactional
+    public Map<String, Object> rechargeDriverWalletDirect(String driverIdStr, double amount, String paymentReference, String notes) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Recharge amount must be greater than 0");
+        }
+
+        Driver driver = findDriverEntity(driverIdStr);
+        if (driver == null) {
+            throw new IllegalArgumentException("Driver not found with identifier: " + driverIdStr);
+        }
+
+        double previousBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+        double newBalance = Math.round((previousBalance + amount) * 100.0) / 100.0;
+
+        driver.setWalletBalance(newBalance);
+        driverRepository.save(driver);
+
+        // Sync DriverWallet entity
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        wallet.setAvailableBalance(newBalance);
+        driverWalletRepository.save(wallet);
+
+        // Record WalletTransaction
+        String txId = "TXN_W_" + System.currentTimeMillis();
+        WalletTransaction rechargeTx = new WalletTransaction();
+        rechargeTx.setId(txId);
+        rechargeTx.setDriverId(String.valueOf(driver.getId()));
+        rechargeTx.setTransactionType("RECHARGE");
+        rechargeTx.setGrossAmount(amount);
+        rechargeTx.setCommissionAmount(0.0);
+        rechargeTx.setAmount(amount);
+        rechargeTx.setBalanceBefore(previousBalance);
+        rechargeTx.setBalanceAfter(newBalance);
+        rechargeTx.setStatus("SUCCESS");
+        rechargeTx.setReferenceId(paymentReference);
+        rechargeTx.setDescription(notes != null && !notes.isBlank() ? notes : "Admin Wallet Top-up / UPI Payment Received");
+        walletTransactionRepository.save(rechargeTx);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("driverId", "DRV-" + driver.getId());
+        response.put("previousBalance", previousBalance);
+        response.put("rechargedAmount", amount);
+        response.put("newWalletBalance", newBalance);
+        response.put("transactionId", txId);
+        return response;
+    }
+
+    /**
+     * Assigns order to driver and deducts 5% commission from driver's wallet.
+     */
+    @Transactional
+    public Map<String, Object> assignOrderWithCommission(Order order, Driver driver, Double commissionRate) {
+        double rate = commissionRate != null ? commissionRate : (getCommissionPercentage() / 100.0);
+        double orderFare = order.getAmount() != null ? order.getAmount() : 500.0;
+        double commission = Math.round(orderFare * rate * 100.0) / 100.0;
+
+        double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+
+        // Check if wallet_balance <= 0
+        if (walletBalance <= 0) {
+            throw new IllegalStateException("Driver wallet balance is ₹0. Please recharge to accept orders.");
+        }
+
+        double newBalance = Math.round((walletBalance - commission) * 100.0) / 100.0;
+        driver.setWalletBalance(newBalance);
+        driverRepository.save(driver);
+
+        // Sync DriverWallet
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        wallet.setAvailableBalance(newBalance);
+        wallet.setPlatformCommission(wallet.getPlatformCommission() + commission);
+        driverWalletRepository.save(wallet);
+
+        String orderIdStr = order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId());
+        String txId = "TXN_W_" + System.currentTimeMillis();
+
+        // Log in wallet_transactions with type = 'COMMISSION_DEDUCTION'
+        WalletTransaction commTx = new WalletTransaction();
+        commTx.setId(txId);
+        commTx.setDriverId(String.valueOf(driver.getId()));
+        commTx.setOrderId(orderIdStr);
+        commTx.setTransactionType("COMMISSION_DEDUCTION");
+        commTx.setGrossAmount(orderFare);
+        commTx.setCommissionAmount(commission);
+        commTx.setAmount(-commission);
+        commTx.setBalanceBefore(walletBalance);
+        commTx.setBalanceAfter(newBalance);
+        commTx.setStatus("SUCCESS");
+        commTx.setDescription("Ride Commission Deduction (" + (rate * 100) + "%) - Order #" + orderIdStr);
+        walletTransactionRepository.save(commTx);
+
+        // Update Order
+        order.setDriverId(String.valueOf(driver.getId()));
+        order.setDriverName(driver.getName());
+        order.setDriverPhone(driver.getPhone());
+        order.setDriverEmail(driver.getEmail());
+        order.setDriverVehicleNumber(driver.getVehicleNumber());
+        order.setStatus("assigned");
+        orderRepository.save(order);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("orderId", orderIdStr);
+        response.put("driverId", "DRV-" + driver.getId());
+        response.put("orderFare", orderFare);
+        response.put("commissionDeducted", commission);
+        response.put("remainingWalletBalance", newBalance);
+        response.put("status", "assigned");
+        return response;
     }
 
     /**
@@ -196,9 +344,18 @@ public class DriverWalletService {
         wallet.setPlatformCommission(wallet.getPlatformCommission() + platformCommission);
         driverWalletRepository.save(wallet);
 
+        // Sync Driver entity
+        Driver driver = findDriverEntity(driverId);
+        if (driver != null) {
+            driver.setWalletBalance(balanceAfter);
+            driverRepository.save(driver);
+        }
+
         // Record Transaction: Gross Earning
+        String earnTxId = "TXN_W_" + System.currentTimeMillis();
         WalletTransaction earningTx = new WalletTransaction();
-        earningTx.setDriverId(driverId);
+        earningTx.setId(earnTxId);
+        earningTx.setDriverId(driver != null ? String.valueOf(driver.getId()) : driverId);
         earningTx.setOrderId(orderId);
         earningTx.setTransactionType("ORDER_EARNING");
         earningTx.setGrossAmount(grossAmount);
@@ -211,8 +368,10 @@ public class DriverWalletService {
         walletTransactionRepository.save(earningTx);
 
         // Record Transaction: Commission Deduction
+        String commTxId = "TXN_W_" + (System.currentTimeMillis() + 1);
         WalletTransaction commissionTx = new WalletTransaction();
-        commissionTx.setDriverId(driverId);
+        commissionTx.setId(commTxId);
+        commissionTx.setDriverId(driver != null ? String.valueOf(driver.getId()) : driverId);
         commissionTx.setOrderId(orderId);
         commissionTx.setTransactionType("COMMISSION");
         commissionTx.setGrossAmount(grossAmount);
@@ -231,12 +390,9 @@ public class DriverWalletService {
 
         if (autoOffline && wallet.getAvailableBalance() < minRequired) {
             try {
-                Long dId = Long.parseLong(driverId.replaceAll("\\D+", ""));
-                Optional<Driver> driverOpt = driverRepository.findById(dId);
-                if (driverOpt.isPresent()) {
-                    Driver d = driverOpt.get();
-                    d.setStatus("offline");
-                    driverRepository.save(d);
+                if (driver != null) {
+                    driver.setStatus("offline");
+                    driverRepository.save(driver);
                 }
             } catch (Exception ignored) {}
         }

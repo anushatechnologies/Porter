@@ -97,6 +97,9 @@ public class PaymentLifecycleIntegrationTest {
     private String driverToken;
     private String adminToken;
 
+    @Autowired
+    private CommissionRuleRepository commissionRuleRepository;
+
     @BeforeEach
     public void setup() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
@@ -109,6 +112,17 @@ public class PaymentLifecycleIntegrationTest {
         driverEarningsRepository.deleteAll();
         ledgerRepository.deleteAll();
         paymentOrderRepository.deleteAll();
+        commissionRuleRepository.deleteAll();
+
+        // Seed 10% default commission rule for payment lifecycle tests
+        CommissionRule rule = new CommissionRule();
+        rule.setRuleId("RULE_DEFAULT_10");
+        rule.setServiceCategory("ALL");
+        rule.setCommissionType("PERCENTAGE");
+        rule.setPercentageRate(10.0);
+        rule.setFixedAmount(0.0);
+        rule.setIsActive(true);
+        commissionRuleRepository.save(rule);
 
         // 1. Create Driver & AppUser
         String phone = "9876543210";

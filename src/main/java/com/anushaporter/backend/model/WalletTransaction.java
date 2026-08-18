@@ -13,7 +13,7 @@ import java.util.UUID;
 public class WalletTransaction {
 
     @Id
-    @Column(name = "id", length = 36)
+    @Column(name = "id", length = 64)
     private String id;
 
     @Column(name = "driver_id", length = 64, nullable = false)
@@ -22,7 +22,7 @@ public class WalletTransaction {
     @Column(name = "order_id", length = 64)
     private String orderId;
 
-    // 'ORDER_EARNING', 'COMMISSION', 'WITHDRAWAL', 'REFUND'
+    // 'RECHARGE', 'COMMISSION_DEDUCTION', 'COMMISSION', 'ORDER_EARNING', 'WITHDRAWAL', 'REFUND'
     @Column(name = "transaction_type", length = 32, nullable = false)
     private String transactionType;
 
@@ -55,10 +55,34 @@ public class WalletTransaction {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    public String getType() {
+        return transactionType;
+    }
+
+    public void setType(String type) {
+        this.transactionType = type;
+    }
+
+    public String getNotes() {
+        return description;
+    }
+
+    public void setNotes(String notes) {
+        this.description = notes;
+    }
+
+    public String getPaymentReference() {
+        return referenceId;
+    }
+
+    public void setPaymentReference(String paymentReference) {
+        this.referenceId = paymentReference;
+    }
+
     @PrePersist
     public void generateId() {
         if (this.id == null) {
-            this.id = UUID.randomUUID().toString();
+            this.id = "TXN_W_" + System.currentTimeMillis();
         }
     }
 }

@@ -54,6 +54,9 @@ public class Driver {
     private Integer trips;
     private String tenure;
 
+    @Column(name = "wallet_balance")
+    private Double walletBalance = 0.0;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
@@ -126,4 +129,11 @@ public class Driver {
     public void setTrips(Integer trips) { this.trips = trips; }
     public String getTenure() { return tenure; }
     public void setTenure(String tenure) { this.tenure = tenure; }
+
+    public Double getWalletBalance() {
+        return walletBalance != null ? walletBalance : 0.0;
+    }
+    public void setWalletBalance(Double walletBalance) {
+        this.walletBalance = walletBalance != null ? walletBalance : 0.0;
+    }
 }
