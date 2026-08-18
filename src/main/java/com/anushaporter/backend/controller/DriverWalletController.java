@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -52,17 +53,23 @@ public class DriverWalletController {
         walletData.put("commissionPercentage", 5);
         walletData.put("minPayoutAmount", 100.00);
         walletData.put("isPayoutEligible", wallet.getAvailableBalance() >= 100.00);
-        
+
         double needsMore = 100.00 - wallet.getAvailableBalance();
         walletData.put("needsMoreForPayout", needsMore > 0 ? needsMore : 0.0);
-        
+
         boolean hasVerifiedAccount = driver.getAccountNumber() != null && !driver.getAccountNumber().isEmpty();
         walletData.put("hasVerifiedAccount", hasVerifiedAccount);
 
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "wallet", walletData
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("availableBalance", wallet.getAvailableBalance());
+        response.put("pendingBalance", wallet.getPendingBalance());
+        response.put("totalEarned", wallet.getTotalEarned());
+        response.put("totalWithdrawn", wallet.getTotalWithdrawn());
+        response.put("platformCommission", wallet.getPlatformCommission());
+        response.put("wallet", walletData);
+
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/withdrawals")
@@ -75,7 +82,7 @@ public class DriverWalletController {
         try {
             double amount = Double.parseDouble(String.valueOf(payload.get("amount")));
             String bankAccountId = payload.get("bankAccountId") != null ? String.valueOf(payload.get("bankAccountId")) : driver.getAccountNumber();
-            
+
             if (amount < 100.0) {
                 return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Minimum payout amount is 100.00"));
             }
@@ -112,9 +119,16 @@ public class DriverWalletController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized"));
         }
 
-        var requests = withdrawalRequestRepository.findByDriverIdAndStatus(String.valueOf(driver.getId()), "PENDING_ADMIN_APPROVAL");
+        List<WithdrawalRequest> requests = withdrawalRequestRepository.findByDriverIdAndStatusInOrderByRequestedAtDesc(
+                String.valueOf(driver.getId()),
+                List.of("PENDING_ADMIN_APPROVAL", "PROCESSING")
+        );
+
         if (requests.isEmpty()) {
-            return ResponseEntity.ok(Map.of("success", true, "request", (Object)null));
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("success", true);
+            res.put("request", null);
+            return ResponseEntity.ok(res);
         }
 
         WithdrawalRequest req = requests.get(0);
@@ -124,17 +138,18 @@ public class DriverWalletController {
         reqData.put("heldAmount", req.getHeldAmount());
         reqData.put("status", req.getStatus());
         reqData.put("bankName", driver.getBankName() != null ? driver.getBankName() : "Unknown Bank");
-        
-        String mask = req.getBankAccountId() != null && req.getBankAccountId().length() >= 4 
-            ? "•••• " + req.getBankAccountId().substring(req.getBankAccountId().length() - 4) 
-            : req.getBankAccountId();
+
+        String accountNum = req.getBankAccountId() != null ? req.getBankAccountId() : driver.getAccountNumber();
+        String mask = accountNum != null && accountNum.length() >= 4
+                ? "•••• " + accountNum.substring(accountNum.length() - 4)
+                : accountNum;
         reqData.put("accountNumberMasked", mask);
         reqData.put("requestedAt", req.getRequestedAt());
 
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "request", reqData
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("request", reqData);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/withdrawals/history")
@@ -144,7 +159,10 @@ public class DriverWalletController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized"));
         }
 
-        var list = withdrawalRequestRepository.findByDriverIdOrderByRequestedAtDesc(String.valueOf(driver.getId()));
+        List<WithdrawalRequest> list = withdrawalRequestRepository.findByDriverIdAndStatusInOrderByRequestedAtDesc(
+                String.valueOf(driver.getId()),
+                List.of("COMPLETED", "REJECTED", "CANCELLED")
+        );
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "withdrawals", list

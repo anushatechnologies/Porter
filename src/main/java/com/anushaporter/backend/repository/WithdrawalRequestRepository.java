@@ -11,4 +11,6 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
     List<WithdrawalRequest> findByDriverIdOrderByRequestedAtDesc(String driverId);
     List<WithdrawalRequest> findByDriverIdAndStatus(String driverId, String status);
     List<WithdrawalRequest> findByStatus(String status);
+    List<WithdrawalRequest> findByDriverIdAndStatusIn(String driverId, List<String> statuses);
+    List<WithdrawalRequest> findByDriverIdAndStatusInOrderByRequestedAtDesc(String driverId, List<String> statuses);
 }
