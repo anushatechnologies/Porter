@@ -37,22 +37,60 @@ public class PaymentController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
+
+    @Autowired(required = false)
+    private DriverAPIController driverAPIController;
+
     /**
-     * POST /api/payments/create or POST /api/payments/initiate
-     * Generates a unique payment ID, invoice ID, and dynamic UPI QR code.
+     * POST /api/payments/create or POST /api/payments/initiate or POST /api/payments/razorpay/create-order
+     * Generates a unique payment ID, invoice ID, and dynamic UPI QR code / Razorpay Order.
      */
-    @PostMapping({"/create", "/initiate", "/create-order"})
+    @PostMapping({"/create", "/initiate", "/create-order", "/razorpay/create-order", "/razorpay/create"})
     public ResponseEntity<?> createPayment(
+            jakarta.servlet.http.HttpServletRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody Map<String, Object> payload
     ) {
         try {
             String bookingId = (String) payload.get("bookingId");
+            Double amount = payload.get("amount") != null ? Double.parseDouble(String.valueOf(payload.get("amount"))) : null;
+            String currency = payload.get("currency") != null ? String.valueOf(payload.get("currency")) : "INR";
+            String paymentMethod = (String) payload.getOrDefault("paymentMethod", "RAZORPAY");
+
+            // Check if this is a driver recharge request (starts with RECH_ or called via /razorpay/create-order with amount)
+            boolean isRecharge = (bookingId != null && bookingId.startsWith("RECH_"))
+                    || (bookingId == null && amount != null)
+                    || "RECHARGE".equalsIgnoreCase(String.valueOf(payload.get("transactionType")));
+
+            if (isRecharge) {
+                if (bookingId == null || bookingId.isBlank()) {
+                    bookingId = "RECH_" + System.currentTimeMillis();
+                }
+                double finalAmount = amount != null ? amount : 500.0;
+                com.anushaporter.backend.model.Driver driver = driverAPIController != null ? driverAPIController.getAuthenticatedDriver(request) : null;
+                String driverId = driver != null ? String.valueOf(driver.getId()) : (String) payload.get("driverId");
+
+                PaymentOrder payment = paymentLifecycleService.createRazorpayOrder(bookingId, finalAmount, driverId, currency);
+
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("success", true);
+                response.put("razorpayOrderId", payment.getGatewayOrderId());
+                response.put("keyId", paymentProvider.getKeyId());
+                response.put("amount", payment.getAmount());
+                response.put("currency", payment.getCurrency());
+                response.put("paymentId", payment.getPaymentId());
+                response.put("bookingId", payment.getBookingId());
+                response.put("status", payment.getStatus().name());
+                response.put("gateway", payment.getGateway());
+                return ResponseEntity.ok(response);
+            }
+
             if (bookingId == null || bookingId.isBlank()) {
                 return ResponseEntity.badRequest().body(Map.of("success", false, "message", "bookingId is required"));
             }
 
-            String paymentMethod = (String) payload.getOrDefault("paymentMethod", "UPI_QR");
             if (idempotencyKey == null) {
                 idempotencyKey = (String) payload.get("idempotencyKey");
             }
@@ -61,6 +99,8 @@ public class PaymentController {
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("success", true);
+            response.put("razorpayOrderId", payment.getGatewayOrderId());
+            response.put("keyId", paymentProvider.getKeyId());
             response.put("paymentId", payment.getPaymentId());
             response.put("bookingId", payment.getBookingId());
             response.put("invoiceId", payment.getInvoiceId());
@@ -115,18 +155,100 @@ public class PaymentController {
     }
 
     /**
-     * POST /api/payments/verify
-     * Verifies payment completion.
+     * POST /api/payments/verify or POST /api/payments/razorpay/verify
+     * Verifies payment completion & credits Driver Wallet if recharge.
      */
-    @PostMapping("/verify")
-    public ResponseEntity<?> verifyPayment(@RequestBody Map<String, Object> payload) {
+    @PostMapping({"/verify", "/razorpay/verify"})
+    public ResponseEntity<?> verifyPayment(
+            jakarta.servlet.http.HttpServletRequest request,
+            @RequestBody Map<String, Object> payload
+    ) {
         try {
             String paymentId = (String) payload.get("paymentId");
             String bookingId = (String) payload.get("bookingId");
-            String gatewayPaymentId = (String) payload.getOrDefault("gatewayPaymentId", "pay_sbx_" + UUID.randomUUID().toString().substring(0, 8));
-            String transactionId = (String) payload.getOrDefault("transactionId", "TXN_" + UUID.randomUUID().toString().substring(0, 10));
-            String paymentMethod = (String) payload.getOrDefault("paymentMethod", "UPI_QR");
+            String rzpPaymentId = (String) payload.getOrDefault("razorpay_payment_id", payload.get("payment_id"));
+            String rzpOrderId = (String) payload.getOrDefault("razorpay_order_id", payload.get("order_id"));
+            String rzpSignature = (String) payload.getOrDefault("razorpay_signature", payload.get("signature"));
 
+            String gatewayPaymentId = rzpPaymentId != null ? rzpPaymentId : (String) payload.getOrDefault("gatewayPaymentId", "pay_sbx_" + UUID.randomUUID().toString().substring(0, 8));
+            String transactionId = (String) payload.getOrDefault("transactionId", "TXN_" + UUID.randomUUID().toString().substring(0, 10));
+            String paymentMethod = (String) payload.getOrDefault("paymentMethod", "RAZORPAY");
+
+            // 1. Signature Verification
+            if (rzpSignature != null && !rzpSignature.isBlank()) {
+                boolean isValid = paymentProvider.verifyPaymentSignature(rzpOrderId, rzpPaymentId, rzpSignature);
+                if (!isValid) {
+                    return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid payment signature"));
+                }
+            }
+
+            // Find existing PaymentOrder if any
+            Optional<PaymentOrder> paymentOpt = Optional.empty();
+            if (paymentId != null) {
+                paymentOpt = paymentOrderRepository.findByPaymentId(paymentId);
+            }
+            if (paymentOpt.isEmpty() && bookingId != null) {
+                paymentOpt = paymentOrderRepository.findByBookingId(bookingId);
+            }
+
+            // Check if this is a Driver Wallet Recharge
+            boolean isRecharge = (bookingId != null && bookingId.startsWith("RECH_"))
+                    || (paymentOpt.isPresent() && paymentOpt.get().getBookingId() != null && paymentOpt.get().getBookingId().startsWith("RECH_"))
+                    || Boolean.TRUE.equals(payload.get("isRecharge"))
+                    || "RECHARGE".equalsIgnoreCase(String.valueOf(payload.get("transactionType")));
+
+            com.anushaporter.backend.model.Driver authDriver = driverAPIController != null ? driverAPIController.getAuthenticatedDriver(request) : null;
+            if (authDriver != null || isRecharge) {
+                String driverId = authDriver != null ? String.valueOf(authDriver.getId()) : null;
+                if (driverId == null && paymentOpt.isPresent()) {
+                    driverId = paymentOpt.get().getDriverId();
+                }
+                if (driverId == null && payload.get("driverId") != null) {
+                    driverId = String.valueOf(payload.get("driverId"));
+                }
+
+                if (driverId != null && !driverId.isBlank()) {
+                    Double rechargeAmount = payload.get("amount") != null
+                            ? Double.parseDouble(String.valueOf(payload.get("amount")))
+                            : (paymentOpt.isPresent() ? paymentOpt.get().getAmount() : 500.0);
+
+                    com.anushaporter.backend.model.DriverWallet updatedWallet =
+                            driverWalletService.rechargeWallet(driverId, rechargeAmount, gatewayPaymentId, "Wallet Recharge (Razorpay)");
+
+                    if (paymentOpt.isPresent()) {
+                        PaymentOrder p = paymentOpt.get();
+                        p.setStatus(com.anushaporter.backend.model.PaymentStatus.SUCCESS);
+                        p.setGatewayPaymentId(gatewayPaymentId);
+                        p.setTransactionId(transactionId);
+                        p.setPaidAt(java.time.LocalDateTime.now());
+                        paymentOrderRepository.save(p);
+                    }
+
+                    boolean isEligible = driverWalletService.isDriverEligibleForRides(driverId);
+                    String eligibilityReason = driverWalletService.getEligibilityReason(driverId);
+
+                    Map<String, Object> walletMap = new LinkedHashMap<>();
+                    walletMap.put("availableBalance", updatedWallet.getAvailableBalance());
+                    walletMap.put("totalEarned", updatedWallet.getTotalEarned());
+                    walletMap.put("platformCommission", updatedWallet.getPlatformCommission());
+                    walletMap.put("minRequiredBalance", driverWalletService.getMinRequiredBalance());
+                    walletMap.put("isEligible", isEligible);
+                    walletMap.put("eligibilityReason", eligibilityReason);
+
+                    Map<String, Object> response = new LinkedHashMap<>();
+                    response.put("success", true);
+                    response.put("message", "Payment verified and wallet credited successfully");
+                    response.put("wallet", walletMap);
+                    response.put("updatedBalance", updatedWallet.getAvailableBalance());
+                    if (paymentOpt.isPresent()) {
+                        response.put("paymentId", paymentOpt.get().getPaymentId());
+                        response.put("bookingId", paymentOpt.get().getBookingId());
+                    }
+                    return ResponseEntity.ok(response);
+                }
+            }
+
+            // Customer Booking Payment Verification Fallback
             if (paymentId == null && bookingId != null) {
                 PaymentOrder existing = paymentLifecycleService.createOrFetchPaymentOrder(bookingId, paymentMethod, null);
                 paymentId = existing.getPaymentId();

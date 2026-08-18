@@ -294,4 +294,23 @@ public class DriverController {
             return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "driver", (Object) savedDriver));
         }).orElse(ResponseEntity.notFound().build());
     }
+
+    @Autowired(required = false)
+    private DriverWalletController driverWalletController;
+
+    @GetMapping({"/me/wallet", "/wallet"})
+    public ResponseEntity<?> getDriverWallet(jakarta.servlet.http.HttpServletRequest request) {
+        if (driverWalletController != null) {
+            return driverWalletController.getWallet(request);
+        }
+        return ResponseEntity.status(500).body(Map.of("success", false, "message", "Wallet service unavailable"));
+    }
+
+    @GetMapping({"/me/wallet/transactions", "/wallet/transactions", "/transactions"})
+    public ResponseEntity<?> getDriverWalletTransactions(jakarta.servlet.http.HttpServletRequest request) {
+        if (driverWalletController != null) {
+            return driverWalletController.getWalletTransactions(request);
+        }
+        return ResponseEntity.status(500).body(Map.of("success", false, "message", "Wallet service unavailable"));
+    }
 }

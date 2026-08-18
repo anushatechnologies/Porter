@@ -35,14 +35,19 @@ public class DriverWalletController {
         return driverAPIController.getAuthenticatedDriver(request);
     }
 
-    @GetMapping("/wallet")
+    @GetMapping({"/wallet", "/me/wallet"})
     public ResponseEntity<?> getWallet(HttpServletRequest request) {
         Driver driver = getAuthDriver(request);
         if (driver == null) {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized"));
         }
 
-        DriverWallet wallet = driverWalletService.getWallet(String.valueOf(driver.getId()));
+        String driverId = String.valueOf(driver.getId());
+        DriverWallet wallet = driverWalletService.getWallet(driverId);
+        double commissionPercent = driverWalletService.getCommissionPercentage();
+        double minRequiredBalance = driverWalletService.getMinRequiredBalance();
+        boolean isEligible = driverWalletService.isDriverEligibleForRides(driverId);
+        String eligibilityReason = driverWalletService.getEligibilityReason(driverId);
 
         Map<String, Object> walletData = new LinkedHashMap<>();
         walletData.put("availableBalance", wallet.getAvailableBalance());
@@ -50,7 +55,10 @@ public class DriverWalletController {
         walletData.put("totalEarned", wallet.getTotalEarned());
         walletData.put("totalWithdrawn", wallet.getTotalWithdrawn());
         walletData.put("platformCommission", wallet.getPlatformCommission());
-        walletData.put("commissionPercentage", 5);
+        walletData.put("commissionPercentage", commissionPercent);
+        walletData.put("minRequiredBalance", minRequiredBalance);
+        walletData.put("isEligible", isEligible);
+        walletData.put("eligibilityReason", eligibilityReason);
         walletData.put("minPayoutAmount", 100.00);
         walletData.put("isPayoutEligible", wallet.getAvailableBalance() >= 100.00);
 
@@ -70,6 +78,41 @@ public class DriverWalletController {
         response.put("wallet", walletData);
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping({"/wallet/transactions", "/transactions"})
+    public ResponseEntity<?> getWalletTransactions(HttpServletRequest request) {
+        Driver driver = getAuthDriver(request);
+        if (driver == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized"));
+        }
+
+        String driverId = String.valueOf(driver.getId());
+        List<com.anushaporter.backend.model.WalletTransaction> txList =
+                walletTransactionRepository.findByDriverIdOrderByCreatedAtDesc(driverId);
+
+        List<Map<String, Object>> formattedTx = new java.util.ArrayList<>();
+        for (com.anushaporter.backend.model.WalletTransaction tx : txList) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", tx.getId());
+            item.put("orderId", tx.getOrderId());
+            item.put("transactionType", tx.getTransactionType());
+            item.put("amount", tx.getAmount());
+            item.put("grossAmount", tx.getGrossAmount());
+            item.put("commissionAmount", tx.getCommissionAmount());
+            item.put("balanceBefore", tx.getBalanceBefore());
+            item.put("balanceAfter", tx.getBalanceAfter());
+            item.put("description", tx.getDescription());
+            item.put("status", tx.getStatus());
+            item.put("referenceId", tx.getReferenceId());
+            item.put("createdAt", tx.getCreatedAt() != null ? tx.getCreatedAt().toString() : null);
+            formattedTx.add(item);
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "transactions", formattedTx
+        ));
     }
 
     @PostMapping("/withdrawals")

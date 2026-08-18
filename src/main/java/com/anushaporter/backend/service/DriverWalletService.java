@@ -1,9 +1,13 @@
 package com.anushaporter.backend.service;
 
+import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.model.DriverWallet;
+import com.anushaporter.backend.model.GlobalSettings;
 import com.anushaporter.backend.model.WalletTransaction;
 import com.anushaporter.backend.model.WithdrawalRequest;
+import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.repository.DriverWalletRepository;
+import com.anushaporter.backend.repository.GlobalSettingsRepository;
 import com.anushaporter.backend.repository.WalletTransactionRepository;
 import com.anushaporter.backend.repository.WithdrawalRequestRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class DriverWalletService {
@@ -25,7 +32,14 @@ public class DriverWalletService {
     @Autowired
     private WithdrawalRequestRepository withdrawalRequestRepository;
 
-    private static final double COMMISSION_RATE = 0.05; // 5% Platform Commission
+    @Autowired
+    private GlobalSettingsRepository globalSettingsRepository;
+
+    @Autowired
+    private DriverRepository driverRepository;
+
+    private static final double DEFAULT_COMMISSION_PERCENTAGE = 5.0; // 5% Platform Commission
+    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 0.0;
 
     public DriverWallet getWallet(String driverId) {
         return driverWalletRepository.findByDriverId(driverId).orElseGet(() -> {
@@ -36,14 +50,141 @@ public class DriverWalletService {
     }
 
     /**
-     * Processes an order earning, deducting the 5% platform commission and crediting the 95% to the driver.
+     * Reads Admin Wallet & Commission Settings from GlobalSettings
+     */
+    public Map<String, Object> getAdminWalletSettings() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+
+        double commissionPercentage = DEFAULT_COMMISSION_PERCENTAGE;
+        double minRequiredBalance = DEFAULT_MIN_REQUIRED_BALANCE;
+        boolean walletRequiredForRides = true;
+        boolean autoOfflineWhenBalanceInsufficient = true;
+
+        if (globalSettingsRepository != null) {
+            Optional<GlobalSettings> commOpt = globalSettingsRepository.findBySettingKey("wallet_commission_percentage");
+            if (commOpt.isPresent() && commOpt.get().getSettingValue() != null) {
+                try { commissionPercentage = Double.parseDouble(commOpt.get().getSettingValue()); } catch (Exception ignored) {}
+            }
+
+            Optional<GlobalSettings> minBalOpt = globalSettingsRepository.findBySettingKey("wallet_min_required_balance");
+            if (minBalOpt.isPresent() && minBalOpt.get().getSettingValue() != null) {
+                try { minRequiredBalance = Double.parseDouble(minBalOpt.get().getSettingValue()); } catch (Exception ignored) {}
+            }
+
+            Optional<GlobalSettings> reqOpt = globalSettingsRepository.findBySettingKey("wallet_required_for_rides");
+            if (reqOpt.isPresent() && reqOpt.get().getSettingValue() != null) {
+                walletRequiredForRides = Boolean.parseBoolean(reqOpt.get().getSettingValue());
+            }
+
+            Optional<GlobalSettings> autoOffOpt = globalSettingsRepository.findBySettingKey("wallet_auto_offline_insufficient");
+            if (autoOffOpt.isPresent() && autoOffOpt.get().getSettingValue() != null) {
+                autoOfflineWhenBalanceInsufficient = Boolean.parseBoolean(autoOffOpt.get().getSettingValue());
+            }
+        }
+
+        settings.put("commissionPercentage", commissionPercentage);
+        settings.put("minRequiredBalance", minRequiredBalance);
+        settings.put("walletRequiredForRides", walletRequiredForRides);
+        settings.put("autoOfflineWhenBalanceInsufficient", autoOfflineWhenBalanceInsufficient);
+        return settings;
+    }
+
+    /**
+     * Updates Admin Wallet & Commission Settings
+     */
+    @Transactional
+    public Map<String, Object> updateAdminWalletSettings(Map<String, Object> payload) {
+        if (globalSettingsRepository == null || payload == null) {
+            return getAdminWalletSettings();
+        }
+
+        if (payload.containsKey("commissionPercentage")) {
+            saveSetting("wallet_commission_percentage", String.valueOf(payload.get("commissionPercentage")));
+        }
+        if (payload.containsKey("minRequiredBalance")) {
+            saveSetting("wallet_min_required_balance", String.valueOf(payload.get("minRequiredBalance")));
+        }
+        if (payload.containsKey("walletRequiredForRides")) {
+            saveSetting("wallet_required_for_rides", String.valueOf(payload.get("walletRequiredForRides")));
+        }
+        if (payload.containsKey("autoOfflineWhenBalanceInsufficient")) {
+            saveSetting("wallet_auto_offline_insufficient", String.valueOf(payload.get("autoOfflineWhenBalanceInsufficient")));
+        }
+
+        return getAdminWalletSettings();
+    }
+
+    private void saveSetting(String key, String value) {
+        Optional<GlobalSettings> existing = globalSettingsRepository.findBySettingKey(key);
+        GlobalSettings s = existing.orElseGet(GlobalSettings::new);
+        s.setSettingKey(key);
+        s.setSettingValue(value);
+        globalSettingsRepository.save(s);
+    }
+
+    public double getCommissionPercentage() {
+        Object val = getAdminWalletSettings().get("commissionPercentage");
+        return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_COMMISSION_PERCENTAGE;
+    }
+
+    public double getMinRequiredBalance() {
+        Object val = getAdminWalletSettings().get("minRequiredBalance");
+        return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_MIN_REQUIRED_BALANCE;
+    }
+
+    public boolean isDriverEligibleForRides(String driverId) {
+        DriverWallet wallet = getWallet(driverId);
+        double minRequired = getMinRequiredBalance();
+        return wallet.getAvailableBalance() >= minRequired;
+    }
+
+    public String getEligibilityReason(String driverId) {
+        return isDriverEligibleForRides(driverId) ? "Sufficient balance" : "Insufficient balance. Recharge wallet to accept rides.";
+    }
+
+    /**
+     * Recharges driver's wallet after successful payment (e.g. Razorpay)
+     */
+    @Transactional
+    public DriverWallet rechargeWallet(String driverId, double amount, String paymentId, String description) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Recharge amount must be greater than 0");
+        }
+
+        DriverWallet wallet = getWallet(driverId);
+        double balanceBefore = wallet.getAvailableBalance();
+        double balanceAfter = balanceBefore + amount;
+
+        wallet.setAvailableBalance(balanceAfter);
+        driverWalletRepository.save(wallet);
+
+        // Record Transaction: RECHARGE
+        WalletTransaction rechargeTx = new WalletTransaction();
+        rechargeTx.setDriverId(driverId);
+        rechargeTx.setTransactionType("RECHARGE");
+        rechargeTx.setGrossAmount(amount);
+        rechargeTx.setCommissionAmount(0.0);
+        rechargeTx.setAmount(amount);
+        rechargeTx.setBalanceBefore(balanceBefore);
+        rechargeTx.setBalanceAfter(balanceAfter);
+        rechargeTx.setStatus("SUCCESS");
+        rechargeTx.setReferenceId(paymentId);
+        rechargeTx.setDescription(description != null && !description.isBlank() ? description : "Wallet Recharge (Razorpay)");
+        walletTransactionRepository.save(rechargeTx);
+
+        return wallet;
+    }
+
+    /**
+     * Processes an order earning, deducting the platform commission and updating wallet metrics.
      */
     @Transactional
     public void processOrderEarning(String driverId, String orderId, double grossAmount) {
         if (grossAmount <= 0) return;
 
         DriverWallet wallet = getWallet(driverId);
-        double platformCommission = Math.round(grossAmount * COMMISSION_RATE * 100.0) / 100.0;
+        double commissionRate = getCommissionPercentage() / 100.0;
+        double platformCommission = Math.round(grossAmount * commissionRate * 100.0) / 100.0;
         double netAmount = grossAmount - platformCommission;
 
         double balanceBefore = wallet.getAvailableBalance();
@@ -80,8 +221,25 @@ public class DriverWalletService {
         commissionTx.setBalanceBefore(balanceBefore + grossAmount);
         commissionTx.setBalanceAfter(balanceAfter);
         commissionTx.setStatus("SUCCESS");
-        commissionTx.setDescription("Platform commission (5%) for order " + orderId);
+        commissionTx.setDescription(String.format("Ride Commission (%.1f%%) - Order #%s", (commissionRate * 100), orderId));
         walletTransactionRepository.save(commissionTx);
+
+        // Check if Driver Balance < Minimum Required and Auto-Offline Trigger
+        Map<String, Object> settings = getAdminWalletSettings();
+        boolean autoOffline = Boolean.TRUE.equals(settings.get("autoOfflineWhenBalanceInsufficient"));
+        double minRequired = getMinRequiredBalance();
+
+        if (autoOffline && wallet.getAvailableBalance() < minRequired) {
+            try {
+                Long dId = Long.parseLong(driverId.replaceAll("\\D+", ""));
+                Optional<Driver> driverOpt = driverRepository.findById(dId);
+                if (driverOpt.isPresent()) {
+                    Driver d = driverOpt.get();
+                    d.setStatus("offline");
+                    driverRepository.save(d);
+                }
+            } catch (Exception ignored) {}
+        }
     }
 
     /**

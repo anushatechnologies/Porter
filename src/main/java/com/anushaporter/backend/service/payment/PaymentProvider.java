@@ -42,4 +42,19 @@ public interface PaymentProvider {
      * Fetches live status and UTR of a payout transfer
      */
     Map<String, Object> fetchPayoutStatus(String gatewayPayoutId);
+
+    /**
+     * Verifies payment signature (e.g. Razorpay HMAC SHA256 of orderId + "|" + paymentId)
+     */
+    boolean verifyPaymentSignature(String orderId, String paymentId, String signature);
+
+    /**
+     * Gets the configured Gateway Key ID (e.g. Razorpay Key ID)
+     */
+    String getKeyId();
+
+    /**
+     * Gets the configured Gateway Key Secret
+     */
+    String getKeySecret();
 }

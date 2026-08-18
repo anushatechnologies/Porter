@@ -127,6 +127,68 @@ public class PaymentLifecycleService {
     }
 
     /**
+     * Creates a dedicated Razorpay Order (e.g. for Driver Wallet Recharge)
+     */
+    @Transactional
+    public PaymentOrder createRazorpayOrder(String bookingId, double amount, String driverId, String currency) {
+        if (bookingId == null || bookingId.isBlank()) {
+            bookingId = "RECH_" + System.currentTimeMillis();
+        }
+        if (currency == null || currency.isBlank()) {
+            currency = "INR";
+        }
+
+        Optional<PaymentOrder> existingOpt = paymentOrderRepository.findByBookingId(bookingId);
+        if (existingOpt.isPresent()) {
+            PaymentOrder existing = existingOpt.get();
+            if (existing.getStatus() == PaymentStatus.PENDING || existing.getStatus() == PaymentStatus.CREATED) {
+                existing.setAmount(amount);
+                existing.setCurrency(currency);
+                return paymentOrderRepository.save(existing);
+            }
+            return existing;
+        }
+
+        String paymentId = "PAY_" + bookingId.replace("-", "_") + "_" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        String invoiceId = "INV-" + LocalDateTime.now().getYear() + "-" + String.format("%06d", (int)(Math.random() * 900000) + 100000);
+
+        PaymentOrder paymentOrder = new PaymentOrder();
+        paymentOrder.setPaymentId(paymentId);
+        paymentOrder.setBookingId(bookingId);
+        paymentOrder.setInvoiceId(invoiceId);
+        paymentOrder.setDriverId(driverId);
+        paymentOrder.setAmount(amount);
+        paymentOrder.setCurrency(currency);
+        paymentOrder.setStatus(PaymentStatus.CREATED);
+        paymentOrder.setPaymentMethod("RAZORPAY");
+        paymentOrder.setGateway("razorpay");
+        paymentOrder.setFareBreakdownJson(String.format("{\"type\":\"WALLET_RECHARGE\",\"amount\":%.2f}", amount));
+        paymentOrder.setQrExpiresAt(LocalDateTime.now().plusMinutes(30));
+
+        Map<String, Object> gatewayRes = paymentProvider.createPaymentOrder(paymentOrder);
+        if (gatewayRes != null) {
+            if (gatewayRes.containsKey("gatewayOrderId")) {
+                paymentOrder.setGatewayOrderId((String) gatewayRes.get("gatewayOrderId"));
+            }
+            if (gatewayRes.containsKey("qrCodeData")) {
+                paymentOrder.setQrCodeData((String) gatewayRes.get("qrCodeData"));
+            }
+            if (gatewayRes.containsKey("qrImageUrl")) {
+                paymentOrder.setQrImageUrl((String) gatewayRes.get("qrImageUrl"));
+            }
+            if (gatewayRes.containsKey("gateway")) {
+                paymentOrder.setGateway((String) gatewayRes.get("gateway"));
+            }
+        }
+
+        if (paymentOrder.getGatewayOrderId() == null) {
+            paymentOrder.setGatewayOrderId("order_" + UUID.randomUUID().toString().substring(0, 14).replace("-", ""));
+        }
+
+        return paymentOrderRepository.save(paymentOrder);
+    }
+
+    /**
      * Step 2: Process verified payment success (Atomically updates payment, ledger, commission & driver earnings).
      */
     @Transactional
