@@ -60,4 +60,29 @@ public class AdminWalletSettingsController {
 
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * POST /api/admin/settings/wallet/clean-duplicates
+     * Cleans up any duplicate COMMISSION records and recalculates balances for affected drivers.
+     */
+    @PostMapping("/clean-duplicates")
+    public ResponseEntity<?> cleanDuplicates() {
+        Map<String, Object> result = driverWalletService.cleanDuplicateCommissionTransactions();
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * POST /api/admin/settings/wallet/recalculate/{driverId}
+     * Recalculates wallet balance for a specific driver from transaction history.
+     */
+    @PostMapping("/recalculate/{driverId}")
+    public ResponseEntity<?> recalculateDriverBalance(@PathVariable String driverId) {
+        double newBalance = driverWalletService.recalculateDriverWalletBalance(driverId);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "driverId", driverId,
+                "recalculatedBalance", newBalance,
+                "message", "Driver wallet balance successfully recalculated from transaction history."
+        ));
+    }
 }

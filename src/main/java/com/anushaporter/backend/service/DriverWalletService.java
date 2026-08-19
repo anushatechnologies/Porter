@@ -319,6 +319,15 @@ public class DriverWalletService {
             return null;
         }
 
+        // Idempotency: Prevent duplicate COMMISSION_DEDUCTION for the same order and driver
+        if (orderId != null && !orderId.isBlank()) {
+            Optional<WalletTransaction> existingTx = walletTransactionRepository
+                    .findFirstByDriverIdAndOrderIdAndTransactionType(String.valueOf(driver.getId()), orderId, "COMMISSION_DEDUCTION");
+            if (existingTx.isPresent()) {
+                return existingTx.get();
+            }
+        }
+
         DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
         double commissionRate = getCommissionPercentage() / 100.0;
         if (commissionRate <= 0) commissionRate = 0.05;
@@ -377,6 +386,151 @@ public class DriverWalletService {
     @Transactional
     public void processOrderEarning(String driverId, String orderId, double grossAmount) {
         deductCommissionOnCompletion(driverId, orderId, grossAmount);
+    }
+
+    /**
+     * Cleans up any legacy duplicate COMMISSION / double-deduction transactions and
+     * recalculates driver wallet balances accurately.
+     */
+    @Transactional
+    public Map<String, Object> cleanDuplicateCommissionTransactions() {
+        List<WalletTransaction> allTx = walletTransactionRepository.findAll();
+        int deletedCount = 0;
+        java.util.Set<String> affectedDriverIds = new java.util.HashSet<>();
+
+        // Group by driverId and orderId
+        Map<String, List<WalletTransaction>> byDriverAndOrder = new java.util.HashMap<>();
+        for (WalletTransaction tx : allTx) {
+            if (tx.getOrderId() != null && !tx.getOrderId().isBlank()) {
+                String key = tx.getDriverId() + "::" + tx.getOrderId();
+                byDriverAndOrder.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(tx);
+            }
+        }
+
+        for (Map.Entry<String, List<WalletTransaction>> entry : byDriverAndOrder.entrySet()) {
+            List<WalletTransaction> txs = entry.getValue();
+            List<WalletTransaction> commDeductions = txs.stream()
+                    .filter(t -> "COMMISSION_DEDUCTION".equalsIgnoreCase(t.getTransactionType()))
+                    .collect(java.util.stream.Collectors.toList());
+            List<WalletTransaction> legacyCommissions = txs.stream()
+                    .filter(t -> "COMMISSION".equalsIgnoreCase(t.getTransactionType()))
+                    .collect(java.util.stream.Collectors.toList());
+
+            double amountToRestore = 0.0;
+
+            // 1. If COMMISSION_DEDUCTION exists, delete all legacy COMMISSION rows for this order and restore deducted amount
+            if (!commDeductions.isEmpty() && !legacyCommissions.isEmpty()) {
+                for (WalletTransaction legacy : legacyCommissions) {
+                    double amt = legacy.getAmount() != null ? Math.abs(legacy.getAmount()) : (legacy.getCommissionAmount() != null ? legacy.getCommissionAmount() : 0.0);
+                    amountToRestore += amt;
+                    walletTransactionRepository.delete(legacy);
+                    deletedCount++;
+                    affectedDriverIds.add(legacy.getDriverId());
+                }
+            } else if (legacyCommissions.size() > 1) {
+                // If multiple legacy COMMISSION rows exist, keep only one and convert to COMMISSION_DEDUCTION
+                WalletTransaction keep = legacyCommissions.get(0);
+                keep.setTransactionType("COMMISSION_DEDUCTION");
+                keep.setDescription("5% Platform Commission Cut on Ride Completion");
+                walletTransactionRepository.save(keep);
+                for (int i = 1; i < legacyCommissions.size(); i++) {
+                    WalletTransaction extra = legacyCommissions.get(i);
+                    double amt = extra.getAmount() != null ? Math.abs(extra.getAmount()) : (extra.getCommissionAmount() != null ? extra.getCommissionAmount() : 0.0);
+                    amountToRestore += amt;
+                    walletTransactionRepository.delete(extra);
+                    deletedCount++;
+                    affectedDriverIds.add(extra.getDriverId());
+                }
+            } else if (legacyCommissions.size() == 1 && commDeductions.isEmpty()) {
+                // Normalize type to COMMISSION_DEDUCTION
+                WalletTransaction legacy = legacyCommissions.get(0);
+                legacy.setTransactionType("COMMISSION_DEDUCTION");
+                legacy.setDescription("5% Platform Commission Cut on Ride Completion");
+                walletTransactionRepository.save(legacy);
+            }
+
+            // 2. If multiple duplicate COMMISSION_DEDUCTION rows exist for the same order, keep only 1
+            if (commDeductions.size() > 1) {
+                for (int i = 1; i < commDeductions.size(); i++) {
+                    WalletTransaction extra = commDeductions.get(i);
+                    double amt = extra.getAmount() != null ? Math.abs(extra.getAmount()) : (extra.getCommissionAmount() != null ? extra.getCommissionAmount() : 0.0);
+                    amountToRestore += amt;
+                    walletTransactionRepository.delete(extra);
+                    deletedCount++;
+                    affectedDriverIds.add(extra.getDriverId());
+                }
+            }
+
+            if (amountToRestore > 0 && !txs.isEmpty()) {
+                String dId = txs.get(0).getDriverId();
+                Driver driver = findDriverEntity(dId);
+                if (driver != null) {
+                    double currentBal = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+                    double fixedBal = Math.round((currentBal + amountToRestore) * 100.0) / 100.0;
+                    driver.setWalletBalance(fixedBal);
+                    driverRepository.save(driver);
+
+                    DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+                    wallet.setAvailableBalance(fixedBal);
+                    wallet.setPlatformCommission(Math.max(0.00, Math.round((wallet.getPlatformCommission() - amountToRestore) * 100.0) / 100.0));
+                    driverWalletRepository.save(wallet);
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("deletedDuplicatesCount", deletedCount);
+        result.put("affectedDriversCount", affectedDriverIds.size());
+        result.put("affectedDriverIds", affectedDriverIds);
+        result.put("message", "Duplicate commission records cleaned up and wallet balances restored.");
+        return result;
+    }
+
+    /**
+     * Recalculates driver wallet balance from transaction history.
+     */
+    @Transactional
+    public double recalculateDriverWalletBalance(String driverIdStr) {
+        Driver driver = findDriverEntity(driverIdStr);
+        if (driver == null) return 0.0;
+
+        List<WalletTransaction> txs = walletTransactionRepository.findByDriverIdOrderByCreatedAtDesc(String.valueOf(driver.getId()));
+
+        double totalRecharges = 0.0;
+        double totalCommissions = 0.0;
+        double totalWithdrawals = 0.0;
+        double totalRefunds = 0.0;
+        double totalEarned = 0.0;
+
+        for (WalletTransaction tx : txs) {
+            String type = tx.getTransactionType() != null ? tx.getTransactionType().toUpperCase() : "";
+            double amt = tx.getAmount() != null ? Math.abs(tx.getAmount()) : 0.0;
+            if ("RECHARGE".equals(type)) {
+                totalRecharges += amt;
+            } else if ("COMMISSION_DEDUCTION".equals(type) || "COMMISSION".equals(type)) {
+                totalCommissions += amt;
+                if (tx.getGrossAmount() != null) totalEarned += tx.getGrossAmount();
+            } else if ("WITHDRAWAL".equals(type)) {
+                totalWithdrawals += amt;
+            } else if ("REFUND".equals(type)) {
+                totalRefunds += amt;
+            }
+        }
+
+        double calculatedBalance = Math.max(0.00, Math.round((totalRecharges + totalRefunds - totalCommissions - totalWithdrawals) * 100.0) / 100.0);
+
+        driver.setWalletBalance(calculatedBalance);
+        driverRepository.save(driver);
+
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        wallet.setAvailableBalance(calculatedBalance);
+        wallet.setPlatformCommission(Math.round(totalCommissions * 100.0) / 100.0);
+        wallet.setTotalEarned(Math.round(totalEarned * 100.0) / 100.0);
+        wallet.setTotalWithdrawn(Math.round(totalWithdrawals * 100.0) / 100.0);
+        driverWalletRepository.save(wallet);
+
+        return calculatedBalance;
     }
 
     /**

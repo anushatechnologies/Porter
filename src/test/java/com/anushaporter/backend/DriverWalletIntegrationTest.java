@@ -24,6 +24,7 @@ import org.springframework.web.context.WebApplicationContext;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,6 +62,9 @@ public class DriverWalletIntegrationTest {
 
     @Autowired
     private WalletTransactionRepository walletTransactionRepository;
+
+    @Autowired
+    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -255,5 +259,69 @@ public class DriverWalletIntegrationTest {
                 .andExpect(jsonPath("$.withdrawals", hasSize(1)))
                 .andExpect(jsonPath("$.withdrawals[0].status", is("COMPLETED")))
                 .andExpect(jsonPath("$.withdrawals[0].amount", is(500.00)));
+    }
+
+    @Test
+    void testDeductCommissionIdempotency() {
+        // First deduction for order ORD-100 (500 fare * 5% = 25 commission)
+        driverWalletService.deductCommissionOnCompletion(String.valueOf(testDriver.getId()), "ORD-100", 500.00);
+
+        Driver driverAfterFirst = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals(2000.00 - 25.00, driverAfterFirst.getWalletBalance());
+
+        // Second deduction call for same order ORD-100 must be a no-op (idempotent)
+        driverWalletService.deductCommissionOnCompletion(String.valueOf(testDriver.getId()), "ORD-100", 500.00);
+
+        Driver driverAfterSecond = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals(1975.00, driverAfterSecond.getWalletBalance());
+
+        // Verify only 1 transaction exists for ORD-100
+        List<com.anushaporter.backend.model.WalletTransaction> txs = walletTransactionRepository.findByOrderId("ORD-100");
+        assertEquals(1, txs.size());
+        assertEquals("COMMISSION_DEDUCTION", txs.get(0).getTransactionType());
+    }
+
+    @Test
+    void testCleanDuplicateCommissionTransactionsRemovesLegacyRowsAndRecalculatesBalance() {
+        // Setup: Driver has a COMMISSION_DEDUCTION and an erroneous legacy COMMISSION row for ORD-200
+        com.anushaporter.backend.model.WalletTransaction tx1 = new com.anushaporter.backend.model.WalletTransaction();
+        tx1.setId("TXN_1");
+        tx1.setDriverId(String.valueOf(testDriver.getId()));
+        tx1.setOrderId("ORD-200");
+        tx1.setTransactionType("COMMISSION_DEDUCTION");
+        tx1.setAmount(-25.00);
+        tx1.setBalanceBefore(2000.00);
+        tx1.setBalanceAfter(1975.00);
+        tx1.setStatus("SUCCESS");
+        walletTransactionRepository.save(tx1);
+
+        com.anushaporter.backend.model.WalletTransaction tx2 = new com.anushaporter.backend.model.WalletTransaction();
+        tx2.setId("TXN_2");
+        tx2.setDriverId(String.valueOf(testDriver.getId()));
+        tx2.setOrderId("ORD-200");
+        tx2.setTransactionType("COMMISSION");
+        tx2.setAmount(-25.00);
+        tx2.setBalanceBefore(1975.00);
+        tx2.setBalanceAfter(1950.00);
+        tx2.setStatus("SUCCESS");
+        walletTransactionRepository.save(tx2);
+
+        // Erroneously double-deducted balance
+        testDriver.setWalletBalance(1950.00);
+        driverRepository.save(testDriver);
+
+        // Run data cleanup
+        Map<String, Object> result = driverWalletService.cleanDuplicateCommissionTransactions();
+        assertEquals(true, result.get("success"));
+        assertEquals(1, result.get("deletedDuplicatesCount"));
+
+        // Verify legacy COMMISSION was deleted
+        List<com.anushaporter.backend.model.WalletTransaction> txsAfter = walletTransactionRepository.findByOrderId("ORD-200");
+        assertEquals(1, txsAfter.size());
+        assertEquals("COMMISSION_DEDUCTION", txsAfter.get(0).getTransactionType());
+
+        // Verify balance was restored accurately (1975.00 instead of 1950.00)
+        Driver driverFixed = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals(1975.00, driverFixed.getWalletBalance());
     }
 }
