@@ -38,13 +38,22 @@ public class VehicleController {
 
             List<Map<String, Object>> vehicles = list.stream().map(v -> {
                 Map<String, Object> map = new LinkedHashMap<>();
-                map.put("id",       v.getId());
-                map.put("name",     v.getName());
-                map.put("type",     v.getType());
-                map.put("capacity", v.getCapacity() != null ? v.getCapacity() : "");
-                map.put("status",   v.getStatus());
-                map.put("priority", v.getPriority() != null ? v.getPriority() : 1);
-                if (v.getImageUrl() != null) map.put("imageUrl", v.getImageUrl());
+                map.put("id",          v.getId());
+                map.put("name",        v.getName());
+                map.put("type",        v.getType());
+                map.put("typeCode",    v.getType());
+                map.put("type_code",   v.getType());
+                map.put("description", v.getDescription() != null ? v.getDescription() : "");
+                map.put("capacity",    v.getCapacity() != null ? v.getCapacity() : "");
+                map.put("capacityKg",  v.getCapacityKg() != null ? v.getCapacityKg() : 20);
+                map.put("dimensions",  v.getDimensions() != null ? v.getDimensions() : "");
+                map.put("iconName",    v.getIconName() != null ? v.getIconName() : "bike");
+                map.put("imageUrl",    v.getImageUrl() != null ? v.getImageUrl() : "");
+                map.put("baseFare",    v.getBaseFare() != null ? v.getBaseFare() : 40.0);
+                map.put("baseKm",      v.getBaseKm() != null ? v.getBaseKm() : 1.0);
+                map.put("perKmRate",   v.getPerKmRate() != null ? v.getPerKmRate() : 12.0);
+                map.put("status",      v.getStatus());
+                map.put("priority",    v.getPriority() != null ? v.getPriority() : 1);
                 return map;
             }).collect(Collectors.toList());
 

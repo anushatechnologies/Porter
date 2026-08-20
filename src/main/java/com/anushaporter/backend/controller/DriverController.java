@@ -153,11 +153,31 @@ public class DriverController {
             map.put("name", d.getName() != null ? d.getName() : "Unknown");
             map.put("email", d.getEmail() != null ? d.getEmail() : "");
             map.put("phone", d.getPhone() != null ? d.getPhone() : "");
+            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
+            String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
+            map.put("vehicle", v);
+            map.put("vehicleType", vType);
+            map.put("vehicle_type", vType);
+            map.put("vehicleName", vType);
             map.put("vehicleNumber", d.getVehicleNumber() != null ? d.getVehicleNumber() : "");
+            map.put("rcNumber", d.getRcNumber() != null ? d.getRcNumber() : "");
+            map.put("licenseNumber", d.getLicenseNumber() != null ? d.getLicenseNumber() : "");
+            map.put("aadhaarNumber", d.getAadhaarNumber() != null ? d.getAadhaarNumber() : "");
+            map.put("dob", d.getDob() != null ? d.getDob() : "");
+            map.put("gender", d.getGender() != null ? d.getGender() : "");
+            map.put("addressLine1", d.getAddressLine1() != null ? d.getAddressLine1() : "");
+            map.put("city", d.getCity() != null ? d.getCity() : "");
+            map.put("state", d.getState() != null ? d.getState() : "");
+            map.put("pincode", d.getPincode() != null ? d.getPincode() : "");
+            map.put("bankName", d.getBankName() != null ? d.getBankName() : "");
+            map.put("accountHolderName", d.getAccountHolderName() != null ? d.getAccountHolderName() : "");
+            map.put("accountNumber", d.getAccountNumber() != null ? d.getAccountNumber() : "");
+            map.put("ifscCode", d.getIfscCode() != null ? d.getIfscCode() : "");
             map.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
             map.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("rating", d.getRating() != null ? d.getRating() : "4.8");
+            map.put("trips", d.getTrips() != null ? d.getTrips() : 0);
             map.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
             map.put("wallet_balance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
             map.put("licenseUri", storageService.getPresignedOrSanitizedUrl(d.getLicenseUri()));
@@ -193,6 +213,13 @@ public class DriverController {
         } else {
             entity.setStatus(driverAuthService.normalizeStatus(entity.getStatus()));
         }
+
+        String veh = entity.getVehicle();
+        String vehType = entity.getVehicleType();
+        String resolvedVeh = (veh != null && !veh.trim().isEmpty()) ? veh.trim() : ((vehType != null && !vehType.trim().isEmpty()) ? vehType.trim() : "Vehicle");
+        entity.setVehicle(resolvedVeh);
+        entity.setVehicleType(resolvedVeh);
+
         if (entity.getLicenseUri() != null) entity.setLicenseUri(storageService.sanitizeUri(entity.getLicenseUri()));
         if (entity.getRcUri() != null) entity.setRcUri(storageService.sanitizeUri(entity.getRcUri()));
         if (entity.getAadhaarUri() != null) entity.setAadhaarUri(storageService.sanitizeUri(entity.getAadhaarUri()));
@@ -202,10 +229,10 @@ public class DriverController {
         Driver savedDriver = repository.save(entity);
 
         if (entity.getVehicleNumber() != null && !entity.getVehicleNumber().trim().isEmpty()) {
-            vehicleRepository.findByPlate(entity.getVehicleNumber()).ifPresentOrElse(veh -> {
-                veh.setOwner(entity.getName());
-                veh.setType(entity.getVehicleType());
-                vehicleRepository.save(veh);
+            vehicleRepository.findByPlate(entity.getVehicleNumber()).ifPresentOrElse(vehObj -> {
+                vehObj.setOwner(entity.getName());
+                vehObj.setType(entity.getVehicleType());
+                vehicleRepository.save(vehObj);
             }, () -> {
                 Vehicle newVeh = new Vehicle();
                 newVeh.setModel(entity.getVehicleType() + " Model");
@@ -218,6 +245,51 @@ public class DriverController {
             });
         }
         return savedDriver;
+    }
+
+    @GetMapping("/{id:[0-9]+}")
+    public ResponseEntity<?> getById(@PathVariable Long id) {
+        return repository.findById(id).map(d -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", d.getId());
+            map.put("driverId", d.getId().toString());
+            map.put("name", d.getName() != null ? d.getName() : "Unknown");
+            map.put("email", d.getEmail() != null ? d.getEmail() : "");
+            map.put("phone", d.getPhone() != null ? d.getPhone() : "");
+            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
+            String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
+            map.put("vehicle", v);
+            map.put("vehicleType", vType);
+            map.put("vehicle_type", vType);
+            map.put("vehicleName", vType);
+            map.put("vehicleNumber", d.getVehicleNumber() != null ? d.getVehicleNumber() : "");
+            map.put("rcNumber", d.getRcNumber() != null ? d.getRcNumber() : "");
+            map.put("licenseNumber", d.getLicenseNumber() != null ? d.getLicenseNumber() : "");
+            map.put("aadhaarNumber", d.getAadhaarNumber() != null ? d.getAadhaarNumber() : "");
+            map.put("dob", d.getDob() != null ? d.getDob() : "");
+            map.put("gender", d.getGender() != null ? d.getGender() : "");
+            map.put("addressLine1", d.getAddressLine1() != null ? d.getAddressLine1() : "");
+            map.put("city", d.getCity() != null ? d.getCity() : "");
+            map.put("state", d.getState() != null ? d.getState() : "");
+            map.put("pincode", d.getPincode() != null ? d.getPincode() : "");
+            map.put("bankName", d.getBankName() != null ? d.getBankName() : "");
+            map.put("accountHolderName", d.getAccountHolderName() != null ? d.getAccountHolderName() : "");
+            map.put("accountNumber", d.getAccountNumber() != null ? d.getAccountNumber() : "");
+            map.put("ifscCode", d.getIfscCode() != null ? d.getIfscCode() : "");
+            map.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
+            map.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
+            map.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
+            map.put("rating", d.getRating() != null ? d.getRating() : "4.8");
+            map.put("trips", d.getTrips() != null ? d.getTrips() : 0);
+            map.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
+            map.put("wallet_balance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
+            map.put("profilePhotoUri", storageService.getPresignedOrSanitizedUrl(d.getProfilePhotoUri()));
+            map.put("licenseUri", storageService.getPresignedOrSanitizedUrl(d.getLicenseUri()));
+            map.put("rcUri", storageService.getPresignedOrSanitizedUrl(d.getRcUri()));
+            map.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(d.getAadhaarUri()));
+            map.put("bankPassbookUri", storageService.getPresignedOrSanitizedUrl(d.getBankPassbookUri()));
+            return ResponseEntity.ok((Object) map);
+        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found with ID: " + id)));
     }
 
     @GetMapping("/email/{email}")

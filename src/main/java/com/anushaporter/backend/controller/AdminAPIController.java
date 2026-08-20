@@ -78,11 +78,27 @@ public class AdminAPIController {
                     .collect(Collectors.toList());
         }
 
-        List<Map<String, Object>> response = drivers.stream().map(d -> Map.<String, Object>of(
-                "driverId", d.getId().toString(),
-                "name", d.getName() != null ? d.getName() : "Unknown",
-                "kycStatus", d.getKyc() != null ? d.getKyc() : "pending"
-        )).collect(Collectors.toList());
+        List<Map<String, Object>> response = drivers.stream().map(d -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("driverId", d.getId().toString());
+            m.put("id", "DRV-" + d.getId());
+            m.put("name", d.getName() != null ? d.getName() : "Unknown");
+            m.put("email", d.getEmail() != null ? d.getEmail() : "");
+            m.put("phone", d.getPhone() != null ? d.getPhone() : "");
+            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
+            String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
+            m.put("vehicle", v);
+            m.put("vehicleType", vType);
+            m.put("vehicle_type", vType);
+            m.put("vehicleName", vType);
+            m.put("vehicleNumber", d.getVehicleNumber() != null ? d.getVehicleNumber() : "");
+            m.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
+            m.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
+            m.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
+            m.put("rating", d.getRating() != null ? d.getRating() : "4.8");
+            m.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
+            return m;
+        }).collect(Collectors.toList());
 
         return ResponseEntity.ok(response);
     }

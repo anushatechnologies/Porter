@@ -93,8 +93,12 @@ public class DriverAPIController {
         map.put("kyc", driver.getKyc() != null ? driver.getKyc() : "pending");
         map.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "pending");
         map.put("rating", driver.getRating() != null ? driver.getRating() : "4.8");
-        map.put("vehicle", driver.getVehicle() != null ? driver.getVehicle() : "");
-        map.put("vehicleType", driver.getVehicleType() != null ? driver.getVehicleType() : "");
+        String vType = driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType() : (driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle() : "Vehicle");
+        String v = driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle() : (driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType() : "Vehicle");
+        map.put("vehicle", v);
+        map.put("vehicleType", vType);
+        map.put("vehicle_type", vType);
+        map.put("vehicleName", vType);
         map.put("vehicleNumber", driver.getVehicleNumber() != null ? driver.getVehicleNumber() : "");
         map.put("rcNumber", driver.getRcNumber() != null ? driver.getRcNumber() : "");
         map.put("licenseNumber", driver.getLicenseNumber() != null ? driver.getLicenseNumber() : "");
@@ -490,12 +494,20 @@ public class DriverAPIController {
             }
         }
 
+        // Resolve unified vehicle string
+        String vehicleVal = text(payload, "vehicle");
+        String vehicleTypeVal = text(payload, "vehicleType");
+        String vehicle_typeVal = text(payload, "vehicle_type");
+        String vehicleNameVal = text(payload, "vehicleName");
+        String resolvedVehicle = vehicleVal != null ? vehicleVal : (vehicleTypeVal != null ? vehicleTypeVal : (vehicle_typeVal != null ? vehicle_typeVal : (vehicleNameVal != null ? vehicleNameVal : "Vehicle")));
+
         driver.setPhone(phone);
         driver.setEmail(text(payload, "email") != null ? text(payload, "email") : appUser.getEmail());
         driver.setName(name);
         driver.setDob(text(payload, "dob"));
         driver.setGender(text(payload, "gender"));
-        driver.setVehicleType(text(payload, "vehicleType"));
+        driver.setVehicle(resolvedVehicle);
+        driver.setVehicleType(resolvedVehicle);
         driver.setVehicleNumber(text(payload, "vehicleNumber"));
         driver.setAadhaarNumber(aadhaar);
         driver.setRcNumber(rcNumber);
@@ -523,11 +535,17 @@ public class DriverAPIController {
 
         Driver saved = driverRepository.save(driver);
 
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "driverId", saved.getId().toString(),
-            "kycStatus", saved.getKyc()
-        ));
+        Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("message", "Driver profile created successfully");
+        resp.put("driverId", saved.getId().toString());
+        resp.put("id", saved.getId().toString());
+        resp.put("kycStatus", saved.getKyc());
+        resp.put("vehicle", saved.getVehicle());
+        resp.put("vehicleType", saved.getVehicleType());
+        resp.put("driver", saved);
+
+        return ResponseEntity.ok(resp);
     }
 
     private String text(Map<String, Object> payload, String key) {
