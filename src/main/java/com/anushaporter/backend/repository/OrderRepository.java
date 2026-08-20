@@ -21,26 +21,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
-    @Query("UPDATE Order o SET o.driverId = :driverId, o.driverName = :driverName, o.driverEmail = :driverEmail, o.driverPhone = :driverPhone, o.driverVehicleNumber = :driverVehicleNumber, o.status = 'accepted' WHERE o.id = :id AND (o.status = 'searching' OR o.status = 'pending' OR o.status IS NULL)")
+    @Query("UPDATE Order o SET o.driverId = :driverId, o.driverName = :driverName, o.driverEmail = :driverEmail, o.driverPhone = :driverPhone, o.driverVehicleNumber = :driverVehicleNumber, o.status = 'accepted', o.acceptedAt = :acceptedAt WHERE o.id = :id AND (o.status = 'searching' OR o.status = 'pending' OR o.status = 'created' OR o.status = 'broadcasted' OR o.status = 'unassigned' OR o.status = 'placed' OR o.status = 'available' OR o.status IS NULL)")
     int claimOrderByIdAtomic(
             @Param("id") Long id,
             @Param("driverId") String driverId,
             @Param("driverName") String driverName,
             @Param("driverEmail") String driverEmail,
             @Param("driverPhone") String driverPhone,
-            @Param("driverVehicleNumber") String driverVehicleNumber
+            @Param("driverVehicleNumber") String driverVehicleNumber,
+            @Param("acceptedAt") java.time.LocalDateTime acceptedAt
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
-    @Query("UPDATE Order o SET o.driverId = :driverId, o.driverName = :driverName, o.driverEmail = :driverEmail, o.driverPhone = :driverPhone, o.driverVehicleNumber = :driverVehicleNumber, o.status = 'accepted' WHERE o.bookingId = :bookingId AND (o.status = 'searching' OR o.status = 'pending' OR o.status IS NULL)")
+    @Query("UPDATE Order o SET o.driverId = :driverId, o.driverName = :driverName, o.driverEmail = :driverEmail, o.driverPhone = :driverPhone, o.driverVehicleNumber = :driverVehicleNumber, o.status = 'accepted', o.acceptedAt = :acceptedAt WHERE o.bookingId = :bookingId AND (o.status = 'searching' OR o.status = 'pending' OR o.status = 'created' OR o.status = 'broadcasted' OR o.status = 'unassigned' OR o.status = 'placed' OR o.status = 'available' OR o.status IS NULL)")
     int claimOrderByBookingIdAtomic(
             @Param("bookingId") String bookingId,
             @Param("driverId") String driverId,
             @Param("driverName") String driverName,
             @Param("driverEmail") String driverEmail,
             @Param("driverPhone") String driverPhone,
-            @Param("driverVehicleNumber") String driverVehicleNumber
+            @Param("driverVehicleNumber") String driverVehicleNumber,
+            @Param("acceptedAt") java.time.LocalDateTime acceptedAt
     );
 
     /**

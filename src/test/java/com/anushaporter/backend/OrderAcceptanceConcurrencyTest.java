@@ -115,7 +115,8 @@ public class OrderAcceptanceConcurrencyTest {
                 .header("Authorization", "Bearer " + tokenDriverB))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.message", is("This order has already been accepted by another driver.")));
+                .andExpect(jsonPath("$.statusCode", is(409)))
+                .andExpect(jsonPath("$.message", containsString("This order has already been accepted by another driver")));
 
         // Verify Driver A STILL owns the order and Driver B did not overwrite it
         inDb = orderRepository.findById(order.getId()).orElseThrow();
@@ -149,7 +150,8 @@ public class OrderAcceptanceConcurrencyTest {
                 .content("{\"status\": \"accepted\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.message", is("This order has already been accepted by another driver.")));
+                .andExpect(jsonPath("$.statusCode", is(409)))
+                .andExpect(jsonPath("$.message", containsString("This order has already been accepted by another driver")));
 
         // Verify order remains assigned to Driver A
         Order inDb = orderRepository.findById(order.getId()).orElseThrow();
@@ -170,6 +172,7 @@ public class OrderAcceptanceConcurrencyTest {
                 .header("Authorization", "Bearer " + tokenDriverA))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.statusCode", is(200)))
                 .andExpect(jsonPath("$.status", is("accepted")));
 
         // Driver B attempts via /api/driver/orders/{bookingId}/accept -> MUST receive 409
@@ -177,12 +180,110 @@ public class OrderAcceptanceConcurrencyTest {
                 .header("Authorization", "Bearer " + tokenDriverB))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.message", is("This order has already been accepted by another driver.")));
+                .andExpect(jsonPath("$.statusCode", is(409)))
+                .andExpect(jsonPath("$.message", containsString("This order has already been accepted by another driver")));
 
         // Idempotent retry by Driver A -> Returns 200 OK
         mockMvc.perform(put("/api/driver/orders/" + order.getBookingId() + "/accept")
                 .header("Authorization", "Bearer " + tokenDriverA))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)));
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.message", is("You have already accepted this order.")));
+    }
+
+    @Test
+    void testAcceptOrderWithExplicitBodyPayload() throws Exception {
+        Order order = new Order();
+        order.setBookingId("BK_TEST_004");
+        order.setUserEmail("customer@test.com");
+        order.setStatus("searching");
+        order.setAmount(250.0);
+        order = orderRepository.save(order);
+
+        // Accept via POST /api/orders/{id}/accept with body payload
+        mockMvc.perform(post("/api/orders/" + order.getId() + "/accept")
+                .header("Authorization", "Bearer " + tokenDriverA)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"driverId\":\"" + driverA.getId() + "\",\"driverName\":\"Driver Alice\",\"driverPhone\":\"9876500001\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.statusCode", is(200)))
+                .andExpect(jsonPath("$.order.driverId", is(driverA.getId().toString())));
+
+        // Second driver attempts via POST with body -> 409 Conflict
+        mockMvc.perform(post("/api/orders/" + order.getId() + "/accept")
+                .header("Authorization", "Bearer " + tokenDriverB)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"driverId\":\"" + driverB.getId() + "\",\"driverName\":\"Driver Bob\",\"driverPhone\":\"9876500002\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.statusCode", is(409)));
+    }
+
+    @Test
+    void testAcceptOrderNotFoundReturns404() throws Exception {
+        mockMvc.perform(put("/api/orders/999999/accept")
+                .header("Authorization", "Bearer " + tokenDriverA))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.statusCode", is(404)))
+                .andExpect(jsonPath("$.message", is("Order not found or has expired.")));
+    }
+
+    @Test
+    void testMultithreadedSimultaneousRaceCondition() throws Exception {
+        Order order = new Order();
+        order.setBookingId("BK_RACE_001");
+        order.setUserEmail("customer@test.com");
+        order.setStatus("searching");
+        order.setAmount(600.0);
+        final Order savedOrder = orderRepository.save(order);
+
+        int totalThreads = 8;
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(totalThreads);
+        java.util.concurrent.CountDownLatch readyLatch = new java.util.concurrent.CountDownLatch(totalThreads);
+        java.util.concurrent.CountDownLatch startLatch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger successCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger conflictCount = new java.util.concurrent.atomic.AtomicInteger(0);
+
+        for (int i = 1; i <= totalThreads; i++) {
+            final int index = i;
+            executor.submit(() -> {
+                try {
+                    Driver d = new Driver();
+                    d.setName("Concurrent Driver " + index);
+                    d.setEmail("concurrent" + index + "@test.com");
+                    d.setPhone("98760000" + index);
+                    d = driverRepository.save(d);
+                    String token = jwtUtil.generateToken(d.getEmail());
+
+                    readyLatch.countDown();
+                    startLatch.await(); // wait for all threads to start at the exact same instant
+
+                    int status = mockMvc.perform(put("/api/orders/" + savedOrder.getId() + "/accept")
+                            .header("Authorization", "Bearer " + token))
+                            .andReturn()
+                            .getResponse()
+                            .getStatus();
+
+                    if (status == 200) {
+                        successCount.incrementAndGet();
+                    } else if (status == 409) {
+                        conflictCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        readyLatch.await();
+        startLatch.countDown(); // Fire all requests simultaneously!
+        executor.shutdown();
+        executor.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS);
+
+        // Exactly 1 driver must succeed with 200 OK, and exactly (totalThreads - 1) must get 409 Conflict
+        assertEquals(1, successCount.get(), "Only 1 driver should win the order");
+        assertEquals(totalThreads - 1, conflictCount.get(), "All other drivers must receive 409 Conflict");
     }
 }

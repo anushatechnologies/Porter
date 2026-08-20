@@ -90,6 +90,9 @@ public class Order {
     @Column(length = 64)
     private String completedByDriverId;
 
+    /** Set when a driver accepts the order */
+    private LocalDateTime acceptedAt;
+
     /** Idempotency key to prevent duplicate completion calls from the Driver App */
     @Column(length = 128, unique = true)
     private String idempotencyKey;
@@ -186,6 +189,8 @@ public class Order {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getCompletedAt() { return completedAt; }
     public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public LocalDateTime getAcceptedAt() { return acceptedAt; }
+    public void setAcceptedAt(LocalDateTime acceptedAt) { this.acceptedAt = acceptedAt; }
     public String getCompletedByDriverId() { return completedByDriverId; }
     public void setCompletedByDriverId(String completedByDriverId) { this.completedByDriverId = completedByDriverId; }
     public String getIdempotencyKey() { return idempotencyKey; }

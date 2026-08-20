@@ -21,11 +21,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -213,10 +209,25 @@ public class DriverAPIController {
     }
 
     @RequestMapping(value = {"/driver/orders/{bookingId}/accept", "/drivers/orders/{bookingId}/accept"}, method = {RequestMethod.PUT, RequestMethod.POST})
-    public ResponseEntity<?> acceptOrderByBookingId(HttpServletRequest request, @PathVariable String bookingId) {
+    public ResponseEntity<?> acceptOrderByBookingId(
+            HttpServletRequest request,
+            @PathVariable String bookingId,
+            @RequestBody(required = false) Map<String, Object> payload
+    ) {
         Driver driver = getAuthenticatedDriver(request);
-        if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver profile not found or unauthorized"));
+
+        String driverId = driver != null && driver.getId() != null ? driver.getId().toString() : (payload != null && payload.get("driverId") != null ? String.valueOf(payload.get("driverId")) : null);
+        String driverName = driver != null ? driver.getName() : (payload != null && payload.get("driverName") != null ? String.valueOf(payload.get("driverName")) : null);
+        String driverEmail = driver != null ? driver.getEmail() : (payload != null && payload.get("driverEmail") != null ? String.valueOf(payload.get("driverEmail")) : null);
+        String driverPhone = driver != null ? driver.getPhone() : (payload != null && payload.get("driverPhone") != null ? String.valueOf(payload.get("driverPhone")) : null);
+        String driverVehicle = driver != null ? driver.getVehicleNumber() : (payload != null && payload.get("driverVehicleNumber") != null ? String.valueOf(payload.get("driverVehicleNumber")) : (payload != null && payload.get("vehicleNumber") != null ? String.valueOf(payload.get("vehicleNumber")) : null));
+
+        if (driver == null && driverId == null && driverEmail == null) {
+            Map<String, Object> unauth = new LinkedHashMap<>();
+            unauth.put("success", false);
+            unauth.put("statusCode", 401);
+            unauth.put("message", "Driver profile not found or unauthorized");
+            return ResponseEntity.status(401).body(unauth);
         }
 
         Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
@@ -226,55 +237,113 @@ public class DriverAPIController {
             } catch (NumberFormatException ignored) {}
         }
         if (orderOpt.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
+            Map<String, Object> notFound = new LinkedHashMap<>();
+            notFound.put("success", false);
+            notFound.put("statusCode", 404);
+            notFound.put("message", "Order not found or has expired.");
+            return ResponseEntity.status(404).body(notFound);
         }
 
         Order order = orderOpt.get();
-        String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "searching";
-        boolean isClaimable = currentStatus.equals("searching") || currentStatus.equals("pending");
+        boolean isSameDriver = (driverId != null && order.getDriverId() != null && driverId.trim().equalsIgnoreCase(order.getDriverId().trim()))
+                || (driverEmail != null && order.getDriverEmail() != null && driverEmail.trim().equalsIgnoreCase(order.getDriverEmail().trim()))
+                || (driverPhone != null && order.getDriverPhone() != null && driverPhone.trim().equals(order.getDriverPhone().trim()));
 
-        boolean isSameDriver = (driver.getId() != null && driver.getId().toString().equals(order.getDriverId()))
-                || (driver.getEmail() != null && driver.getEmail().equalsIgnoreCase(order.getDriverEmail()));
-
-        if (!isClaimable && !isSameDriver) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "success", false,
-                    "message", "This order has already been accepted by another driver."
-            ));
+        // If this same driver already claimed the order, return idempotent success
+        if (isSameDriver) {
+            Map<String, Object> idempotentSuccess = new LinkedHashMap<>();
+            idempotentSuccess.put("success", true);
+            idempotentSuccess.put("statusCode", 200);
+            idempotentSuccess.put("message", "You have already accepted this order.");
+            idempotentSuccess.put("bookingId", order.getBookingId() != null ? order.getBookingId() : bookingId);
+            idempotentSuccess.put("status", "accepted");
+            idempotentSuccess.put("order", order);
+            return ResponseEntity.ok(idempotentSuccess);
         }
 
+        // If order is not in a claimable status and not accepted by this driver -> 409 Conflict
+        if (!isOrderClaimable(order.getStatus())) {
+            Map<String, Object> conflict = new LinkedHashMap<>();
+            conflict.put("success", false);
+            conflict.put("statusCode", 409);
+            conflict.put("message", "This order has already been accepted by another driver partner.");
+            Map<String, Object> orderSummary = new LinkedHashMap<>();
+            orderSummary.put("id", order.getId());
+            if (order.getBookingId() != null) orderSummary.put("bookingId", order.getBookingId());
+            orderSummary.put("status", order.getStatus() != null ? order.getStatus() : "accepted");
+            conflict.put("order", orderSummary);
+            return ResponseEntity.status(409).body(conflict);
+        }
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
         int rows = orderRepository.claimOrderByIdAtomic(
                 order.getId(),
-                driver.getId() != null ? driver.getId().toString() : "",
-                driver.getName(),
-                driver.getEmail(),
-                driver.getPhone(),
-                driver.getVehicleNumber()
+                driverId != null ? driverId : "",
+                driverName,
+                driverEmail,
+                driverPhone,
+                driverVehicle,
+                now
         );
 
-        if (rows == 0 && !isSameDriver) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "success", false,
-                    "message", "This order has already been accepted by another driver."
-            ));
+        if (rows == 0) {
+            Order fresh = orderRepository.findById(order.getId()).orElse(order);
+            boolean freshIsSame = (driverId != null && driverId.equalsIgnoreCase(fresh.getDriverId()))
+                    || (driverEmail != null && driverEmail.equalsIgnoreCase(fresh.getDriverEmail()))
+                    || (driverPhone != null && driverPhone.equals(fresh.getDriverPhone()));
+
+            if (freshIsSame) {
+                Map<String, Object> idempotentSuccess = new LinkedHashMap<>();
+                idempotentSuccess.put("success", true);
+                idempotentSuccess.put("statusCode", 200);
+                idempotentSuccess.put("message", "You have already accepted this order.");
+                idempotentSuccess.put("bookingId", fresh.getBookingId() != null ? fresh.getBookingId() : bookingId);
+                idempotentSuccess.put("status", "accepted");
+                idempotentSuccess.put("order", fresh);
+                return ResponseEntity.ok(idempotentSuccess);
+            }
+
+            Map<String, Object> conflict = new LinkedHashMap<>();
+            conflict.put("success", false);
+            conflict.put("statusCode", 409);
+            conflict.put("message", "This order has already been accepted by another driver partner.");
+            Map<String, Object> orderSummary = new LinkedHashMap<>();
+            orderSummary.put("id", fresh.getId());
+            if (fresh.getBookingId() != null) orderSummary.put("bookingId", fresh.getBookingId());
+            orderSummary.put("status", fresh.getStatus() != null ? fresh.getStatus() : "accepted");
+            conflict.put("order", orderSummary);
+            return ResponseEntity.status(409).body(conflict);
         }
 
-        order.setDriverId(driver.getId() != null ? driver.getId().toString() : "");
-        order.setDriverName(driver.getName());
-        order.setDriverEmail(driver.getEmail());
-        order.setDriverPhone(driver.getPhone());
-        order.setDriverVehicleNumber(driver.getVehicleNumber());
+        order.setDriverId(driverId != null ? driverId : "");
+        order.setDriverName(driverName);
+        order.setDriverEmail(driverEmail);
+        order.setDriverPhone(driverPhone);
+        order.setDriverVehicleNumber(driverVehicle);
         order.setStatus("accepted");
+        order.setAcceptedAt(now);
 
         Order saved = orderRepository.findById(order.getId()).orElse(order);
-        pushNotificationService.notifyOrderStatus(saved, saved.getStatus());
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Order accepted successfully",
-                "bookingId", saved.getBookingId() != null ? saved.getBookingId() : bookingId,
-                "status", "accepted",
-                "order", saved
-        ));
+        if (pushNotificationService != null) {
+            pushNotificationService.notifyOrderStatus(saved, saved.getStatus());
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("statusCode", 200);
+        response.put("message", "Order accepted successfully");
+        response.put("bookingId", saved.getBookingId() != null ? saved.getBookingId() : bookingId);
+        response.put("status", "accepted");
+        response.put("order", saved);
+        return ResponseEntity.ok(response);
+    }
+
+    private boolean isOrderClaimable(String status) {
+        if (status == null || status.isBlank()) return true;
+        String s = status.trim().toLowerCase();
+        return s.equals("searching") || s.equals("pending") || s.equals("created")
+                || s.equals("broadcasted") || s.equals("unassigned") || s.equals("placed")
+                || s.equals("available");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
