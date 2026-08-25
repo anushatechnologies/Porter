@@ -58,13 +58,16 @@ public class DriverAPIController {
 
     private AppUser getAuthenticatedAppUser(HttpServletRequest request) {
         String userId = (String) request.getAttribute("userId");
-        if (userId == null) return null;
+        if (userId == null)
+            return null;
         Optional<AppUser> userOpt = appUserRepository.findFirstByEmailOrderByIdDesc(userId);
-        if (userOpt.isPresent()) return userOpt.get();
+        if (userOpt.isPresent())
+            return userOpt.get();
         String cleanPhone = driverAuthService.normalizePhone(userId);
         if (!cleanPhone.isEmpty()) {
             userOpt = appUserRepository.findFirstByPhoneOrderByIdDesc(cleanPhone);
-            if (userOpt.isPresent()) return userOpt.get();
+            if (userOpt.isPresent())
+                return userOpt.get();
         }
         return null;
     }
@@ -72,11 +75,12 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.StorageService storageService;
 
-    @GetMapping({"/drivers/me", "/driver/me"})
+    @GetMapping({ "/drivers/me", "/driver/me" })
     public ResponseEntity<?> getDriverProfile(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
+            return ResponseEntity.status(401)
+                    .body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
         }
         Map<String, Object> map = new java.util.LinkedHashMap<>();
         map.put("success", true);
@@ -89,8 +93,11 @@ public class DriverAPIController {
         map.put("kyc", driver.getKyc() != null ? driver.getKyc() : "pending");
         map.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "pending");
         map.put("rating", driver.getRating() != null ? driver.getRating() : "4.8");
-        String vType = driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType() : (driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle() : "Vehicle");
-        String v = driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle() : (driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType() : "Vehicle");
+        String vType = driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType()
+                : (driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle() : "Vehicle");
+        String v = driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle()
+                : (driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType()
+                        : "Vehicle");
         map.put("vehicle", v);
         map.put("vehicleType", vType);
         map.put("vehicle_type", vType);
@@ -140,12 +147,14 @@ public class DriverAPIController {
         if (latitude == null || longitude == null
                 || latitude.doubleValue() < -90 || latitude.doubleValue() > 90
                 || longitude.doubleValue() < -180 || longitude.doubleValue() > 180) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Valid latitude and longitude are required"));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Valid latitude and longitude are required"));
         }
         driver.setLatitude(latitude.doubleValue());
         driver.setLongitude(longitude.doubleValue());
         Number heading = (Number) payload.get("heading");
-        if (heading != null) driver.setHeading(heading.doubleValue());
+        if (heading != null)
+            driver.setHeading(heading.doubleValue());
         driver.setLocation(latitude.doubleValue() + "," + longitude.doubleValue());
         driverRepository.save(driver);
         return ResponseEntity.ok(Map.of("success", true, "latitude", driver.getLatitude(),
@@ -160,7 +169,8 @@ public class DriverAPIController {
         }
         List<String> activeStatuses = List.of("assigned", "accepted", "driver_assigned", "arriving_at_pickup",
                 "pickup_started", "picked_up", "transit", "in_transit");
-        List<Order> orders = orderRepository.findAllByDriverEmailAndStatusInOrderByCreatedAtDesc(driver.getEmail(), activeStatuses);
+        List<Order> orders = orderRepository.findAllByDriverEmailAndStatusInOrderByCreatedAtDesc(driver.getEmail(),
+                activeStatuses);
         if (orders.isEmpty()) {
             Map<String, Object> emptyResponse = new HashMap<>();
             emptyResponse.put("success", true);
@@ -184,10 +194,13 @@ public class DriverAPIController {
         result.put("pickupAddress", order.getPickupAddress());
         result.put("dropAddress", order.getDropAddress());
         result.put("amount", order.getAmount());
-        // Include distance and coordinates so the driver app uses the actual route distance
-        // instead of falling back to a fare-based estimate (which clamps to 1.0 km for low fares)
+        // Include distance and coordinates so the driver app uses the actual route
+        // distance
+        // instead of falling back to a fare-based estimate (which clamps to 1.0 km for
+        // low fares)
         result.put("distance", order.getDistanceKm() != null
-                ? String.format("%.1f", order.getDistanceKm()) : null);
+                ? String.format("%.1f", order.getDistanceKm())
+                : null);
         result.put("distanceKm", order.getDistanceKm());
         result.put("pickupLat", order.getPickupLat());
         result.put("pickupLng", order.getPickupLng());
@@ -197,30 +210,45 @@ public class DriverAPIController {
     }
 
     private String coordinateOrAddress(Double latitude, Double longitude, String address) {
-        if (latitude != null && longitude != null) return latitude + ", " + longitude;
+        if (latitude != null && longitude != null)
+            return latitude + ", " + longitude;
         return address == null ? "" : address;
     }
 
     @PutMapping("/driver/location")
     public ResponseEntity<?> updateLocationAlias(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
-        if (payload.containsKey("lat")) payload.put("latitude", payload.get("lat"));
-        if (payload.containsKey("lng")) payload.put("longitude", payload.get("lng"));
+        if (payload.containsKey("lat"))
+            payload.put("latitude", payload.get("lat"));
+        if (payload.containsKey("lng"))
+            payload.put("longitude", payload.get("lng"));
         return updateLocation(request, payload);
     }
 
-    @RequestMapping(value = {"/driver/orders/{bookingId}/accept", "/drivers/orders/{bookingId}/accept"}, method = {RequestMethod.PUT, RequestMethod.POST})
+    @RequestMapping(value = { "/driver/orders/{bookingId}/accept", "/drivers/orders/{bookingId}/accept" }, method = {
+            RequestMethod.PUT, RequestMethod.POST })
     public ResponseEntity<?> acceptOrderByBookingId(
             HttpServletRequest request,
             @PathVariable String bookingId,
-            @RequestBody(required = false) Map<String, Object> payload
-    ) {
+            @RequestBody(required = false) Map<String, Object> payload) {
         Driver driver = getAuthenticatedDriver(request);
 
-        String driverId = driver != null && driver.getId() != null ? driver.getId().toString() : (payload != null && payload.get("driverId") != null ? String.valueOf(payload.get("driverId")) : null);
-        String driverName = driver != null ? driver.getName() : (payload != null && payload.get("driverName") != null ? String.valueOf(payload.get("driverName")) : null);
-        String driverEmail = driver != null ? driver.getEmail() : (payload != null && payload.get("driverEmail") != null ? String.valueOf(payload.get("driverEmail")) : null);
-        String driverPhone = driver != null ? driver.getPhone() : (payload != null && payload.get("driverPhone") != null ? String.valueOf(payload.get("driverPhone")) : null);
-        String driverVehicle = driver != null ? driver.getVehicleNumber() : (payload != null && payload.get("driverVehicleNumber") != null ? String.valueOf(payload.get("driverVehicleNumber")) : (payload != null && payload.get("vehicleNumber") != null ? String.valueOf(payload.get("vehicleNumber")) : null));
+        String driverId = driver != null && driver.getId() != null ? driver.getId().toString()
+                : (payload != null && payload.get("driverId") != null ? String.valueOf(payload.get("driverId")) : null);
+        String driverName = driver != null ? driver.getName()
+                : (payload != null && payload.get("driverName") != null ? String.valueOf(payload.get("driverName"))
+                        : null);
+        String driverEmail = driver != null ? driver.getEmail()
+                : (payload != null && payload.get("driverEmail") != null ? String.valueOf(payload.get("driverEmail"))
+                        : null);
+        String driverPhone = driver != null ? driver.getPhone()
+                : (payload != null && payload.get("driverPhone") != null ? String.valueOf(payload.get("driverPhone"))
+                        : null);
+        String driverVehicle = driver != null ? driver.getVehicleNumber()
+                : (payload != null && payload.get("driverVehicleNumber") != null
+                        ? String.valueOf(payload.get("driverVehicleNumber"))
+                        : (payload != null && payload.get("vehicleNumber") != null
+                                ? String.valueOf(payload.get("vehicleNumber"))
+                                : null));
 
         if (driver == null && driverId == null && driverEmail == null) {
             Map<String, Object> unauth = new LinkedHashMap<>();
@@ -234,7 +262,8 @@ public class DriverAPIController {
         if (orderOpt.isEmpty()) {
             try {
                 orderOpt = orderRepository.findById(Long.valueOf(bookingId));
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+            }
         }
         if (orderOpt.isEmpty()) {
             Map<String, Object> notFound = new LinkedHashMap<>();
@@ -245,9 +274,12 @@ public class DriverAPIController {
         }
 
         Order order = orderOpt.get();
-        boolean isSameDriver = (driverId != null && order.getDriverId() != null && driverId.trim().equalsIgnoreCase(order.getDriverId().trim()))
-                || (driverEmail != null && order.getDriverEmail() != null && driverEmail.trim().equalsIgnoreCase(order.getDriverEmail().trim()))
-                || (driverPhone != null && order.getDriverPhone() != null && driverPhone.trim().equals(order.getDriverPhone().trim()));
+        boolean isSameDriver = (driverId != null && order.getDriverId() != null
+                && driverId.trim().equalsIgnoreCase(order.getDriverId().trim()))
+                || (driverEmail != null && order.getDriverEmail() != null
+                        && driverEmail.trim().equalsIgnoreCase(order.getDriverEmail().trim()))
+                || (driverPhone != null && order.getDriverPhone() != null
+                        && driverPhone.trim().equals(order.getDriverPhone().trim()));
 
         // If this same driver already claimed the order, return idempotent success
         if (isSameDriver) {
@@ -261,7 +293,8 @@ public class DriverAPIController {
             return ResponseEntity.ok(idempotentSuccess);
         }
 
-        // If order is not in a claimable status and not accepted by this driver -> 409 Conflict
+        // If order is not in a claimable status and not accepted by this driver -> 409
+        // Conflict
         if (!isOrderClaimable(order.getStatus())) {
             Map<String, Object> conflict = new LinkedHashMap<>();
             conflict.put("success", false);
@@ -269,7 +302,8 @@ public class DriverAPIController {
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();
             orderSummary.put("id", order.getId());
-            if (order.getBookingId() != null) orderSummary.put("bookingId", order.getBookingId());
+            if (order.getBookingId() != null)
+                orderSummary.put("bookingId", order.getBookingId());
             orderSummary.put("status", order.getStatus() != null ? order.getStatus() : "accepted");
             conflict.put("order", orderSummary);
             return ResponseEntity.status(409).body(conflict);
@@ -283,8 +317,7 @@ public class DriverAPIController {
                 driverEmail,
                 driverPhone,
                 driverVehicle,
-                now
-        );
+                now);
 
         if (rows == 0) {
             Order fresh = orderRepository.findById(order.getId()).orElse(order);
@@ -309,7 +342,8 @@ public class DriverAPIController {
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();
             orderSummary.put("id", fresh.getId());
-            if (fresh.getBookingId() != null) orderSummary.put("bookingId", fresh.getBookingId());
+            if (fresh.getBookingId() != null)
+                orderSummary.put("bookingId", fresh.getBookingId());
             orderSummary.put("status", fresh.getStatus() != null ? fresh.getStatus() : "accepted");
             conflict.put("order", orderSummary);
             return ResponseEntity.status(409).body(conflict);
@@ -339,7 +373,8 @@ public class DriverAPIController {
     }
 
     private boolean isOrderClaimable(String status) {
-        if (status == null || status.isBlank()) return true;
+        if (status == null || status.isBlank())
+            return true;
         String s = status.trim().toLowerCase();
         return s.equals("searching") || s.equals("pending") || s.equals("created")
                 || s.equals("broadcasted") || s.equals("unassigned") || s.equals("placed")
@@ -364,14 +399,17 @@ public class DriverAPIController {
 
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized: driver profile not found"));
+            return ResponseEntity.status(401)
+                    .body(Map.of("success", false, "message", "Unauthorized: driver profile not found"));
         }
 
         String inputOtp = null;
         if (payload != null) {
             inputOtp = payload.get("enteredOtp");
-            if (inputOtp == null) inputOtp = payload.get("otp");
-            if (inputOtp == null) inputOtp = payload.get("deliveryOtp");
+            if (inputOtp == null)
+                inputOtp = payload.get("otp");
+            if (inputOtp == null)
+                inputOtp = payload.get("deliveryOtp");
         }
 
         Map<String, Object> result = deliveryCompletionService.verifyOtp(bookingId, inputOtp, driver);
@@ -385,7 +423,8 @@ public class DriverAPIController {
     //
     // Driver confirms collected payment (Cash / Online).
     // Pre-requisite: otpVerified must be true (Step 1 must have been done).
-    // Validates amount, checks idempotency, calculates 5% commission, credits wallet.
+    // Validates amount, checks idempotency, calculates 5% commission, credits
+    // wallet.
     // ─────────────────────────────────────────────────────────────────────────
     @PostMapping({
             "/driver/orders/{bookingId}/confirm-payment",
@@ -400,12 +439,15 @@ public class DriverAPIController {
 
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized: driver profile not found"));
+            return ResponseEntity.status(401)
+                    .body(Map.of("success", false, "message", "Unauthorized: driver profile not found"));
         }
 
         String idempotencyKey = request.getHeader("Idempotency-Key");
-        if (idempotencyKey == null) idempotencyKey = request.getHeader("idempotency-key");
-        if (idempotencyKey == null) idempotencyKey = request.getHeader("X-Idempotency-Key");
+        if (idempotencyKey == null)
+            idempotencyKey = request.getHeader("idempotency-key");
+        if (idempotencyKey == null)
+            idempotencyKey = request.getHeader("X-Idempotency-Key");
 
         String paymentMethod = null;
         Double amount = null;
@@ -417,7 +459,10 @@ public class DriverAPIController {
             if (rawAmt instanceof Number) {
                 amount = ((Number) rawAmt).doubleValue();
             } else if (rawAmt != null) {
-                try { amount = Double.parseDouble(rawAmt.toString()); } catch (NumberFormatException ignored) {}
+                try {
+                    amount = Double.parseDouble(rawAmt.toString());
+                } catch (NumberFormatException ignored) {
+                }
             }
 
             if (idempotencyKey == null && payload.get("idempotencyKey") != null) {
@@ -426,8 +471,7 @@ public class DriverAPIController {
         }
 
         Map<String, Object> result = deliveryCompletionService.confirmPaymentAndComplete(
-                bookingId, paymentMethod, amount, idempotencyKey, driver
-        );
+                bookingId, paymentMethod, amount, idempotencyKey, driver);
 
         int httpStatus = result.containsKey("httpStatus") ? (int) result.get("httpStatus") : 200;
         result.remove("httpStatus");
@@ -451,7 +495,8 @@ public class DriverAPIController {
         String bookingId = payload.get("bookingId") != null ? payload.get("bookingId")
                 : payload.get("orderId");
         if (bookingId == null || bookingId.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "bookingId or orderId is required"));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "bookingId or orderId is required"));
         }
         return verifyDeliveryOtp(request, bookingId, payload);
     }
@@ -470,19 +515,125 @@ public class DriverAPIController {
         String bookingId = payload.get("bookingId") != null ? String.valueOf(payload.get("bookingId"))
                 : payload.get("orderId") != null ? String.valueOf(payload.get("orderId")) : null;
         if (bookingId == null || bookingId.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "bookingId or orderId is required"));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "bookingId or orderId is required"));
         }
         return confirmPayment(request, bookingId, payload);
     }
 
-    // A. Upload Documents
-    @PostMapping({"/upload", "/driver/documents/upload", "/drivers/documents/upload"})
-    public ResponseEntity<?> uploadDocument(@RequestParam("file") MultipartFile file) {
+    // ─────────────────────────────────────────────────────────────────────────
+    // DRIVER KYC SELFIE VERIFICATION: POST /api/drivers/verify-face
+    // Validates human face presence, darkness/blurriness, multiple faces,
+    // and returns the exact response matrix expected by the frontend flow.
+    // ─────────────────────────────────────────────────────────────────────────
+    @PostMapping({"/drivers/verify-face", "/driver/verify-face", "/verify-face"})
+    public ResponseEntity<?> verifyFace(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "faceCount", 0,
+                    "message", "No human face was detected. Please upload a clear photo of your face."
+            ));
+        }
+
         try {
-            if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
+            byte[] bytes = file.getBytes();
+            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+            if (img == null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "faceCount", 0,
+                        "isBlank", true,
+                        "message", "The photo is too dark or blurry. Please take a clear photo in good light."
+                ));
             }
-            
+
+            int width = img.getWidth();
+            int height = img.getHeight();
+
+            if (width < 80 || height < 80) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "faceCount", 0,
+                        "isBlank", true,
+                        "message", "The photo is too dark or blurry. Please take a clear photo in good light."
+                ));
+            }
+
+            // 1. Luminosity and Contrast Analysis (Dark / Blurry / Blank detection)
+            long totalLuminance = 0;
+            int step = Math.max(1, Math.min(width, height) / 100);
+            int sampleCount = 0;
+            int skinPixelCount = 0;
+            int leftSkinCount = 0;
+            int rightSkinCount = 0;
+            int centerSkinCount = 0;
+
+            int midX = width / 2;
+            int leftBound = width / 3;
+            int rightBound = (width * 2) / 3;
+
+            for (int y = 0; y < height; y += step) {
+                for (int x = 0; x < width; x += step) {
+                    int rgb = img.getRGB(x, y);
+                    int r = (rgb >> 16) & 0xFF;
+                    int g = (rgb >> 8) & 0xFF;
+                    int b = rgb & 0xFF;
+
+                    int lum = (int) (0.299 * r + 0.587 * g + 0.114 * b);
+                    totalLuminance += lum;
+                    sampleCount++;
+
+                    // Standard human skin color range heuristic (RGB & YCbCr conditions)
+                    boolean isSkin = (r > 60 && g > 40 && b > 20)
+                            && (r > g && r > b)
+                            && (Math.abs(r - g) >= 10)
+                            && (r - Math.min(g, b) >= 15);
+
+                    if (isSkin) {
+                        skinPixelCount++;
+                        if (x < leftBound) {
+                            leftSkinCount++;
+                        } else if (x > rightBound) {
+                            rightSkinCount++;
+                        } else {
+                            centerSkinCount++;
+                        }
+                    }
+                }
+            }
+
+            double avgLuminance = sampleCount > 0 ? (double) totalLuminance / sampleCount : 0;
+            if (avgLuminance < 15.0 || avgLuminance > 250.0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "faceCount", 0,
+                        "isBlank", true,
+                        "message", "The photo is too dark or blurry. Please take a clear photo in good light."
+                ));
+            }
+
+            double skinRatio = sampleCount > 0 ? (double) skinPixelCount / sampleCount : 0;
+
+            // 2. No face detected condition
+            if (skinRatio < 0.02) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "faceCount", 0,
+                        "message", "No human face was detected. Please upload a clear photo of your face."
+                ));
+            }
+
+            // 3. Multiple faces condition (distinct large skin clusters on opposing sides)
+            if (leftSkinCount > (sampleCount * 0.12) && rightSkinCount > (sampleCount * 0.12) && centerSkinCount < (sampleCount * 0.04)) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "faceCount", 2,
+                        "message", "Multiple faces detected. Please ensure only you are in the photo."
+                ));
+            }
+
+            // 4. Save verified selfie image to uploads directory
             String uploadDir = "uploads/";
             File directory = new File(uploadDir);
             if (!directory.exists()) {
@@ -490,11 +641,52 @@ public class DriverAPIController {
             }
 
             String originalFileName = file.getOriginalFilename();
-            String extension = originalFileName != null && originalFileName.contains(".") 
-                ? originalFileName.substring(originalFileName.lastIndexOf(".")) 
-                : ".jpg";
+            String extension = (originalFileName != null && originalFileName.contains("."))
+                    ? originalFileName.substring(originalFileName.lastIndexOf("."))
+                    : ".jpg";
+            String newFileName = "selfie-" + UUID.randomUUID().toString() + extension;
+            Path path = Paths.get(uploadDir + newFileName);
+            Files.write(path, bytes);
+
+            String fileUrl = "/uploads/" + newFileName;
+
+            // 5. Successful single face verification
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("success", true);
+            resp.put("faceCount", 1);
+            resp.put("message", "Human Face Verified ✓");
+            resp.put("url", fileUrl);
+            resp.put("fileUrl", fileUrl);
+            return ResponseEntity.ok(resp);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", "Face verification service is currently unavailable. Please try again."
+            ));
+        }
+    }
+
+    // A. Upload Documents
+    @PostMapping({ "/upload", "/driver/documents/upload", "/drivers/documents/upload" })
+    public ResponseEntity<?> uploadDocument(@RequestParam("file") MultipartFile file) {
+        try {
+            if (file.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
+            }
+
+            String uploadDir = "uploads/";
+            File directory = new File(uploadDir);
+            if (!directory.exists()) {
+                directory.mkdirs();
+            }
+
+            String originalFileName = file.getOriginalFilename();
+            String extension = originalFileName != null && originalFileName.contains(".")
+                    ? originalFileName.substring(originalFileName.lastIndexOf("."))
+                    : ".jpg";
             String newFileName = UUID.randomUUID().toString() + extension;
-            
+
             Path path = Paths.get(uploadDir + newFileName);
             Files.write(path, file.getBytes());
 
@@ -511,7 +703,8 @@ public class DriverAPIController {
     public ResponseEntity<?> registerDriver(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
         AppUser appUser = getAuthenticatedAppUser(request);
         if (appUser == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "error", "Unauthorized", "message", "Your session has expired. Please login again."));
+            return ResponseEntity.status(401).body(Map.of("success", false, "error", "Unauthorized", "message",
+                    "Your session has expired. Please login again."));
         }
 
         String phone = appUser.getPhone();
@@ -519,8 +712,10 @@ public class DriverAPIController {
 
         // Check if KYC application already exists (HTTP 409)
         if (driver.getId() != null && driver.getKyc() != null &&
-                ("pending".equalsIgnoreCase(driver.getKyc()) || "verified".equalsIgnoreCase(driver.getKyc()) || "approved".equalsIgnoreCase(driver.getKyc()))) {
-            return ResponseEntity.status(409).body(Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists."));
+                ("pending".equalsIgnoreCase(driver.getKyc()) || "verified".equalsIgnoreCase(driver.getKyc())
+                        || "approved".equalsIgnoreCase(driver.getKyc()))) {
+            return ResponseEntity.status(409).body(
+                    Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists."));
         }
 
         String name = text(payload, "name");
@@ -533,19 +728,24 @@ public class DriverAPIController {
 
         // Strict Backend Validation Checks (HTTP 400)
         if (name != null && !name.matches("^[a-zA-Z\\s]{2,50}$")) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Name must contain only alphabets and spaces (2-50 characters)."));
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message",
+                    "Name must contain only alphabets and spaces (2-50 characters)."));
         }
         if (aadhaar != null && !aadhaar.replaceAll("\\s+", "").matches("^\\d{12}$")) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Aadhaar number must contain exactly 12 digits."));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Aadhaar number must contain exactly 12 digits."));
         }
         if (pincode != null && !pincode.matches("^\\d{6}$")) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Pincode must contain exactly 6 digits."));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Pincode must contain exactly 6 digits."));
         }
         if (ifsc != null && !ifsc.toUpperCase().matches("^[A-Z]{4}0[A-Z0-9]{6}$")) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid IFSC code format (e.g. HDFC0001234)."));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Invalid IFSC code format (e.g. HDFC0001234)."));
         }
         if (accountNumber != null && !accountNumber.matches("^\\d{9,18}$")) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Bank Account number must contain 9 to 18 digits."));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Bank Account number must contain 9 to 18 digits."));
         }
 
         // ── Vehicle type validation ──────────────────────────────────────────
@@ -558,8 +758,7 @@ public class DriverAPIController {
             if (!isValid) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
-                        "message", "Selected vehicle type is no longer available."
-                ));
+                        "message", "Selected vehicle type is no longer available."));
             }
         }
 
@@ -568,7 +767,10 @@ public class DriverAPIController {
         String vehicleTypeVal = text(payload, "vehicleType");
         String vehicle_typeVal = text(payload, "vehicle_type");
         String vehicleNameVal = text(payload, "vehicleName");
-        String resolvedVehicle = vehicleVal != null ? vehicleVal : (vehicleTypeVal != null ? vehicleTypeVal : (vehicle_typeVal != null ? vehicle_typeVal : (vehicleNameVal != null ? vehicleNameVal : "Vehicle")));
+        String resolvedVehicle = vehicleVal != null ? vehicleVal
+                : (vehicleTypeVal != null ? vehicleTypeVal
+                        : (vehicle_typeVal != null ? vehicle_typeVal
+                                : (vehicleNameVal != null ? vehicleNameVal : "Vehicle")));
 
         driver.setPhone(phone);
         driver.setEmail(text(payload, "email") != null ? text(payload, "email") : appUser.getEmail());
@@ -619,24 +821,30 @@ public class DriverAPIController {
 
     private String text(Map<String, Object> payload, String key) {
         Object value = payload.get(key);
-        if (value == null) return null;
+        if (value == null)
+            return null;
         String result = String.valueOf(value).trim();
         return result.isEmpty() ? null : result;
     }
 
     // Toggle Status
-    @RequestMapping(value = {"/drivers/me/status", "/driver/me/status", "/drivers/status", "/driver/status"}, method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
-    public ResponseEntity<?> updateStatus(HttpServletRequest request, @RequestBody(required = false) Map<String, Object> payload) {
+    @RequestMapping(value = { "/drivers/me/status", "/driver/me/status", "/drivers/status",
+            "/driver/status" }, method = { RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH })
+    public ResponseEntity<?> updateStatus(HttpServletRequest request,
+            @RequestBody(required = false) Map<String, Object> payload) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "error", "Unauthorized or Driver profile not found"));
+            return ResponseEntity.status(401)
+                    .body(Map.of("success", false, "error", "Unauthorized or Driver profile not found"));
         }
 
         Object rawStatus = null;
         if (payload != null) {
             rawStatus = payload.get("status");
-            if (rawStatus == null) rawStatus = payload.get("online");
-            if (rawStatus == null) rawStatus = payload.get("isOnline");
+            if (rawStatus == null)
+                rawStatus = payload.get("online");
+            if (rawStatus == null)
+                rawStatus = payload.get("isOnline");
         }
 
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
@@ -644,26 +852,27 @@ public class DriverAPIController {
         Driver saved = driverRepository.save(driver);
 
         return ResponseEntity.ok(Map.of(
-            "success", true,
-            "status", saved.getStatus() != null ? saved.getStatus().toLowerCase() : newStatus,
-            "driver", saved
-        ));
+                "success", true,
+                "status", saved.getStatus() != null ? saved.getStatus().toLowerCase() : newStatus,
+                "driver", saved));
     }
 
     // Fetch full order history — matched by driverId OR driverEmail OR driverPhone
-    @GetMapping({"/drivers/me/orders", "/drivers/me/orders/history", "/drivers/me/orders/completed",
-                 "/driver/orders", "/driver/orders/history", "/driver/orders/completed"})
+    @GetMapping({ "/drivers/me/orders", "/drivers/me/orders/history", "/drivers/me/orders/completed",
+            "/driver/orders", "/driver/orders/history", "/driver/orders/completed" })
     public ResponseEntity<?> getOrderHistory(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "error", "Unauthorized or Driver profile not found"));
+            return ResponseEntity.status(401)
+                    .body(Map.of("success", false, "error", "Unauthorized or Driver profile not found"));
         }
 
-        String driverId   = driver.getId() != null ? driver.getId().toString() : "";
+        String driverId = driver.getId() != null ? driver.getId().toString() : "";
         String driverEmail = driver.getEmail() != null ? driver.getEmail().toLowerCase().trim() : "";
         String driverPhone = driver.getPhone() != null ? driverAuthService.normalizePhone(driver.getPhone()) : "";
 
-        // Union: match by driverId OR driverEmail OR driverPhone so no booking is missed
+        // Union: match by driverId OR driverEmail OR driverPhone so no booking is
+        // missed
         List<Order> orders = orderRepository.findAll().stream()
                 .filter(o -> {
                     boolean byId = !driverId.isEmpty() && driverId.equals(o.getDriverId());
@@ -674,28 +883,31 @@ public class DriverAPIController {
                     return byId || byEmail || byPhone;
                 })
                 .sorted((a, b) -> {
-                    if (a.getCreatedAt() == null && b.getCreatedAt() == null) return 0;
-                    if (a.getCreatedAt() == null) return 1;
-                    if (b.getCreatedAt() == null) return -1;
+                    if (a.getCreatedAt() == null && b.getCreatedAt() == null)
+                        return 0;
+                    if (a.getCreatedAt() == null)
+                        return 1;
+                    if (b.getCreatedAt() == null)
+                        return -1;
                     return b.getCreatedAt().compareTo(a.getCreatedAt());
                 })
                 .collect(Collectors.toList());
 
         List<Map<String, Object>> orderList = orders.stream().map(o -> {
             Map<String, Object> map = new java.util.LinkedHashMap<>();
-            map.put("orderId",       o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
-            map.put("bookingId",     o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
-            map.put("status",        o.getStatus() != null ? o.getStatus() : "unknown");
-            map.put("fare",          o.getAmount() != null ? o.getAmount() : 0.0);
-            map.put("amount",        o.getAmount() != null ? o.getAmount() : 0.0);
-            map.put("pickup",        o.getPickupAddress());
+            map.put("orderId", o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
+            map.put("bookingId", o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
+            map.put("status", o.getStatus() != null ? o.getStatus() : "unknown");
+            map.put("fare", o.getAmount() != null ? o.getAmount() : 0.0);
+            map.put("amount", o.getAmount() != null ? o.getAmount() : 0.0);
+            map.put("pickup", o.getPickupAddress());
             map.put("pickupAddress", o.getPickupAddress());
-            map.put("dropoff",       o.getDropAddress());
-            map.put("dropAddress",   o.getDropAddress());
-            map.put("serviceName",   o.getServiceName());
-            map.put("distanceKm",    o.getDistanceKm() != null ? o.getDistanceKm() : 0.0);
+            map.put("dropoff", o.getDropAddress());
+            map.put("dropAddress", o.getDropAddress());
+            map.put("serviceName", o.getServiceName());
+            map.put("distanceKm", o.getDistanceKm() != null ? o.getDistanceKm() : 0.0);
             map.put("paymentMethod", o.getPaymentMethod());
-            map.put("createdAt",     o.getCreatedAt());
+            map.put("createdAt", o.getCreatedAt());
             return map;
         }).collect(Collectors.toList());
 
@@ -717,14 +929,15 @@ public class DriverAPIController {
     }
 
     // Available rides pool for nearby drivers
-    @GetMapping({"/driver/orders/available", "/drivers/orders/available"})
+    @GetMapping({ "/driver/orders/available", "/drivers/orders/available" })
     public ResponseEntity<?> getAvailableOrders(
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false, defaultValue = "10") Double radiusKm) {
 
         List<Order> availableOrders = orderRepository.findAll().stream()
-                .filter(o -> o.getStatus() == null || "searching".equalsIgnoreCase(o.getStatus()) || "pending".equalsIgnoreCase(o.getStatus()))
+                .filter(o -> o.getStatus() == null || "searching".equalsIgnoreCase(o.getStatus())
+                        || "pending".equalsIgnoreCase(o.getStatus()))
                 .filter(o -> o.getDriverId() == null || o.getDriverId().isEmpty())
                 .collect(Collectors.toList());
 
@@ -751,25 +964,26 @@ public class DriverAPIController {
                 "success", true,
                 "count", response.size(),
                 "orders", response,
-                "availableOrders", response
-        ));
+                "availableOrders", response));
     }
 
     // Driver Earnings Overview
-    @GetMapping({"/driver/earnings", "/drivers/earnings"})
+    @GetMapping({ "/driver/earnings", "/drivers/earnings" })
     public ResponseEntity<?> getDriverEarningsSummary(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
         String driverId = driver != null ? driver.getId().toString() : "1";
 
         List<Order> completedTrips = orderRepository.findAll().stream()
-                .filter(o -> driverId.equals(o.getDriverId()) && ("delivered".equalsIgnoreCase(o.getStatus()) || "completed".equalsIgnoreCase(o.getStatus())))
+                .filter(o -> driverId.equals(o.getDriverId())
+                        && ("delivered".equalsIgnoreCase(o.getStatus()) || "completed".equalsIgnoreCase(o.getStatus())))
                 .collect(Collectors.toList());
 
         double totalEarnings = completedTrips.stream()
                 .mapToDouble(o -> o.getAmount() != null ? o.getAmount() * 0.80 : 200.0)
                 .sum();
 
-        if (totalEarnings == 0.0) totalEarnings = 1450.0;
+        if (totalEarnings == 0.0)
+            totalEarnings = 1450.0;
         int completedCount = completedTrips.size() > 0 ? completedTrips.size() : 6;
 
         Map<String, Object> response = new HashMap<>();
@@ -784,7 +998,7 @@ public class DriverAPIController {
     }
 
     // Driver Payout Request
-    @PostMapping({"/driver/payout-request", "/drivers/payout-request"})
+    @PostMapping({ "/driver/payout-request", "/drivers/payout-request" })
     public ResponseEntity<?> requestDriverPayout(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
         Driver driver = getAuthenticatedDriver(request);
         String driverId = driver != null ? driver.getId().toString() : "1";
