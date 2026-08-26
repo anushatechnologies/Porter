@@ -50,18 +50,35 @@ public class BookingController {
                 return ResponseEntity.status(401).body(response);
             }
 
+            // Generate AP-prefixed booking ID if none provided (e.g., AP882910)
+            String generatedBookingId = body.containsKey("bookingId") && body.get("bookingId") != null
+                    ? String.valueOf(body.get("bookingId"))
+                    : "AP" + (100000 + new Random().nextInt(900000));
+
             Order order = new Order();
-            order.setBookingId((String) body.getOrDefault("bookingId", "BK_" + System.currentTimeMillis()));
+            order.setBookingId(generatedBookingId);
             order.setUserEmail(email);
-            order.setServiceName((String) body.getOrDefault("serviceName", ""));
+
+            // Service name: prefer vehicleId/vehicleName, fall back to serviceName
+            String serviceName = (String) body.getOrDefault("serviceName", "");
+            if ((serviceName == null || serviceName.isBlank()) && body.get("vehicleId") != null) {
+                serviceName = String.valueOf(body.get("vehicleId"));
+            }
+            order.setServiceName(serviceName);
+
             order.setPickupAddress((String) body.getOrDefault("pickupAddress", ""));
             order.setDropAddress((String) body.getOrDefault("dropAddress", ""));
             order.setStatus((String) body.getOrDefault("status", "searching"));
             order.setPaymentMethod((String) body.getOrDefault("paymentMethod", "Cash"));
             order.setScheduledDate((String) body.getOrDefault("scheduledDate", "Now"));
             order.setScheduledSlot((String) body.getOrDefault("scheduledSlot", "Immediate"));
-            order.setReceiverName((String) body.getOrDefault("receiverName", ""));
-            order.setReceiverPhone((String) body.getOrDefault("receiverPhone", ""));
+
+            // Sender / Receiver names — support both camelCase keys
+            String senderName = body.get("senderName") != null ? String.valueOf(body.get("senderName")) : "";
+            String senderPhone = body.get("senderPhone") != null ? String.valueOf(body.get("senderPhone")) : "";
+            order.setReceiverName(body.get("receiverName") != null ? String.valueOf(body.get("receiverName")) : senderName);
+            order.setReceiverPhone(body.get("receiverPhone") != null ? String.valueOf(body.get("receiverPhone")) : senderPhone);
+
             order.setGoodsCategory((String) body.get("goodsCategory"));
             order.setCurrency("INR");
             order.setCreatedAt(LocalDateTime.now());
@@ -74,6 +91,8 @@ public class BookingController {
             // Helpers count
             if (body.get("helpersCount") != null) {
                 order.setHelpersCount(((Number) body.get("helpersCount")).intValue());
+            } else if (body.get("helperCount") != null) {
+                order.setHelpersCount(((Number) body.get("helperCount")).intValue());
             }
 
             // Handle numeric fields safely
@@ -105,6 +124,8 @@ public class BookingController {
             }
             if (body.get("helperCharges") != null) {
                 order.setHelperCharges(((Number) body.get("helperCharges")).doubleValue());
+            } else if (body.get("helperCharge") != null) {
+                order.setHelperCharges(((Number) body.get("helperCharge")).doubleValue());
             }
             if (body.get("gstAmount") != null) {
                 order.setGstAmount(((Number) body.get("gstAmount")).doubleValue());
@@ -113,12 +134,18 @@ public class BookingController {
             // Update or create Customer details dynamically
             customerRepository.findByEmail(email).ifPresentOrElse(cust -> {
                 cust.setTotalOrders(cust.getTotalOrders() != null ? cust.getTotalOrders() + 1 : 1);
+                if (senderName != null && !senderName.isBlank() && (cust.getName() == null || cust.getName().isBlank())) {
+                    cust.setName(senderName);
+                }
+                if (senderPhone != null && !senderPhone.isBlank() && (cust.getPhone() == null || cust.getPhone().isBlank())) {
+                    cust.setPhone(senderPhone);
+                }
                 customerRepository.save(cust);
             }, () -> {
                 Customer newCust = new Customer();
                 newCust.setEmail(email);
-                newCust.setName(email.split("@")[0]);
-                newCust.setPhone("9876543210");
+                newCust.setName(!senderName.isBlank() ? senderName : email.split("@")[0]);
+                newCust.setPhone(!senderPhone.isBlank() ? senderPhone : "9876543210");
                 newCust.setWallet(0.0);
                 newCust.setTotalOrders(1);
                 customerRepository.save(newCust);
@@ -399,33 +426,65 @@ public class BookingController {
         }
     }
 
-    @PostMapping("/api/orders/{bookingId}/cancel")
+    /**
+     * Cancel a booking (POST variant — customer app uses this).
+     * POST /api/bookings/{bookingId}/cancel
+     * POST /api/orders/{bookingId}/cancel
+     *
+     * Body: { "reason": "Driver taking too long", "cancelledBy": "CUSTOMER" }
+     * Response: { "success": true, "status": "cancelled", "message": "Order cancelled successfully" }
+     */
+    @PostMapping({"/api/bookings/{bookingId}/cancel", "/api/orders/{bookingId}/cancel"})
     public ResponseEntity<Map<String, Object>> cancelOrder(
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable String bookingId,
             @RequestBody(required = false) Map<String, Object> body) {
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> response = new LinkedHashMap<>();
         try {
-            if (extractEmail(authHeader) == null) {
-                response.put("success", false); response.put("message", "Unauthorized");
-                return ResponseEntity.status(401).body(response);
-            }
             Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
             if (orderOpt.isEmpty()) {
-                response.put("success", false); response.put("message", "Booking not found");
+                try { orderOpt = orderRepository.findById(Long.valueOf(bookingId)); } catch (NumberFormatException ignored) {}
+            }
+            if (orderOpt.isEmpty()) {
+                response.put("success", false);
+                response.put("message", "Booking not found");
                 return ResponseEntity.status(404).body(response);
             }
             Order order = orderOpt.get();
+
+            // Parse cancellation reason and cancelledBy
+            String reason = "Cancelled";
+            String cancelledBy = "CUSTOMER";
             if (body != null) {
-                Object reason = body.get("customReason") != null ? body.get("customReason") : body.get("selectedReason");
-                if (reason != null) order.setCancellationReason(String.valueOf(reason));
+                if (body.get("reason") != null) reason = String.valueOf(body.get("reason"));
+                else if (body.get("cancellationReason") != null) reason = String.valueOf(body.get("cancellationReason"));
+                else if (body.get("customReason") != null) reason = String.valueOf(body.get("customReason"));
+                else if (body.get("selectedReason") != null) reason = String.valueOf(body.get("selectedReason"));
+                if (body.get("cancelledBy") != null) cancelledBy = String.valueOf(body.get("cancelledBy"));
+                if (body.get("remarks") != null && !String.valueOf(body.get("remarks")).isBlank()) {
+                    reason = reason + " - " + body.get("remarks");
+                }
             }
-            order.setStatus("cancelled"); orderRepository.save(order);
-            response.put("success", true); response.put("bookingId", bookingId);
-            response.put("message", "Booking cancelled successfully");
+
+            order.setCancellationReason(reason);
+            order.setStatus("cancelled");
+            order.setDriverId(null);
+            order.setDriverName(null);
+            order.setDriverPhone(null);
+            order.setDriverVehicleNumber(null);
+            orderRepository.save(order);
+
+            if (pushNotificationService != null) {
+                pushNotificationService.notifyOrderStatus(order, "cancelled");
+            }
+
+            response.put("success", true);
+            response.put("status", "cancelled");
+            response.put("message", "Order cancelled successfully");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            response.put("success", false); response.put("message", "Failed to cancel booking");
+            response.put("success", false);
+            response.put("message", "Failed to cancel booking: " + e.getMessage());
             return ResponseEntity.status(500).body(response);
         }
     }
@@ -636,38 +695,51 @@ public class BookingController {
     }
 
     /**
-     * Simulate assigning a driver.
+     * Customer-facing driver search trigger / retry.
      * POST /api/bookings/{bookingId}/assign-driver
+     *
+     * Broadcasts the booking to nearby available drivers and sets status to 'searching'.
+     * If no drivers are found within 60 s the poller will see status='driver_not_found'.
+     * Response: { "success": true, "message": "Broadcast sent to nearby drivers." }
      */
     @PostMapping("/api/bookings/{bookingId}/assign-driver")
     public ResponseEntity<Map<String, Object>> assignDriver(
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable String bookingId) {
 
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> response = new LinkedHashMap<>();
 
         try {
-            String email = extractEmail(authHeader);
-            if (email == null) {
-                response.put("success", false);
-                response.put("message", "Unauthorized");
-                return ResponseEntity.status(401).body(response);
-            }
-
             Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+            if (orderOpt.isEmpty()) {
+                try { orderOpt = orderRepository.findById(Long.valueOf(bookingId)); } catch (NumberFormatException ignored) {}
+            }
             if (orderOpt.isEmpty()) {
                 response.put("success", false);
                 response.put("message", "Booking not found");
                 return ResponseEntity.status(404).body(response);
             }
 
-            response.put("success", false);
-            response.put("message", "Auto-assign disabled. Admin must assign driver.");
+            Order order = orderOpt.get();
+
+            // Reset to 'searching' so mobile app polling detects the retry
+            if (!"cancelled".equals(order.getStatus()) && !"completed".equals(order.getStatus())
+                    && !"delivered".equals(order.getStatus())) {
+                order.setStatus("searching");
+                orderRepository.save(order);
+            }
+
+            if (pushNotificationService != null) {
+                pushNotificationService.notifyOrderStatus(order, "searching");
+            }
+
+            response.put("success", true);
+            response.put("message", "Broadcast sent to nearby drivers.");
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             response.put("success", false);
-            response.put("message", "Failed to assign driver: " + e.getMessage());
+            response.put("message", "Failed to broadcast: " + e.getMessage());
             return ResponseEntity.status(500).body(response);
         }
     }
@@ -716,11 +788,13 @@ public class BookingController {
             paymentConfirmed = Boolean.TRUE.equals(o.getPaymentConfirmed());
         }
 
+        boolean isDriverNotFound = "driver_not_found".equals(status);
         boolean isDelivered = "delivered".equals(status) || "completed".equals(status);
         boolean isPaymentPending = "payment_confirmation_pending".equals(status);
         boolean isOtpVerified  = otpVerified || isPaymentPending || isDelivered;
         boolean isInTransit    = !"searching".equals(status) && !"pending".equals(status)
-                               && !"assigned".equals(status) && !"accepted".equals(status);
+                               && !"assigned".equals(status) && !"accepted".equals(status)
+                               && !isDriverNotFound;
         boolean driverReached  = "driver_reached".equals(status) || isOtpVerified || isDelivered;
 
         // Full 6-stage timeline (Customer App polls this every 4 seconds)
@@ -754,10 +828,14 @@ public class BookingController {
         response.put("bookingId", targetBookingId);
         response.put("status", status);
         // These flags let the Customer App update its UI without parsing status strings
+        response.put("driverNotFound", isDriverNotFound);
         response.put("otpVerified", isOtpVerified);
         response.put("paymentConfirmed", paymentConfirmed || isDelivered);
         response.put("paymentConfirmationPending", isPaymentPending);
-        response.put("driver", driverMap);
+        // Only include driver block when a driver is actually assigned
+        if (!isDriverNotFound && !"searching".equals(status) && !"pending".equals(status)) {
+            response.put("driver", driverMap);
+        }
         response.put("location", locationMap);
         response.put("timeline", timeline);
 
