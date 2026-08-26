@@ -536,9 +536,21 @@ public class DriverAPIController {
             ));
         }
 
+        // FIX A: Reject oversized uploads early (> 10 MB) before loading into memory
+        if (file.getSize() > 10 * 1024 * 1024L) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "faceCount", 0,
+                    "message", "Photo file size is too large. Please upload a photo under 10 MB."
+            ));
+        }
+
+        java.awt.image.BufferedImage img = null;
         try {
-            byte[] bytes = file.getBytes();
-            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+            // FIX B: Stream directly into ImageIO — avoids double-buffering the raw bytes
+            // (old code: file.getBytes() then new ByteArrayInputStream(bytes) = 2x memory)
+            img = javax.imageio.ImageIO.read(file.getInputStream());
+
             if (img == null) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
@@ -548,7 +560,22 @@ public class DriverAPIController {
                 ));
             }
 
-            int width = img.getWidth();
+            // FIX C: Downscale to max 800px wide before pixel analysis
+            // This prevents loading a 4K camera photo fully into heap
+            final int MAX_WIDTH = 800;
+            if (img.getWidth() > MAX_WIDTH) {
+                int newWidth  = MAX_WIDTH;
+                int newHeight = (int) (img.getHeight() * (MAX_WIDTH / (double) img.getWidth()));
+                java.awt.image.BufferedImage scaled = new java.awt.image.BufferedImage(newWidth, newHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
+                java.awt.Graphics2D g2d = scaled.createGraphics();
+                g2d.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g2d.drawImage(img, 0, 0, newWidth, newHeight, null);
+                g2d.dispose();
+                img.flush(); // Release original large image memory immediately
+                img = scaled;
+            }
+
+            int width  = img.getWidth();
             int height = img.getHeight();
 
             if (width < 80 || height < 80) {
@@ -563,14 +590,13 @@ public class DriverAPIController {
             // 1. Luminosity and Contrast Analysis (Dark / Blurry / Blank detection)
             long totalLuminance = 0;
             int step = Math.max(1, Math.min(width, height) / 100);
-            int sampleCount = 0;
+            int sampleCount    = 0;
             int skinPixelCount = 0;
-            int leftSkinCount = 0;
+            int leftSkinCount  = 0;
             int rightSkinCount = 0;
             int centerSkinCount = 0;
 
-            int midX = width / 2;
-            int leftBound = width / 3;
+            int leftBound  = width / 3;
             int rightBound = (width * 2) / 3;
 
             for (int y = 0; y < height; y += step) {
@@ -633,7 +659,7 @@ public class DriverAPIController {
                 ));
             }
 
-            // 4. Save verified selfie image to uploads directory
+            // 4. Save original (not downscaled) bytes to disk using streaming copy
             String uploadDir = "uploads/";
             File directory = new File(uploadDir);
             if (!directory.exists()) {
@@ -645,8 +671,12 @@ public class DriverAPIController {
                     ? originalFileName.substring(originalFileName.lastIndexOf("."))
                     : ".jpg";
             String newFileName = "selfie-" + UUID.randomUUID().toString() + extension;
-            Path path = Paths.get(uploadDir + newFileName);
-            Files.write(path, bytes);
+            Path savePath = Paths.get(uploadDir + newFileName);
+
+            // FIX D: Stream the upload directly to disk — no full byte[] in heap
+            try (java.io.InputStream in = file.getInputStream()) {
+                Files.copy(in, savePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
 
             String fileUrl = "/uploads/" + newFileName;
 
@@ -659,13 +689,27 @@ public class DriverAPIController {
             resp.put("fileUrl", fileUrl);
             return ResponseEntity.ok(resp);
 
+        } catch (OutOfMemoryError oom) {
+            // FIX E: Catch OOM explicitly — return 503 instead of crashing the JVM thread
+            System.gc();
+            return ResponseEntity.status(503).body(Map.of(
+                    "success", false,
+                    "faceCount", 0,
+                    "message", "Server is temporarily unable to process this image. Please try again with a smaller photo."
+            ));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
                     "success", false,
                     "message", "Face verification service is currently unavailable. Please try again."
             ));
+        } finally {
+            // FIX F: Always release BufferedImage memory regardless of outcome
+            if (img != null) {
+                img.flush();
+            }
         }
     }
+
 
     // A. Upload Documents
     @PostMapping({ "/upload", "/driver/documents/upload", "/drivers/documents/upload" })
