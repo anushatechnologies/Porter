@@ -63,10 +63,12 @@ public class CustomerServiceController {
         for (ServiceCategory cat : categories) {
             String catIdStr = cat.getId() != null ? String.valueOf(cat.getId()) : "1";
             String catSlug = cat.getSlug() != null ? cat.getSlug().toLowerCase() : "";
+            String catName = cat.getName() != null ? cat.getName() : "";
+            Integer dispOrder = cat.getDisplayOrder() != null ? cat.getDisplayOrder() : 1;
 
             // Find matching services
             List<Map<String, Object>> catServices = services.stream()
-                    .filter(s -> matchesCategory(s, catIdStr, catSlug))
+                    .filter(s -> matchesCategory(s, catIdStr, catSlug, catName, dispOrder))
                     .sorted(Comparator.comparingInt(s -> s.getDisplayOrder() != null ? s.getDisplayOrder() : 1))
                     .map(s -> formatServiceForCustomer(s, catIdStr, cat.getName()))
                     .collect(Collectors.toList());
@@ -75,12 +77,34 @@ public class CustomerServiceController {
             if (!catServices.isEmpty()) {
                 Map<String, Object> catMap = new LinkedHashMap<>();
                 catMap.put("id", catIdStr);
-                catMap.put("name", cat.getName() != null ? cat.getName() : "");
-                catMap.put("slug", cat.getSlug() != null ? cat.getSlug() : "");
+                catMap.put("name", catName);
+                catMap.put("slug", catSlug);
                 catMap.put("icon", cat.getIcon() != null ? cat.getIcon() : "truck-fast");
-                catMap.put("displayOrder", cat.getDisplayOrder() != null ? cat.getDisplayOrder() : 1);
+                catMap.put("displayOrder", dispOrder);
                 catMap.put("services", catServices);
                 resultCategories.add(catMap);
+            }
+        }
+
+        // Fallback: if database category IDs didn't match service category IDs, build from default fallback
+        if (resultCategories.isEmpty()) {
+            List<PorterService> fallbackServices = PorterServiceController.getDefaultFallbackServices();
+            for (ServiceCategory cat : getDefaultCategories()) {
+                String catIdStr = cat.getId() != null ? String.valueOf(cat.getId()) : String.valueOf(cat.getDisplayOrder());
+                List<Map<String, Object>> catServices = fallbackServices.stream()
+                        .filter(s -> matchesCategory(s, catIdStr, cat.getSlug(), cat.getName(), cat.getDisplayOrder()))
+                        .map(s -> formatServiceForCustomer(s, catIdStr, cat.getName()))
+                        .collect(Collectors.toList());
+                if (!catServices.isEmpty()) {
+                    Map<String, Object> catMap = new LinkedHashMap<>();
+                    catMap.put("id", catIdStr);
+                    catMap.put("name", cat.getName());
+                    catMap.put("slug", cat.getSlug());
+                    catMap.put("icon", cat.getIcon());
+                    catMap.put("displayOrder", cat.getDisplayOrder());
+                    catMap.put("services", catServices);
+                    resultCategories.add(catMap);
+                }
             }
         }
 
@@ -91,26 +115,36 @@ public class CustomerServiceController {
         ));
     }
 
-    private boolean matchesCategory(PorterService s, String categoryId, String categorySlug) {
+    private boolean matchesCategory(PorterService s, String categoryId, String categorySlug, String categoryName, Integer displayOrder) {
+        if (s == null) return false;
+
         // Direct categoryId match
-        if (s.getCategoryId() != null && s.getCategoryId().equalsIgnoreCase(categoryId)) {
-            return true;
+        if (s.getCategoryId() != null && !s.getCategoryId().isBlank()) {
+            if (s.getCategoryId().equalsIgnoreCase(categoryId) || s.getCategoryId().equalsIgnoreCase(categorySlug)) {
+                return true;
+            }
         }
-        if (s.getCategoryId() != null && s.getCategoryId().equalsIgnoreCase(categorySlug)) {
-            return true;
-        }
-
-        // Slug / category string match fallback
-        String svcCat = s.getCategory() != null ? s.getCategory().toLowerCase() : "";
-        if (categorySlug.contains("truck") || categorySlug.contains("fleet") || "1".equals(categoryId)) {
-            return svcCat.contains("vehicle") || svcCat.contains("truck") || svcCat.contains("fleet") || "1".equalsIgnoreCase(s.getCategoryId());
-        } else if (categorySlug.contains("bike") || categorySlug.contains("2-wheeler") || "2".equals(categoryId)) {
-            return svcCat.contains("two_wheeler") || svcCat.contains("bike") || svcCat.contains("2_wheeler") || "2".equalsIgnoreCase(s.getCategoryId());
-        } else if (categorySlug.contains("packer") || "3".equals(categoryId)) {
-            return svcCat.contains("packer") || "3".equalsIgnoreCase(s.getCategoryId());
+        if (s.getCategoryName() != null && categoryName != null && !categoryName.isBlank()) {
+            if (s.getCategoryName().equalsIgnoreCase(categoryName)) {
+                return true;
+            }
         }
 
-        return svcCat.equalsIgnoreCase(categorySlug);
+        String combinedCat = ((categorySlug != null ? categorySlug : "") + " " + (categoryName != null ? categoryName : "")).toLowerCase();
+        String svcCat = (s.getCategory() != null ? s.getCategory() : "") + " "
+                + (s.getCategoryName() != null ? s.getCategoryName() : "") + " "
+                + (s.getName() != null ? s.getName() : "");
+        svcCat = svcCat.toLowerCase();
+
+        if (combinedCat.contains("truck") || combinedCat.contains("fleet") || "1".equals(categoryId) || Integer.valueOf(1).equals(displayOrder)) {
+            return svcCat.contains("vehicle") || svcCat.contains("truck") || svcCat.contains("fleet") || svcCat.contains("ace") || svcCat.contains("pickup") || svcCat.contains("tata") || "1".equalsIgnoreCase(s.getCategoryId());
+        } else if (combinedCat.contains("bike") || combinedCat.contains("2-wheeler") || combinedCat.contains("two_wheeler") || "2".equals(categoryId) || Integer.valueOf(2).equals(displayOrder)) {
+            return svcCat.contains("two_wheeler") || svcCat.contains("bike") || svcCat.contains("2_wheeler") || svcCat.contains("2 wheeler") || svcCat.contains("scooter") || "2".equalsIgnoreCase(s.getCategoryId());
+        } else if (combinedCat.contains("packer") || combinedCat.contains("mover") || combinedCat.contains("shifting") || "3".equals(categoryId) || Integer.valueOf(3).equals(displayOrder)) {
+            return svcCat.contains("packer") || svcCat.contains("mover") || svcCat.contains("shift") || svcCat.contains("intracity") || svcCat.contains("intercity") || "3".equalsIgnoreCase(s.getCategoryId());
+        }
+
+        return false;
     }
 
     private Map<String, Object> formatServiceForCustomer(PorterService s, String fallbackCatId, String fallbackCatName) {
