@@ -134,7 +134,7 @@ public class OrderController {
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
                         "error", "INSUFFICIENT_WALLET_BALANCE",
-                        "message", "Driver wallet balance is ₹0. Please recharge to accept orders."
+                        "message", "Driver wallet balance is ₹0 or negative. Driver must recharge before taking orders."
                 ));
             }
 

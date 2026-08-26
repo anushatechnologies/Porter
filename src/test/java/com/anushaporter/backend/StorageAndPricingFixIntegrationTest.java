@@ -159,6 +159,7 @@ public class StorageAndPricingFixIntegrationTest {
         driver.setEmail("supriya@driver.com");
         driver.setPhone("9876543211");
         driver.setStatus("online");
+        driver.setWalletBalance(100.0);
         driver = driverRepository.save(driver);
 
         String token = jwtUtil.generateToken(driver.getEmail());

@@ -185,6 +185,10 @@ public class DriverWalletService {
         // Sync Driver entity
         Driver driver = findDriverEntity(driverId);
         if (driver != null) {
+            double prevBal = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+            if (prevBal <= 0.0 && balanceAfter > 0.0) {
+                driver.setStatus("online");
+            }
             driver.setWalletBalance(balanceAfter);
             driverRepository.save(driver);
         }
@@ -225,6 +229,9 @@ public class DriverWalletService {
         double previousBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
         double newBalance = Math.round((previousBalance + amount) * 100.0) / 100.0;
 
+        if (previousBalance <= 0.0 && newBalance > 0.0) {
+            driver.setStatus("online");
+        }
         driver.setWalletBalance(newBalance);
         driverRepository.save(driver);
 
@@ -272,7 +279,7 @@ public class DriverWalletService {
 
         // Check if wallet_balance <= 0
         if (walletBalance <= 0) {
-            throw new IllegalStateException("Driver wallet balance is ₹0. Please recharge to accept orders.");
+            throw new IllegalStateException("Driver wallet balance is ₹0 or negative. Driver must recharge before taking orders.");
         }
 
         String orderIdStr = order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId());
@@ -309,8 +316,9 @@ public class DriverWalletService {
     /**
      * Deducts 5% Commission Cut on Order Completion / Confirm Payment:
      * 1. Calculate 5% Commission Cut: commission = order.total_amount * 0.05
-     * 2. Deduct 5% from Driver's Wallet: wallet_balance = GREATEST(0.00, wallet_balance - commission)
+     * 2. Deduct 5% from Driver's Wallet: wallet_balance = wallet_balance - commission
      * 3. Log the Transaction in wallet_transactions with type = 'COMMISSION_DEDUCTION'
+     * 4. If balance <= 0, automatically switch driver to offline
      */
     @Transactional
     public WalletTransaction deductCommissionOnCompletion(String driverIdStr, String orderId, double totalAmount) {
@@ -333,12 +341,17 @@ public class DriverWalletService {
         if (commissionRate <= 0) commissionRate = 0.05;
         double commission = Math.round(totalAmount * commissionRate * 100.0) / 100.0;
 
-        double balanceBefore = driver.getWalletBalance() != null && driver.getWalletBalance() > 0
+        double balanceBefore = (driver.getWalletBalance() != null && driver.getWalletBalance() != 0.0)
                 ? driver.getWalletBalance()
-                : (wallet.getAvailableBalance() != null ? wallet.getAvailableBalance() : 0.0);
-        double balanceAfter = Math.max(0.00, Math.round((balanceBefore - commission) * 100.0) / 100.0);
+                : (wallet.getAvailableBalance() != null && wallet.getAvailableBalance() != 0.0
+                    ? wallet.getAvailableBalance()
+                    : (driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0));
+        double balanceAfter = Math.round((balanceBefore - commission) * 100.0) / 100.0;
 
         driver.setWalletBalance(balanceAfter);
+        if (balanceAfter <= 0.0) {
+            driver.setStatus("offline");
+        }
         driverRepository.save(driver);
 
         // Sync DriverWallet

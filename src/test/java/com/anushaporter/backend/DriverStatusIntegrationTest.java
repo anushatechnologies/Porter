@@ -67,6 +67,7 @@ public class DriverStatusIntegrationTest {
         testDriver.setVehicleType("Tata Ace");
         testDriver.setStatus("online");
         testDriver.setKyc("verified");
+        testDriver.setWalletBalance(100.0);
         testDriver = driverRepository.save(testDriver);
 
         jwtToken = jwtUtil.generateToken(testDriver.getEmail());
@@ -225,5 +226,27 @@ public class DriverStatusIntegrationTest {
 
         Driver inDb = driverRepository.findById(testDriver.getId()).orElseThrow();
         assertEquals("suspended", inDb.getStatus());
+    }
+
+    @Test
+    void testZeroWalletBalanceCannotGoOnline() throws Exception {
+        // Set driver wallet balance to 0.0
+        testDriver.setWalletBalance(0.0);
+        testDriver.setStatus("offline");
+        driverRepository.save(testDriver);
+
+        // Attempt to toggle online
+        mockMvc.perform(put("/api/drivers/me/status")
+                .header("Authorization", "Bearer " + jwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\": \"online\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error", is("WALLET_EMPTY")))
+                .andExpect(jsonPath("$.message", containsString("Your wallet balance is ₹0")));
+
+        // Status remains offline
+        Driver inDb = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals("offline", inDb.getStatus());
     }
 }

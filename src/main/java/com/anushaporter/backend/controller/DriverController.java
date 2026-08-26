@@ -316,6 +316,18 @@ public class DriverController {
         }
 
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
+
+        if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
+            Double walletBalance = driver.getWalletBalance();
+            if (walletBalance == null || walletBalance <= 0.0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "error", "WALLET_EMPTY",
+                        "message", "Your wallet balance is ₹0. Please recharge your wallet to go online."
+                ));
+            }
+        }
+
         driver.setStatus(newStatus);
         Driver saved = repository.save(driver);
 
@@ -351,6 +363,18 @@ public class DriverController {
         }
 
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
+
+        if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
+            Double walletBalance = driver.getWalletBalance();
+            if (walletBalance == null || walletBalance <= 0.0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "error", "WALLET_EMPTY",
+                        "message", "Your wallet balance is ₹0. Please recharge your wallet to go online."
+                ));
+            }
+        }
+
         driver.setStatus(newStatus);
         Driver saved = repository.save(driver);
 
