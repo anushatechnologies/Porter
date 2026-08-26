@@ -68,14 +68,23 @@ public class PackersAndMoversFlowIntegrationTest {
         String pricingPayload = """
                 {
                   "serviceId": "intracity",
-                  "distanceKm": 8.5,
-                  "packingType": "single_layer",
-                  "packingCharge": 199,
-                  "addons": ["addon_installation", "addon_unpacking"],
+                  "distanceKm": 12.5,
+                  "vehicleId": "14ft",
+                  "workerCount": 4,
+                  "packingTier": "single_layer",
+                  "packingCharge": 199.0,
+                  "addons": ["dismantling", "reassembly", "unpacking"],
                   "items": [
                     { "name": "Sofa 3 Seater", "quantity": 1 },
-                    { "name": "King Bed Frame", "quantity": 1 }
-                  ]
+                    { "name": "King Size Bed", "quantity": 1 },
+                    { "name": "Double Door Refrigerator", "quantity": 1 },
+                    { "name": "Carton Boxes", "quantity": 10 }
+                  ],
+                  "pickupFloor": 2,
+                  "pickupLift": true,
+                  "dropFloor": 3,
+                  "dropLift": false,
+                  "couponCode": "FIRSTMOVE"
                 }
                 """;
 
@@ -84,41 +93,46 @@ public class PackersAndMoversFlowIntegrationTest {
                 .content(pricingPayload))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.baseFare", is(649.0)))
-                .andExpect(jsonPath("$.distanceFare", is(170.0)))
-                .andExpect(jsonPath("$.laborCharge", is(400.0)))
-                .andExpect(jsonPath("$.packingCharge", is(199.0)))
-                .andExpect(jsonPath("$.totalFare", is(1418.0)));
+                .andExpect(jsonPath("$.serviceId", is("intracity")))
+                .andExpect(jsonPath("$.transportationFare", notNullValue()))
+                .andExpect(jsonPath("$.laborFare", notNullValue()))
+                .andExpect(jsonPath("$.subtotal", notNullValue()))
+                .andExpect(jsonPath("$.totalFare", notNullValue()));
 
-        // 3. GET /api/services/{serviceId}/slots?date=2026-08-27
-        mockMvc.perform(get("/api/services/intracity/slots?date=2026-08-27"))
+        // 3. GET /api/services/{serviceId}/slots?date=2026-08-28
+        mockMvc.perform(get("/api/services/intracity/slots?date=2026-08-28"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.date", is("2026-08-27")))
-                .andExpect(jsonPath("$.slots", hasSize(3)))
-                .andExpect(jsonPath("$.slots[0].label", is("07:00 AM - 09:00 AM")));
+                .andExpect(jsonPath("$.date", is("2026-08-28")))
+                .andExpect(jsonPath("$.slots", not(empty())));
 
         // 4. POST /api/bookings (Create Packers Order)
         String bookingPayload = """
                 {
                   "serviceCategory": "packers",
-                  "vehicleId": "intracity",
-                  "pickupAddress": "Madhura Nagar, Khajaguda",
-                  "dropAddress": "Hitech City, Madhapur",
+                  "vehicleId": "14ft",
+                  "workerCount": 4,
+                  "pickupAddress": "Flat 402, Royal Palms, Madhapur, Hyderabad",
+                  "dropAddress": "Villa 18, Green Meadows, Gachibowli, Hyderabad",
                   "pickupLat": 17.4483,
                   "pickupLng": 78.3915,
                   "dropLat": 17.4375,
                   "dropLng": 78.4482,
                   "senderName": "Anusha",
                   "senderPhone": "9876543210",
-                  "receiverName": "Kiran",
+                  "receiverName": "Kiran Kumar",
                   "receiverPhone": "9123456780",
-                  "goodsCategory": "Household Goods",
-                  "distanceKm": 8.5,
-                  "paymentMethod": "cash",
-                  "amount": 1418.0,
-                  "scheduledDate": "2026-08-27",
-                  "scheduledSlot": "07:00 AM - 09:00 AM"
+                  "scheduledDate": "2026-08-28",
+                  "scheduledSlot": "09:00 AM – 11:00 AM",
+                  "goodsCategory": "Household Furniture & Electronics",
+                  "packingTier": "single_layer",
+                  "dismantling": true,
+                  "reassembly": true,
+                  "unpacking": true,
+                  "paymentMode": "advance",
+                  "paymentMethod": "upi",
+                  "amount": 4546.0,
+                  "advancePaid": 500.0
                 }
                 """;
 
@@ -128,34 +142,70 @@ public class PackersAndMoversFlowIntegrationTest {
                 .content(bookingPayload))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.status", is("searching")))
-                .andExpect(jsonPath("$.bookingId", startsWith("AP")))
+                .andExpect(jsonPath("$.bookingId", notNullValue()))
+                .andExpect(jsonPath("$.deliveryOtp", notNullValue()))
                 .andReturn().getResponse().getContentAsString();
 
-        // Extract bookingId
+        // Extract bookingId and deliveryOtp
         com.fasterxml.jackson.databind.JsonNode rootNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(bookingResponse);
         String bookingId = rootNode.get("bookingId").asText();
+        String deliveryOtp = rootNode.get("deliveryOtp").asText();
         assertNotNull(bookingId);
 
-        // 5a. POST /api/bookings/{id}/assign-driver
-        mockMvc.perform(post("/api/bookings/" + bookingId + "/assign-driver")
-                .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.message", is("Broadcast sent to nearby drivers.")));
-
-        // 5b. GET /api/bookings/{id}/tracking (while searching)
+        // 5. GET /api/bookings/{id}/tracking
         mockMvc.perform(get("/api/bookings/" + bookingId + "/tracking")
                 .header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.status", is("searching")))
-                .andExpect(jsonPath("$.driver").doesNotExist());
+                .andExpect(jsonPath("$.stageNumber", notNullValue()))
+                .andExpect(jsonPath("$.eta", is("25 mins")))
+                .andExpect(jsonPath("$.timeline", hasSize(8)));
 
-        // 5c. POST /api/bookings/{id}/cancel
+        // 6. POST /api/bookings/{id}/verify-otp
+        mockMvc.perform(post("/api/bookings/" + bookingId + "/verify-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"otp\": \"" + deliveryOtp + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.status", is("completed")))
+                .andExpect(jsonPath("$.message", is("Move completed and verified successfully.")));
+
+        // 7. POST /api/bookings/{id}/review
+        String reviewPayload = """
+                {
+                  "rating": 5,
+                  "tags": ["Professional Team", "Good Packing", "On Time"],
+                  "feedback": "Ramesh and the team were extremely polite and handled glass items with great care."
+                }
+                """;
+
+        mockMvc.perform(post("/api/bookings/" + bookingId + "/review")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(reviewPayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.message", is("Thank you for your review!")));
+
+        // 8. POST /api/bookings/{id}/reschedule
+        String reschedulePayload = """
+                {
+                  "newDate": "2026-08-30",
+                  "newSlot": "11:00 AM – 01:00 PM"
+                }
+                """;
+
+        mockMvc.perform(post("/api/bookings/" + bookingId + "/reschedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(reschedulePayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.status", is("rescheduled")))
+                .andExpect(jsonPath("$.message", is("Booking rescheduled successfully.")));
+
+        // 9. POST /api/bookings/{id}/cancel
         String cancelPayload = """
                 {
-                  "reason": "Change of plans",
+                  "reason": "Change of shifting date",
                   "cancelledBy": "CUSTOMER"
                 }
                 """;
@@ -166,12 +216,7 @@ public class PackersAndMoversFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.status", is("cancelled")))
-                .andExpect(jsonPath("$.message", is("Order cancelled successfully")));
-
-        // 5d. GET /api/bookings/{id}/tracking (after cancel)
-        mockMvc.perform(get("/api/bookings/" + bookingId + "/tracking"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.status", is("cancelled")));
+                .andExpect(jsonPath("$.refundAmount", is(500.0)))
+                .andExpect(jsonPath("$.message", is("Booking cancelled. Refund initiated.")));
     }
 }

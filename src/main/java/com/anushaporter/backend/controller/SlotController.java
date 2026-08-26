@@ -41,8 +41,10 @@ public class SlotController {
     private Map<String, Object> buildSlotsResponse(String date) {
         List<Map<String, Object>> slots = List.of(
             Map.of("id", "slot-1", "label", "07:00 AM - 09:00 AM", "available", true),
-            Map.of("id", "slot-2", "label", "09:00 AM - 11:00 AM", "available", true),
-            Map.of("id", "slot-3", "label", "02:00 PM - 04:00 PM", "available", true)
+            Map.of("id", "slot-2", "label", "09:00 AM – 11:00 AM", "available", true),
+            Map.of("id", "slot-3", "label", "11:00 AM – 01:00 PM", "available", true),
+            Map.of("id", "slot-4", "label", "02:00 PM – 04:00 PM", "available", true),
+            Map.of("id", "slot-5", "label", "04:00 PM – 06:00 PM", "available", true)
         );
         return Map.of(
             "success", true,
