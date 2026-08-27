@@ -29,7 +29,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 2.5rem 1rem;
+      padding: 2rem 1rem;
     }
     .container {
       max-width: 800px;
@@ -102,9 +102,9 @@
       margin-bottom: 1rem;
     }
     .btn-camera, .btn-upload {
-      padding: 0.75rem 0.5rem;
+      padding: 0.85rem 0.5rem;
       border-radius: 0.5rem;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 600;
       border: 1px solid var(--border);
       cursor: pointer;
@@ -209,19 +209,92 @@
       margin-top: 0.5rem;
       max-height: 180px;
     }
+
+    /* ─── LIVE CAMERA MODAL ─── */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 1rem;
+    }
+    .modal-content {
+      background: #1e293b;
+      border-radius: 1rem;
+      max-width: 480px;
+      width: 100%;
+      padding: 1.5rem;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      text-align: center;
+    }
+    .camera-viewfinder {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #000;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      margin: 1rem 0;
+      border: 2px solid #3b82f6;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .shutter-btn {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: #fff;
+      border: 5px solid #3b82f6;
+      cursor: pointer;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s, background 0.2s;
+    }
+    .shutter-btn:hover {
+      transform: scale(1.05);
+      background: #e2e8f0;
+    }
+    .shutter-inner {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #2563eb;
+    }
+    .close-modal-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>🪪 Driver Photo & Document Upload</h1>
-      <p>Upload Driver Photo using Camera or File Chooser</p>
+      <h1>🪪 Driver Photo Upload</h1>
+      <p>Capture using Camera or Choose from Device Gallery</p>
     </header>
 
     <div class="grid">
       <!-- Input Card -->
       <div class="card">
-        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📸 Select Photo</h2>
+        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📸 Driver Photo</h2>
 
         <div class="preview-box">
           <img id="previewImg" class="preview-img" alt="Driver Photo Preview">
@@ -231,21 +304,19 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             <p style="font-weight: 500; color: #cbd5e1;">No photo selected</p>
-            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Use Camera or Upload button below</p>
+            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Tap "Open Camera" or "Choose File"</p>
           </div>
         </div>
 
-        <!-- Camera Input (triggers native camera) -->
-        <input type="file" id="cameraInput" accept="image/*" capture="user" style="display: none;" onchange="handleFileSelected(event)">
-        <!-- File Input (triggers gallery / file explorer) -->
+        <!-- Hidden File Input for Gallery -->
         <input type="file" id="galleryInput" accept="image/*" style="display: none;" onchange="handleFileSelected(event)">
 
-        <!-- Dual Action Buttons -->
+        <!-- Dual Action Buttons: Open Camera & Choose File -->
         <div class="action-buttons">
-          <button class="btn-camera" onclick="document.getElementById('cameraInput').click()">
+          <button type="button" class="btn-camera" onclick="openDeviceCamera()">
             📷 Open Camera
           </button>
-          <button class="btn-upload" onclick="document.getElementById('galleryInput').click()">
+          <button type="button" class="btn-upload" onclick="document.getElementById('galleryInput').click()">
             📁 Choose File
           </button>
         </div>
@@ -263,11 +334,11 @@
       <!-- Result Card -->
       <div class="card">
         <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📊 Upload Status</h2>
-        <div id="badge" class="status-badge badge-idle">Awaiting Selection</div>
+        <div id="badge" class="status-badge badge-idle">Awaiting Photo</div>
 
         <div class="status-panel">
           <div id="statusMessage" style="font-weight: 600; margin-bottom: 0.5rem; color: #f8fafc;">
-            Choose a photo using the Camera or Choose File button.
+            Tap "Open Camera" to take a selfie or "Choose File" from disk.
           </div>
           <div id="urlDisplay" style="margin-top: 0.5rem; display: none;">
             <label style="color: #60a5fa;">Uploaded Photo URL:</label>
@@ -280,8 +351,31 @@
     </div>
   </div>
 
+  <!-- ─── LIVE CAMERA MODAL POPUP ─── -->
+  <div id="cameraModal" class="modal-overlay">
+    <div class="modal-content" style="position: relative;">
+      <button class="close-modal-btn" onclick="closeDeviceCamera()">&times;</button>
+      <h3 style="color: #60a5fa; margin-bottom: 0.25rem;">📸 Device Camera</h3>
+      <p style="font-size: 0.85rem; color: #94a3b8;">Position your face clearly and click Snap Photo</p>
+
+      <div class="camera-viewfinder">
+        <video id="videoElement" autoplay playsinline muted></video>
+        <canvas id="snapshotCanvas" style="display: none;"></canvas>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
+        <button class="shutter-btn" onclick="snapPhoto()" title="Take Snapshot">
+          <div class="shutter-inner"></div>
+        </button>
+        <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 600;">Tap Shutter to Snap</span>
+      </div>
+    </div>
+  </div>
+
   <script>
-    let currentFile = null;
+    let currentBlobOrFile = null;
+    let cameraStream = null;
+
     const previewImg = document.getElementById('previewImg');
     const placeholder = document.getElementById('placeholder');
     const uploadBtn = document.getElementById('uploadBtn');
@@ -290,12 +384,63 @@
     const rawResponse = document.getElementById('rawResponse');
     const urlDisplay = document.getElementById('urlDisplay');
     const uploadedLink = document.getElementById('uploadedLink');
+    const cameraModal = document.getElementById('cameraModal');
+    const videoElement = document.getElementById('videoElement');
+    const snapshotCanvas = document.getElementById('snapshotCanvas');
 
+    // ─── 1. OPEN CAMERA ON THIS DEVICE ───
+    async function openDeviceCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+        });
+        videoElement.srcObject = cameraStream;
+        cameraModal.style.display = 'flex';
+      } catch (err) {
+        alert("Camera access denied or unavailable on this device: " + err.message);
+      }
+    }
+
+    // ─── 2. SNAP PHOTO FROM CAMERA ───
+    function snapPhoto() {
+      if (!cameraStream) return;
+
+      snapshotCanvas.width = videoElement.videoWidth || 640;
+      snapshotCanvas.height = videoElement.videoHeight || 480;
+      const ctx = snapshotCanvas.getContext('2d');
+      ctx.drawImage(videoElement, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+
+      snapshotCanvas.toBlob((blob) => {
+        currentBlobOrFile = new File([blob], "camera_snapshot.jpg", { type: "image/jpeg" });
+        previewImg.src = URL.createObjectURL(blob);
+        previewImg.style.display = 'block';
+        placeholder.style.display = 'none';
+        uploadBtn.disabled = false;
+
+        badge.className = 'status-badge badge-idle';
+        badge.innerText = 'Photo Captured';
+        statusMsg.innerText = 'Snapshot captured from camera. Ready to upload.';
+        urlDisplay.style.display = 'none';
+
+        closeDeviceCamera();
+      }, 'image/jpeg', 0.95);
+    }
+
+    // ─── 3. CLOSE CAMERA ───
+    function closeDeviceCamera() {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+      }
+      cameraModal.style.display = 'none';
+    }
+
+    // ─── 4. CHOOSE FILE FROM GALLERY/DISK ───
     function handleFileSelected(event) {
       const file = event.target.files[0];
       if (!file) return;
 
-      currentFile = file;
+      currentBlobOrFile = file;
       const reader = new FileReader();
       reader.onload = (e) => {
         previewImg.src = e.target.result;
@@ -310,9 +455,10 @@
       reader.readAsDataURL(file);
     }
 
+    // ─── 5. UPLOAD TO BACKEND API ───
     async function uploadPhoto() {
-      if (!currentFile) {
-        alert('Please choose or take a photo first.');
+      if (!currentBlobOrFile) {
+        alert('Please take or choose a photo first.');
         return;
       }
 
@@ -323,7 +469,7 @@
 
       const driverId = document.getElementById('driverId').value.trim();
       const formData = new FormData();
-      formData.append('file', currentFile);
+      formData.append('file', currentBlobOrFile);
       if (driverId) {
         formData.append('driverId', driverId);
       }
