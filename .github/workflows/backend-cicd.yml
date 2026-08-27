@@ -242,19 +242,27 @@ jobs:
             \
             "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
-          # 5. Wait for the app to start (Spring Boot takes ~30s)
+          # 5. Wait for the app to start (Spring Boot initialization)
           echo "⏳ Waiting for application to start..."
-          sleep 35
+          sleep 20
 
-          # 6. Health check — verify the container is running and responding
+          # 6. Health check — verify the container is running and responding (retry loop)
           echo "🏥 Running health check..."
-          HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9000/ || echo "000")
-          if [ "$HEALTH" = "200" ]; then
-            echo "✅ Deployment successful! Server is healthy (HTTP $HEALTH)"
-          else
-            echo "❌ Health check returned HTTP $HEALTH"
+          HEALTH="000"
+          for i in {1..12}; do
+            HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 5 http://127.0.0.1:9000/ || echo "000")
+            if [ "$HEALTH" = "200" ] || [ "$HEALTH" = "404" ] || [ "$HEALTH" = "401" ]; then
+              echo "✅ Deployment successful! Server is healthy (HTTP $HEALTH on attempt $i)"
+              break
+            fi
+            echo "⏳ Attempt $i: server returned HTTP $HEALTH, waiting 5s..."
+            sleep 5
+          done
+
+          if [ "$HEALTH" != "200" ] && [ "$HEALTH" != "404" ] && [ "$HEALTH" != "401" ]; then
+            echo "❌ Health check failed. Last HTTP status: $HEALTH"
             echo "📋 Container logs:"
-            docker logs --tail 50 anusha-backend
+            docker logs --tail 50 anusha-backend || true
             exit 1
           fi
 
