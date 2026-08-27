@@ -52,6 +52,12 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.DeliveryCompletionService deliveryCompletionService;
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverOfferService driverOfferService;
+
+    @Autowired
+    private com.anushaporter.backend.service.TripStateMachineService tripStateMachineService;
+
     public Driver getAuthenticatedDriver(HttpServletRequest request) {
         return driverAuthService.resolveAuthenticatedDriver(request);
     }
@@ -374,6 +380,90 @@ public class DriverAPIController {
         response.put("status", "accepted");
         response.put("order", saved);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * List active incoming offers for the authenticated driver partner.
+     * GET /api/driver/offers or GET /api/drivers/offers
+     */
+    @GetMapping({ "/driver/offers", "/drivers/offers" })
+    public ResponseEntity<?> getDriverOffers(HttpServletRequest request) {
+        Driver driver = getAuthenticatedDriver(request);
+        if (driver == null || driver.getId() == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
+        }
+
+        List<com.anushaporter.backend.dto.DriverOfferResponse> offers = driverOfferService.getActiveOffersForDriver(driver.getId());
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "driverId", driver.getId(),
+                "count", offers.size(),
+                "offers", offers
+        ));
+    }
+
+    /**
+     * Driver responds to a booking offer (ACCEPT or REJECT) with atomic locking.
+     * POST /api/driver/offers/{bookingId}/respond or POST /api/drivers/offers/{bookingId}/respond
+     * Body: { "accept": true } or { "accept": false }
+     */
+    @PostMapping({
+            "/driver/offers/{bookingId}/respond",
+            "/drivers/offers/{bookingId}/respond",
+            "/driver/offers/respond",
+            "/drivers/offers/respond"
+    })
+    public ResponseEntity<?> respondToDriverOffer(
+            HttpServletRequest request,
+            @PathVariable(required = false) String bookingId,
+            @RequestBody Map<String, Object> payload) {
+        Driver driver = getAuthenticatedDriver(request);
+        if (driver == null || driver.getId() == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
+        }
+
+        String targetBookingId = bookingId;
+        if ((targetBookingId == null || targetBookingId.isBlank()) && payload != null && payload.get("bookingId") != null) {
+            targetBookingId = String.valueOf(payload.get("bookingId"));
+        }
+
+        if (targetBookingId == null || targetBookingId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "bookingId is required"));
+        }
+
+        boolean accept = true;
+        if (payload != null && payload.containsKey("accept")) {
+            accept = Boolean.parseBoolean(String.valueOf(payload.get("accept")));
+        } else if (payload != null && payload.containsKey("action")) {
+            accept = "accept".equalsIgnoreCase(String.valueOf(payload.get("action")));
+        }
+
+        Map<String, Object> result = driverOfferService.respondToOffer(targetBookingId, driver.getId(), accept);
+        boolean success = Boolean.TRUE.equals(result.get("success"));
+        int status = success ? 200 : ("TOO_LATE".equals(result.get("status")) ? 409 : 400);
+
+        return ResponseEntity.status(status).body(result);
+    }
+
+    /**
+     * Update trip lifecycle status through the strict Trip State Machine.
+     * PUT /api/driver/orders/{bookingId}/trip-status or POST /api/driver/orders/{bookingId}/trip-status
+     * Body: { "targetStatus": "DRIVER_EN_ROUTE" } | "DRIVER_ARRIVED" | "PICKED_UP" | "IN_TRANSIT" | "DELIVERED" | "COMPLETED" | "DRIVER_CANCELLED"
+     */
+    @RequestMapping(value = {
+            "/driver/orders/{bookingId}/trip-status",
+            "/drivers/orders/{bookingId}/trip-status"
+    }, method = { RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH })
+    public ResponseEntity<?> updateTripStatus(
+            HttpServletRequest request,
+            @PathVariable String bookingId,
+            @RequestBody com.anushaporter.backend.dto.TripStatusUpdateRequest payload) {
+        Driver driver = getAuthenticatedDriver(request);
+        String driverIdStr = driver != null && driver.getId() != null ? driver.getId().toString() : null;
+
+        Map<String, Object> result = tripStateMachineService.updateTripStatus(bookingId, payload, driverIdStr);
+        int statusCode = result.containsKey("statusCode") ? (int) result.get("statusCode") : 200;
+        return ResponseEntity.status(statusCode).body(result);
     }
 
     private boolean isOrderClaimable(String status) {

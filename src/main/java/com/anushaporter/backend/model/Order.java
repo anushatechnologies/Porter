@@ -48,6 +48,10 @@ public class Order {
     private String driverVehicleNumber;
 
     private Double distanceKm;
+    private Double weightKg;
+    private String dimensions;
+    private LocalDateTime assignmentDeadline;
+    private Integer offerCount = 0;
 
     private String houseSize;
     private String heavyItems;
@@ -199,4 +203,12 @@ public class Order {
     public void setOtpVerified(Boolean otpVerified) { this.otpVerified = otpVerified; }
     public Boolean getPaymentConfirmed() { return paymentConfirmed != null && paymentConfirmed; }
     public void setPaymentConfirmed(Boolean paymentConfirmed) { this.paymentConfirmed = paymentConfirmed; }
+    public Double getWeightKg() { return weightKg; }
+    public void setWeightKg(Double weightKg) { this.weightKg = weightKg; }
+    public String getDimensions() { return dimensions; }
+    public void setDimensions(String dimensions) { this.dimensions = dimensions; }
+    public LocalDateTime getAssignmentDeadline() { return assignmentDeadline; }
+    public void setAssignmentDeadline(LocalDateTime assignmentDeadline) { this.assignmentDeadline = assignmentDeadline; }
+    public Integer getOfferCount() { return offerCount != null ? offerCount : 0; }
+    public void setOfferCount(Integer offerCount) { this.offerCount = offerCount; }
 }

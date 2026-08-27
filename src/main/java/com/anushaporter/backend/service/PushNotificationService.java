@@ -97,6 +97,17 @@ public class PushNotificationService {
         }
     }
 
+    public void notifyDriverAssignment(String driverIdentifier, String bookingId, String pickup, String drop) {
+        if (driverIdentifier == null || driverIdentifier.isBlank()) return;
+        userRepository.findFirstByEmailOrderByIdDesc(driverIdentifier)
+                .or(() -> userRepository.findFirstByPhoneOrderByIdDesc(driverIdentifier))
+                .ifPresent(driverUser -> {
+                    String title = "New Delivery Offer! 📦";
+                    String message = "Pickup: " + safe(pickup, "Near you") + " → Drop: " + safe(drop, "Destination");
+                    notifyUser(driverUser, bookingId, "DRIVER_OFFER", title, message);
+                });
+    }
+
     private void sendExpo(String token, String title, String message, String bookingId, String type) throws Exception {
         Map<String, Object> payload = new HashMap<>();
         payload.put("to", token);

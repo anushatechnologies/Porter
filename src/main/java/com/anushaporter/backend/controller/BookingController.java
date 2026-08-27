@@ -31,6 +31,37 @@ public class BookingController {
     @Autowired
     private com.anushaporter.backend.service.DriverWalletService driverWalletService;
 
+    @Autowired
+    private com.anushaporter.backend.service.VehicleRecommendationService vehicleRecommendationService;
+
+    @Autowired
+    private com.anushaporter.backend.service.AutoAssignmentService autoAssignmentService;
+
+    /**
+     * Recommend optimal vehicle type based on weight, dimensions, and category.
+     * POST /api/vehicles/recommend
+     */
+    @PostMapping("/api/vehicles/recommend")
+    public ResponseEntity<com.anushaporter.backend.dto.VehicleRecommendationResponse> recommendVehicle(
+            @RequestBody com.anushaporter.backend.dto.VehicleRecommendationRequest request) {
+        return ResponseEntity.ok(vehicleRecommendationService.recommendVehicle(request));
+    }
+
+    /**
+     * Trigger or retry auto-assignment for a booking.
+     * POST /api/bookings/{bookingId}/auto-assign
+     */
+    @PostMapping("/api/bookings/{bookingId}/auto-assign")
+    public ResponseEntity<Map<String, Object>> triggerAutoAssignment(@PathVariable String bookingId) {
+        autoAssignmentService.startAutoAssignment(bookingId);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "bookingId", bookingId,
+                "status", "SEARCHING",
+                "message", "Auto-assignment search initiated across radius tiers (3km, 5km, 10km, 15km)."
+        ));
+    }
+
     /**
      * Create a new booking.
      * POST /api/bookings
@@ -176,6 +207,12 @@ public class BookingController {
             order.setOtpExpiresAt(LocalDateTime.now().plusHours(24));
 
             orderRepository.save(order);
+
+            // Automatically initiate driver auto-assignment if status is searching/pending
+            String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "";
+            if (currentStatus.equals("searching") || currentStatus.equals("pending") || currentStatus.equals("created")) {
+                autoAssignmentService.startAutoAssignment(order.getBookingId());
+            }
 
             response.clear();
             response.put("success", true);
