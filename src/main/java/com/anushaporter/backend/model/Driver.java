@@ -50,7 +50,11 @@ public class Driver {
     private String bankPassbookUri;
 
     private String kyc;
+    private String verificationStatus;
+    private String rejectionReason;
     private String rejectedReason;
+    private String rejectedDocuments;
+    private String rejectionNotes;
     private Integer trips;
     private String tenure;
 
@@ -129,6 +133,18 @@ public class Driver {
     public void setTrips(Integer trips) { this.trips = trips; }
     public String getTenure() { return tenure; }
     public void setTenure(String tenure) { this.tenure = tenure; }
+
+    public String getVerificationStatus() { return verificationStatus; }
+    public void setVerificationStatus(String verificationStatus) { this.verificationStatus = verificationStatus; }
+    public String getRejectionReason() { return rejectionReason != null ? rejectionReason : rejectedReason; }
+    public void setRejectionReason(String rejectionReason) { 
+        this.rejectionReason = rejectionReason; 
+        this.rejectedReason = rejectionReason;
+    }
+    public String getRejectedDocuments() { return rejectedDocuments; }
+    public void setRejectedDocuments(String rejectedDocuments) { this.rejectedDocuments = rejectedDocuments; }
+    public String getRejectionNotes() { return rejectionNotes; }
+    public void setRejectionNotes(String rejectionNotes) { this.rejectionNotes = rejectionNotes; }
 
     public Double getWalletBalance() {
         return walletBalance != null ? walletBalance : 0.0;

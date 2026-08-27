@@ -17,7 +17,7 @@ import com.anushaporter.backend.model.Vehicle;
 import com.anushaporter.backend.repository.VehicleRepository;
 
 @RestController
-@RequestMapping("/api/drivers")
+@RequestMapping({"/api/drivers", "/api/admin/drivers"})
 public class DriverController {
     @Autowired
     private DriverRepository repository;
@@ -403,21 +403,60 @@ public class DriverController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    @PostMapping("/{id}/reject")
-    public ResponseEntity<java.util.Map<String, Object>> rejectDriver(@PathVariable Long id) {
+    @PostMapping({"/{id}/reject", "/reject/{id}"})
+    public ResponseEntity<?> rejectDriver(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> payload) {
         return repository.findById(id).map(driver -> {
             driver.setKyc("rejected");
+            driver.setVerificationStatus("REJECTED_REQUIRES_REUPLOAD");
+
+            String rejectionReason = null;
+            String rejectedDocsString = null;
+            String notes = null;
+
+            if (payload != null) {
+                rejectionReason = payload.get("rejectionReason") != null ? payload.get("rejectionReason").toString()
+                        : (payload.get("reason") != null ? payload.get("reason").toString() : null);
+                notes = payload.get("notes") != null ? payload.get("notes").toString() : null;
+
+                Object rejectedDocsObj = payload.get("rejectedDocuments");
+                if (rejectedDocsObj instanceof List) {
+                    List<?> list = (List<?>) rejectedDocsObj;
+                    rejectedDocsString = list.stream().map(Object::toString).collect(Collectors.joining(","));
+                } else if (rejectedDocsObj != null) {
+                    rejectedDocsString = rejectedDocsObj.toString();
+                }
+            }
+
+            if (rejectionReason != null && !rejectionReason.isBlank()) {
+                driver.setRejectionReason(rejectionReason);
+            }
+            if (rejectedDocsString != null && !rejectedDocsString.isBlank()) {
+                driver.setRejectedDocuments(rejectedDocsString);
+            }
+            if (notes != null && !notes.isBlank()) {
+                driver.setRejectionNotes(notes);
+            }
 
             com.anushaporter.backend.model.Notification notif = new com.anushaporter.backend.model.Notification();
-            notif.setTitle("Verification Rejected");
-            notif.setMessage("Your verification documents were rejected. Please review and update your documents.");
+            notif.setTitle("Verification Requires Document Re-upload");
+            String docInfo = (rejectedDocsString != null && !rejectedDocsString.isBlank()) ? " [" + rejectedDocsString + "]" : "";
+            notif.setMessage("Your verification requires document re-upload" + docInfo + ". Open the driver app to re-upload.");
             notif.setAudience("driver");
             notif.setTarget(driver.getEmail());
             notif.setReadStatus(false);
             notificationRepository.save(notif);
 
             Driver savedDriver = repository.save(driver);
-            return ResponseEntity.ok(java.util.Map.of("success", (Object) true, "driver", (Object) savedDriver));
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("success", true);
+            resp.put("message", "Driver verification rejected with re-upload requirement");
+            resp.put("verificationStatus", savedDriver.getVerificationStatus());
+            resp.put("rejectionReason", savedDriver.getRejectionReason());
+            resp.put("rejectedDocuments", savedDriver.getRejectedDocuments());
+            resp.put("driver", savedDriver);
+            return ResponseEntity.ok(resp);
         }).orElse(ResponseEntity.notFound().build());
     }
 
