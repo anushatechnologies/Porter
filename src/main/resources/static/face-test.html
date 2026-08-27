@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Driver Photo Upload Portal</title>
+  <title>Driver Photo & Profile Portal</title>
   <style>
     :root {
       --primary: #2563eb;
@@ -32,7 +32,7 @@
       padding: 2rem 1rem;
     }
     .container {
-      max-width: 800px;
+      max-width: 900px;
       width: 100%;
     }
     header {
@@ -66,7 +66,7 @@
     }
     .preview-box {
       width: 100%;
-      height: 240px;
+      height: 220px;
       border-radius: 0.75rem;
       border: 2px dashed var(--border);
       background: #090d16;
@@ -90,8 +90,8 @@
       padding: 1rem;
     }
     .preview-placeholder svg {
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       margin-bottom: 0.5rem;
       stroke: #64748b;
     }
@@ -191,6 +191,66 @@
     .badge-loading { background: #eab308; color: #713f12; }
     .badge-success { background: #15803d; color: #dcfce7; }
     .badge-error { background: #b91c1c; color: #fee2e2; }
+
+    /* ─── LIVE USER PROFILE CARD ─── */
+    .profile-card {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    .profile-avatar-wrapper {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 3px solid #3b82f6;
+      overflow: hidden;
+      background: #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    .profile-avatar {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+    .profile-avatar-fallback {
+      font-size: 2rem;
+      color: #94a3b8;
+    }
+    .profile-info {
+      flex: 1;
+    }
+    .profile-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .profile-meta {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+    .status-pill {
+      display: inline-block;
+      margin-top: 0.4rem;
+      padding: 0.15rem 0.5rem;
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
     .status-panel {
       background: #0f172a;
       border: 1px solid var(--border);
@@ -207,7 +267,7 @@
       font-size: 0.75rem;
       color: #93c5fd;
       margin-top: 0.5rem;
-      max-height: 180px;
+      max-height: 150px;
     }
 
     /* ─── LIVE CAMERA MODAL ─── */
@@ -287,14 +347,14 @@
 <body>
   <div class="container">
     <header>
-      <h1>🪪 Driver Photo Upload</h1>
-      <p>Capture using Camera or Choose from Device Gallery</p>
+      <h1>🪪 Driver Photo & Profile Portal</h1>
+      <p>Upload Photo with Camera / File and View Live on Profile</p>
     </header>
 
     <div class="grid">
-      <!-- Input Card -->
+      <!-- Upload Card -->
       <div class="card">
-        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📸 Driver Photo</h2>
+        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📸 1. Take or Choose Photo</h2>
 
         <div class="preview-box">
           <img id="previewImg" class="preview-img" alt="Driver Photo Preview">
@@ -308,10 +368,9 @@
           </div>
         </div>
 
-        <!-- Hidden File Input for Gallery -->
         <input type="file" id="galleryInput" accept="image/*" style="display: none;" onchange="handleFileSelected(event)">
 
-        <!-- Dual Action Buttons: Open Camera & Choose File -->
+        <!-- Action Buttons -->
         <div class="action-buttons">
           <button type="button" class="btn-camera" onclick="openDeviceCamera()">
             📷 Open Camera
@@ -323,25 +382,39 @@
 
         <div class="form-group">
           <label for="driverId">Driver ID / Phone Number (Optional):</label>
-          <input type="text" id="driverId" placeholder="e.g. 1 or 9876543210" value="1">
+          <input type="text" id="driverId" placeholder="e.g. 1 or 9876543210" value="1" onchange="fetchLiveProfile()">
         </div>
 
         <button id="uploadBtn" class="btn-primary" onclick="uploadPhoto()" disabled>
-          ⬆️ Upload Driver Photo
+          ⬆️ Upload Photo to Profile
         </button>
       </div>
 
-      <!-- Result Card -->
+      <!-- Live Profile Card -->
       <div class="card">
-        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📊 Upload Status</h2>
-        <div id="badge" class="status-badge badge-idle">Awaiting Photo</div>
+        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">👤 2. Live User Profile</h2>
+        <div id="badge" class="status-badge badge-idle">Profile Ready</div>
+
+        <!-- Live Profile Box with Image Display -->
+        <div class="profile-card">
+          <div class="profile-avatar-wrapper">
+            <img id="profileAvatarImg" class="profile-avatar" alt="User Profile Photo">
+            <span id="profileAvatarFallback" class="profile-avatar-fallback">👤</span>
+          </div>
+          <div class="profile-info">
+            <div id="profileName" class="profile-name">Driver #1</div>
+            <div id="profilePhone" class="profile-meta">Phone: 9876543210</div>
+            <div id="profileId" class="profile-meta">Driver ID: #1</div>
+            <span class="status-pill">Active Profile</span>
+          </div>
+        </div>
 
         <div class="status-panel">
           <div id="statusMessage" style="font-weight: 600; margin-bottom: 0.5rem; color: #f8fafc;">
-            Tap "Open Camera" to take a selfie or "Choose File" from disk.
+            Upload a photo to see it appear live on the profile card above!
           </div>
           <div id="urlDisplay" style="margin-top: 0.5rem; display: none;">
-            <label style="color: #60a5fa;">Uploaded Photo URL:</label>
+            <label style="color: #60a5fa;">Profile Photo URI:</label>
             <a id="uploadedLink" href="#" target="_blank" style="color: #4ade80; word-break: break-all;"></a>
           </div>
           <label style="margin-top: 0.75rem;">Server Response:</label>
@@ -356,7 +429,7 @@
     <div class="modal-content" style="position: relative;">
       <button class="close-modal-btn" onclick="closeDeviceCamera()">&times;</button>
       <h3 style="color: #60a5fa; margin-bottom: 0.25rem;">📸 Device Camera</h3>
-      <p style="font-size: 0.85rem; color: #94a3b8;">Position your face clearly and click Snap Photo</p>
+      <p style="font-size: 0.85rem; color: #94a3b8;">Look at the camera and click Snap Photo</p>
 
       <div class="camera-viewfinder">
         <video id="videoElement" autoplay playsinline muted></video>
@@ -388,7 +461,14 @@
     const videoElement = document.getElementById('videoElement');
     const snapshotCanvas = document.getElementById('snapshotCanvas');
 
-    // ─── 1. OPEN CAMERA ON THIS DEVICE ───
+    // Profile elements
+    const profileAvatarImg = document.getElementById('profileAvatarImg');
+    const profileAvatarFallback = document.getElementById('profileAvatarFallback');
+    const profileName = document.getElementById('profileName');
+    const profilePhone = document.getElementById('profilePhone');
+    const profileId = document.getElementById('profileId');
+
+    // ─── 1. OPEN CAMERA ───
     async function openDeviceCamera() {
       try {
         cameraStream = await navigator.mediaDevices.getUserMedia({
@@ -397,7 +477,7 @@
         videoElement.srcObject = cameraStream;
         cameraModal.style.display = 'flex';
       } catch (err) {
-        alert("Camera access denied or unavailable on this device: " + err.message);
+        alert("Camera access denied or unavailable: " + err.message);
       }
     }
 
@@ -419,9 +499,7 @@
 
         badge.className = 'status-badge badge-idle';
         badge.innerText = 'Photo Captured';
-        statusMsg.innerText = 'Snapshot captured from camera. Ready to upload.';
-        urlDisplay.style.display = 'none';
-
+        statusMsg.innerText = 'Photo captured from camera. Click "Upload Photo to Profile".';
         closeDeviceCamera();
       }, 'image/jpeg', 0.95);
     }
@@ -435,7 +513,7 @@
       cameraModal.style.display = 'none';
     }
 
-    // ─── 4. CHOOSE FILE FROM GALLERY/DISK ───
+    // ─── 4. CHOOSE FILE FROM DISK ───
     function handleFileSelected(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -449,13 +527,12 @@
         uploadBtn.disabled = false;
         badge.className = 'status-badge badge-idle';
         badge.innerText = 'Ready to Upload';
-        statusMsg.innerText = 'Photo selected: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
-        urlDisplay.style.display = 'none';
+        statusMsg.innerText = 'Photo selected: ' + file.name;
       };
       reader.readAsDataURL(file);
     }
 
-    // ─── 5. UPLOAD TO BACKEND API ───
+    // ─── 5. UPLOAD TO BACKEND & UPDATE PROFILE ───
     async function uploadPhoto() {
       if (!currentBlobOrFile) {
         alert('Please take or choose a photo first.');
@@ -465,13 +542,13 @@
       uploadBtn.disabled = true;
       badge.className = 'status-badge badge-loading';
       badge.innerText = 'Uploading...';
-      statusMsg.innerText = 'Saving driver photo...';
+      statusMsg.innerText = 'Saving photo to user profile...';
 
-      const driverId = document.getElementById('driverId').value.trim();
+      const driverIdVal = document.getElementById('driverId').value.trim();
       const formData = new FormData();
       formData.append('file', currentBlobOrFile);
-      if (driverId) {
-        formData.append('driverId', driverId);
+      if (driverIdVal) {
+        formData.append('driverId', driverIdVal);
       }
 
       try {
@@ -485,16 +562,29 @@
 
         if (response.ok && data.success) {
           badge.className = 'status-badge badge-success';
-          badge.innerText = 'Success ✓';
-          statusMsg.innerHTML = `<span style="color:#4ade80;">${data.message || 'Photo uploaded successfully!'}</span>`;
+          badge.innerText = 'Profile Updated ✓';
+          statusMsg.innerHTML = `<span style="color:#4ade80;">${data.message || 'Photo uploaded to profile successfully!'}</span>`;
+
+          // UPDATE PROFILE CARD PHOTO IMMEDIATELY!
           if (data.url) {
+            profileAvatarImg.src = data.url;
+            profileAvatarImg.style.display = 'block';
+            profileAvatarFallback.style.display = 'none';
+
             urlDisplay.style.display = 'block';
             uploadedLink.href = data.url;
             uploadedLink.innerText = data.url;
           }
+
+          if (data.driverName) {
+            profileName.innerText = data.driverName;
+          }
+          if (data.driverId) {
+            profileId.innerText = `Driver ID: #${data.driverId}`;
+          }
         } else {
           badge.className = 'status-badge badge-error';
-          badge.innerText = 'Failed ✗';
+          badge.innerText = 'Upload Failed ✗';
           statusMsg.innerHTML = `<span style="color:#f87171;">${data.message || 'Upload failed.'}</span>`;
         }
       } catch (err) {

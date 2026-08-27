@@ -24,6 +24,8 @@ public class AppUser {
     private String language;
     @Column(name = "fcm_token", length = 512)
     private String fcmToken;
+    private String profilePhotoUri;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
@@ -50,5 +52,7 @@ public class AppUser {
     public void setLanguage(String language) { this.language = language; }
     public String getFcmToken() { return fcmToken; }
     public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
+    public String getProfilePhotoUri() { return profilePhotoUri; }
+    public void setProfilePhotoUri(String profilePhotoUri) { this.profilePhotoUri = profilePhotoUri; }
 
 }

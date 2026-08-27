@@ -111,8 +111,12 @@ public class DriverAPIController {
         map.put("longitude", driver.getLongitude());
         map.put("heading", driver.getHeading());
         map.put("speed", driver.getSpeed());
-        map.put("location", driver.getLocation());
-        map.put("profilePhotoUri", storageService.getPresignedOrSanitizedUrl(driver.getProfilePhotoUri()));
+        String photoUrl = storageService.getPresignedOrSanitizedUrl(driver.getProfilePhotoUri());
+        map.put("profilePhotoUri", photoUrl);
+        map.put("photoUrl", photoUrl);
+        map.put("profilePhoto", photoUrl);
+        map.put("avatar", photoUrl);
+        map.put("photo", photoUrl);
         map.put("licenseUri", storageService.getPresignedOrSanitizedUrl(driver.getLicenseUri()));
         map.put("rcUri", storageService.getPresignedOrSanitizedUrl(driver.getRcUri()));
         map.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(driver.getAadhaarUri()));

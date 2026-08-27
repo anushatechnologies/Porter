@@ -2,6 +2,7 @@ package com.anushaporter.backend.controller;
 
 import com.anushaporter.backend.dto.DriverPhotoUploadResponse;
 import com.anushaporter.backend.model.Driver;
+import com.anushaporter.backend.repository.AppUserRepository;
 import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.service.DriverAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +32,9 @@ public class DriverPhotoUploadController {
 
     @Autowired
     private DriverRepository driverRepository;
+
+    @Autowired
+    private AppUserRepository appUserRepository;
 
     @Autowired
     private DriverAuthService driverAuthService;
@@ -106,6 +110,14 @@ public class DriverPhotoUploadController {
             // 4. Update Driver profile photo URI
             driver.setProfilePhotoUri(photoUrl);
             driverRepository.save(driver);
+
+            // 5. Also synchronize with AppUser profile if present
+            if (driver.getPhone() != null) {
+                appUserRepository.findByPhone(driver.getPhone()).ifPresent(u -> {
+                    u.setProfilePhotoUri(photoUrl);
+                    appUserRepository.save(u);
+                });
+            }
 
             log.info("✓ Driver photo successfully saved for driver ID #{}: {}", driver.getId(), photoUrl);
 
