@@ -47,13 +47,16 @@ public class FileUploadController {
             s3Client.putObject(putObjectRequest,
                     RequestBody.fromBytes(file.getBytes()));
 
-            // Assuming the bucket is public or you want to return the S3 URL
+            // Return only the clean, single S3 URL directly
             String fileUrl = "https://" + bucketName + ".s3.ap-south-2.amazonaws.com/" + fileName;
             
-            return ResponseEntity.ok(Map.of("url", fileUrl));
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "url", fileUrl
+            ));
 
         } catch (IOException e) {
-            return ResponseEntity.status(500).body(Map.of("error", "Failed to save file: " + e.getMessage()));
+            return ResponseEntity.status(500).body(Map.of("success", false, "error", "Failed to save file: " + e.getMessage()));
         }
     }
 }
