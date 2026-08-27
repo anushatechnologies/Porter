@@ -204,13 +204,17 @@ jobs:
           docker tag  "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
                       "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
-          # 4. Start new container with all secrets injected
+          # 4. Start new container with all secrets injected & persistent volumes
           echo "🚀 Starting new container..."
+          mkdir -p /var/data/porter-uploads /var/data/porter-data 2>/dev/null || true
           docker run -d \
             --name anusha-backend \
             --restart unless-stopped \
             -p 9000:9000 \
             -e SERVER_PORT=9000 \
+            -e FILE_UPLOAD_DIR=/app/uploads/ \
+            -v /var/data/porter-uploads:/app/uploads \
+            -v /var/data/porter-data:/app/data \
             \
             -e AWS_REGION="$AWS_REGION" \
             -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
