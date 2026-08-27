@@ -14,6 +14,4 @@ WORKDIR /app
 COPY --from=build /app/target/backend-0.0.1-SNAPSHOT.jar app.jar
 RUN mkdir -p /app/uploads /app/data
 VOLUME ["/app/uploads", "/app/data"]
-EXPOSE 8080
-ENTRYPOINT ["java", "-Xms512m", "-Xmx2048m", "-XX:+UseG1GC", "-jar", "app.jar"]
-
+ENTRYPOINT ["java", "-XX:+UseG1GC", "-XX:MaxRAMPercentage=75.0", "-XX:InitialRAMPercentage=25.0", "-jar", "app.jar"]
