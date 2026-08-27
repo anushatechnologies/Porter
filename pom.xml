@@ -127,11 +127,6 @@
 			<artifactId>google-http-client-apache-v2</artifactId>
 			<version>1.43.3</version>
 		</dependency>
-		<dependency>
-			<groupId>org.openpnp</groupId>
-			<artifactId>opencv</artifactId>
-			<version>4.9.0-0</version>
-		</dependency>
 	</dependencies>
 
 	<build>

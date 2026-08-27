@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Driver Face Registration Portal</title>
+  <title>Driver Photo Upload Portal</title>
   <style>
     :root {
       --primary: #2563eb;
@@ -32,7 +32,7 @@
       padding: 2.5rem 1rem;
     }
     .container {
-      max-width: 850px;
+      max-width: 800px;
       width: 100%;
     }
     header {
@@ -66,7 +66,7 @@
     }
     .preview-box {
       width: 100%;
-      height: 260px;
+      height: 240px;
       border-radius: 0.75rem;
       border: 2px dashed var(--border);
       background: #090d16;
@@ -77,11 +77,6 @@
       overflow: hidden;
       margin-bottom: 1.25rem;
       position: relative;
-      cursor: pointer;
-      transition: border-color 0.2s;
-    }
-    .preview-box:hover {
-      border-color: #60a5fa;
     }
     .preview-img {
       width: 100%;
@@ -100,6 +95,42 @@
       margin-bottom: 0.5rem;
       stroke: #64748b;
     }
+    .action-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .btn-camera, .btn-upload {
+      padding: 0.75rem 0.5rem;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      transition: all 0.2s;
+    }
+    .btn-camera {
+      background: #1e293b;
+      color: #60a5fa;
+      border-color: #3b82f6;
+    }
+    .btn-camera:hover {
+      background: #2563eb;
+      color: #fff;
+    }
+    .btn-upload {
+      background: #1e293b;
+      color: #94a3b8;
+    }
+    .btn-upload:hover {
+      background: #334155;
+      color: #fff;
+    }
     .form-group {
       margin-bottom: 1rem;
     }
@@ -110,7 +141,7 @@
       color: var(--text-muted);
       margin-bottom: 0.4rem;
     }
-    input[type="text"], input[type="file"] {
+    input[type="text"] {
       width: 100%;
       padding: 0.7rem 0.85rem;
       border-radius: 0.5rem;
@@ -133,7 +164,7 @@
       cursor: pointer;
       background: var(--primary);
       color: white;
-      transition: background 0.2s, transform 0.1s;
+      transition: background 0.2s;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -160,29 +191,6 @@
     .badge-loading { background: #eab308; color: #713f12; }
     .badge-success { background: #15803d; color: #dcfce7; }
     .badge-error { background: #b91c1c; color: #fee2e2; }
-    .metrics {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-    .metric-box {
-      background: #0f172a;
-      border: 1px solid var(--border);
-      border-radius: 0.5rem;
-      padding: 0.75rem;
-      text-align: center;
-    }
-    .metric-value {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #60a5fa;
-    }
-    .metric-label {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 0.25rem;
-    }
     .status-panel {
       background: #0f172a;
       border: 1px solid var(--border);
@@ -206,60 +214,66 @@
 <body>
   <div class="container">
     <header>
-      <h1>🪪 Driver Face Registration</h1>
-      <p>Capture or Upload a Driver Selfie for Biometric Profile Registration</p>
+      <h1>🪪 Driver Photo & Document Upload</h1>
+      <p>Upload Driver Photo using Camera or File Chooser</p>
     </header>
 
     <div class="grid">
-      <!-- Image Selection / Capture Card -->
+      <!-- Input Card -->
       <div class="card">
-        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📸 Driver Photo</h2>
-        
-        <div class="preview-box" onclick="document.getElementById('photoInput').click()">
-          <img id="previewImg" class="preview-img" alt="Driver Face Preview">
+        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📸 Select Photo</h2>
+
+        <div class="preview-box">
+          <img id="previewImg" class="preview-img" alt="Driver Photo Preview">
           <div id="placeholder" class="preview-placeholder">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <p style="font-weight: 500; color: #cbd5e1;">Click to Take Selfie or Upload Photo</p>
-            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Supports JPG, PNG (Max 10MB)</p>
+            <p style="font-weight: 500; color: #cbd5e1;">No photo selected</p>
+            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Use Camera or Upload button below</p>
           </div>
         </div>
 
-        <input type="file" id="photoInput" accept="image/*" capture="user" style="display: none;" onchange="handleFileSelected(event)">
+        <!-- Camera Input (triggers native camera) -->
+        <input type="file" id="cameraInput" accept="image/*" capture="user" style="display: none;" onchange="handleFileSelected(event)">
+        <!-- File Input (triggers gallery / file explorer) -->
+        <input type="file" id="galleryInput" accept="image/*" style="display: none;" onchange="handleFileSelected(event)">
+
+        <!-- Dual Action Buttons -->
+        <div class="action-buttons">
+          <button class="btn-camera" onclick="document.getElementById('cameraInput').click()">
+            📷 Open Camera
+          </button>
+          <button class="btn-upload" onclick="document.getElementById('galleryInput').click()">
+            📁 Choose File
+          </button>
+        </div>
 
         <div class="form-group">
           <label for="driverId">Driver ID / Phone Number (Optional):</label>
           <input type="text" id="driverId" placeholder="e.g. 1 or 9876543210" value="1">
         </div>
 
-        <button id="registerBtn" class="btn-primary" onclick="registerFace()" disabled>
-          ➕ Register Driver Face
+        <button id="uploadBtn" class="btn-primary" onclick="uploadPhoto()" disabled>
+          ⬆️ Upload Driver Photo
         </button>
       </div>
 
-      <!-- Registration Response & Biometric Results -->
+      <!-- Result Card -->
       <div class="card">
-        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📊 Biometric Results</h2>
-        <div id="badge" class="status-badge badge-idle">Awaiting Photo</div>
-
-        <div class="metrics">
-          <div class="metric-box">
-            <div id="metricDriverId" class="metric-value">--</div>
-            <div class="metric-label">Driver ID</div>
-          </div>
-          <div class="metric-box">
-            <div id="metricLiveness" class="metric-value">--</div>
-            <div class="metric-label">Liveness Score</div>
-          </div>
-        </div>
+        <h2 style="font-size: 1.15rem; margin-bottom: 1rem; color: #cbd5e1;">📊 Upload Status</h2>
+        <div id="badge" class="status-badge badge-idle">Awaiting Selection</div>
 
         <div class="status-panel">
           <div id="statusMessage" style="font-weight: 600; margin-bottom: 0.5rem; color: #f8fafc;">
-            Please select or capture a driver photo to begin.
+            Choose a photo using the Camera or Choose File button.
           </div>
-          <label style="margin-top: 0.5rem;">Raw Server Response:</label>
+          <div id="urlDisplay" style="margin-top: 0.5rem; display: none;">
+            <label style="color: #60a5fa;">Uploaded Photo URL:</label>
+            <a id="uploadedLink" href="#" target="_blank" style="color: #4ade80; word-break: break-all;"></a>
+          </div>
+          <label style="margin-top: 0.75rem;">Server Response:</label>
           <pre id="rawResponse">{}</pre>
         </div>
       </div>
@@ -267,55 +281,55 @@
   </div>
 
   <script>
-    let selectedFile = null;
-    const photoInput = document.getElementById('photoInput');
+    let currentFile = null;
     const previewImg = document.getElementById('previewImg');
     const placeholder = document.getElementById('placeholder');
-    const registerBtn = document.getElementById('registerBtn');
+    const uploadBtn = document.getElementById('uploadBtn');
     const badge = document.getElementById('badge');
     const statusMsg = document.getElementById('statusMessage');
-    const metricDriverId = document.getElementById('metricDriverId');
-    const metricLiveness = document.getElementById('metricLiveness');
     const rawResponse = document.getElementById('rawResponse');
+    const urlDisplay = document.getElementById('urlDisplay');
+    const uploadedLink = document.getElementById('uploadedLink');
 
     function handleFileSelected(event) {
       const file = event.target.files[0];
       if (!file) return;
 
-      selectedFile = file;
+      currentFile = file;
       const reader = new FileReader();
       reader.onload = (e) => {
         previewImg.src = e.target.result;
         previewImg.style.display = 'block';
         placeholder.style.display = 'none';
-        registerBtn.disabled = false;
+        uploadBtn.disabled = false;
         badge.className = 'status-badge badge-idle';
-        badge.innerText = 'Ready to Register';
-        statusMsg.innerText = 'Photo loaded: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+        badge.innerText = 'Ready to Upload';
+        statusMsg.innerText = 'Photo selected: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+        urlDisplay.style.display = 'none';
       };
       reader.readAsDataURL(file);
     }
 
-    async function registerFace() {
-      if (!selectedFile) {
-        alert('Please choose or capture a photo first.');
+    async function uploadPhoto() {
+      if (!currentFile) {
+        alert('Please choose or take a photo first.');
         return;
       }
 
-      registerBtn.disabled = true;
+      uploadBtn.disabled = true;
       badge.className = 'status-badge badge-loading';
-      badge.innerText = 'Processing...';
-      statusMsg.innerText = 'Analyzing face, checking liveness, and generating biometric embeddings...';
+      badge.innerText = 'Uploading...';
+      statusMsg.innerText = 'Saving driver photo...';
 
       const driverId = document.getElementById('driverId').value.trim();
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      formData.append('file', currentFile);
       if (driverId) {
         formData.append('driverId', driverId);
       }
 
       try {
-        const response = await fetch('/api/driver/registerFace', {
+        const response = await fetch('/api/driver/photo', {
           method: 'POST',
           body: formData
         });
@@ -326,22 +340,23 @@
         if (response.ok && data.success) {
           badge.className = 'status-badge badge-success';
           badge.innerText = 'Success ✓';
-          statusMsg.innerHTML = `<span style="color:#4ade80;">${data.message || 'Face registered successfully!'}</span>`;
-          metricDriverId.innerText = data.driverId ? `#${data.driverId}` : 'Saved';
-          metricLiveness.innerText = data.livenessScore ? data.livenessScore.toFixed(2) : '1.00';
+          statusMsg.innerHTML = `<span style="color:#4ade80;">${data.message || 'Photo uploaded successfully!'}</span>`;
+          if (data.url) {
+            urlDisplay.style.display = 'block';
+            uploadedLink.href = data.url;
+            uploadedLink.innerText = data.url;
+          }
         } else {
           badge.className = 'status-badge badge-error';
           badge.innerText = 'Failed ✗';
-          statusMsg.innerHTML = `<span style="color:#f87171;">${data.message || 'Registration failed.'}</span>`;
-          metricDriverId.innerText = '--';
-          metricLiveness.innerText = data.livenessScore ? data.livenessScore.toFixed(2) : '0.00';
+          statusMsg.innerHTML = `<span style="color:#f87171;">${data.message || 'Upload failed.'}</span>`;
         }
       } catch (err) {
         badge.className = 'status-badge badge-error';
         badge.innerText = 'Network Error';
         statusMsg.innerText = 'Error connecting to server: ' + err.message;
       } finally {
-        registerBtn.disabled = false;
+        uploadBtn.disabled = false;
       }
     }
   </script>
