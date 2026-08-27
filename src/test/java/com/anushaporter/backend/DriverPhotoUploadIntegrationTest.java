@@ -1,6 +1,8 @@
 package com.anushaporter.backend;
 
+import com.anushaporter.backend.model.AppUser;
 import com.anushaporter.backend.model.Driver;
+import com.anushaporter.backend.repository.AppUserRepository;
 import com.anushaporter.backend.repository.DriverRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,7 @@ import java.util.Optional;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -49,6 +52,9 @@ public class DriverPhotoUploadIntegrationTest {
 
     @Autowired
     private DriverRepository driverRepository;
+
+    @Autowired
+    private AppUserRepository appUserRepository;
 
     private MockMvc mockMvc;
     private Driver testDriver;
@@ -109,6 +115,57 @@ public class DriverPhotoUploadIntegrationTest {
     }
 
     @Test
+    void testUploadDriverPhoto_ByPhone_AutoCreatesDriver() throws Exception {
+        String uniquePhone = "9911223344";
+        byte[] imageBytes = createTestImage();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "gallery_photo.jpg",
+                "image/jpeg",
+                imageBytes
+        );
+
+        mockMvc.perform(multipart("/api/driver/photo")
+                        .file(file)
+                        .param("phone", uniquePhone))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.url", containsString("/uploads/driver_photos/")));
+
+        Optional<Driver> createdOpt = driverRepository.findByPhone(uniquePhone);
+        assertTrue(createdOpt.isPresent());
+        assertTrue(createdOpt.get().getProfilePhotoUri() != null);
+    }
+
+    @Test
+    void testUploadDriverPhoto_SynchronizesWithAppUser() throws Exception {
+        String testPhone = "9887766554";
+        AppUser appUser = new AppUser();
+        appUser.setName("Synced AppUser");
+        appUser.setPhone(testPhone);
+        appUser.setEmail("sync.test@porter.com");
+        appUser.setRole("DRIVER");
+        appUserRepository.save(appUser);
+
+        byte[] imageBytes = createTestImage();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "synced_photo.jpg",
+                "image/jpeg",
+                imageBytes
+        );
+
+        mockMvc.perform(multipart("/api/driver/photo")
+                        .file(file)
+                        .param("phone", testPhone))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        AppUser updatedUser = appUserRepository.findFirstByPhoneOrderByIdDesc(testPhone).orElseThrow();
+        assertTrue(updatedUser.getProfilePhotoUri() != null && updatedUser.getProfilePhotoUri().contains("/uploads/driver_photos/"));
+    }
+
+    @Test
     void testUploadDriverPhoto_EmptyFile_Returns400() throws Exception {
         MockMultipartFile emptyFile = new MockMultipartFile(
                 "file",
@@ -123,5 +180,30 @@ public class DriverPhotoUploadIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.message", containsString("Photo file is required")));
+    }
+
+    @Test
+    void testUploadDriverPhoto_AliasEndpoints() throws Exception {
+        byte[] imageBytes = createTestImage();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "alias_photo.jpg",
+                "image/jpeg",
+                imageBytes
+        );
+
+        // Test alias: /api/driver/uploadPhoto
+        mockMvc.perform(multipart("/api/driver/uploadPhoto")
+                        .file(file)
+                        .param("driverId", testDriver.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        // Test alias: /driver/photo
+        mockMvc.perform(multipart("/driver/photo")
+                        .file(file)
+                        .param("driverId", testDriver.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
     }
 }
