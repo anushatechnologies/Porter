@@ -112,11 +112,15 @@ public class DriverPhotoUploadController {
             driverRepository.save(driver);
 
             // 5. Also synchronize with AppUser profile if present
-            if (driver.getPhone() != null) {
-                appUserRepository.findByPhone(driver.getPhone()).ifPresent(u -> {
-                    u.setProfilePhotoUri(photoUrl);
-                    appUserRepository.save(u);
-                });
+            if (driver.getPhone() != null && !driver.getPhone().isBlank()) {
+                try {
+                    appUserRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone().trim()).ifPresent(u -> {
+                        u.setProfilePhotoUri(photoUrl);
+                        appUserRepository.save(u);
+                    });
+                } catch (Exception ex) {
+                    log.warn("Could not sync photo to AppUser: {}", ex.getMessage());
+                }
             }
 
             log.info("✓ Driver photo successfully saved for driver ID #{}: {}", driver.getId(), photoUrl);

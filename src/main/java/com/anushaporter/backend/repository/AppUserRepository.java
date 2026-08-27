@@ -9,9 +9,10 @@ import java.util.List;
 
 @Repository
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
-    // Select the newest row while legacy duplicate data is being cleaned up.
     Optional<AppUser> findFirstByEmailOrderByIdDesc(String email);
     Optional<AppUser> findFirstByPhoneOrderByIdDesc(String phone);
+    Optional<AppUser> findByPhone(String phone);
+    Optional<AppUser> findByEmail(String email);
     Optional<AppUser> findFirstByOtpOrderByIdDesc(String otp);
     Optional<AppUser> findFirstByFcmToken(String fcmToken);
     boolean existsByPhone(String phone);
