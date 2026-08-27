@@ -10,10 +10,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailService {
 
-    @Autowired
+    @Autowired(required = false)
     private JavaMailSender emailSender;
 
     public void sendOtpEmail(String to, String otp) {
+        if (emailSender == null) {
+            return;
+        }
         try {
             MimeMessage message = emailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -38,6 +41,9 @@ public class EmailService {
     }
 
     public void sendPasswordResetEmail(String to, String otp) {
+        if (emailSender == null) {
+            return;
+        }
         try {
             MimeMessage message = emailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
