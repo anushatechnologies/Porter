@@ -22,65 +22,141 @@ public class DatabaseConfig {
     @Value("${spring.datasource.driver-class-name:}")
     private String configuredDriver;
 
-    @Value("${spring.datasource.username:sa}")
+    @Value("${spring.datasource.username:${RDS_USERNAME:sa}}")
     private String configuredUsername;
 
-    @Value("${spring.datasource.password:password}")
+    @Value("${spring.datasource.password:${RDS_PASSWORD:}}")
     private String configuredPassword;
 
     @Bean
     @Primary
     public DataSource dataSource() {
-        HikariDataSource dataSource = new HikariDataSource();
 
-        String rawUrl = (configuredUrl != null) ? configuredUrl.trim() : "";
+        String rawUrl = configuredUrl != null
+                ? configuredUrl.trim()
+                : "";
+
         String url;
 
+        /*
+         * Database URL
+         */
         if (!StringUtils.hasText(rawUrl)) {
+
             url = "jdbc:h2:file:./data/anushadb;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE";
-            log.info("No RDS_URL provided. Defaulting to embedded H2 file database at {}", url);
+
+            log.warn(
+                    "No MySQL database URL found. Using H2 fallback: {}",
+                    url);
+
         } else {
+
             url = rawUrl;
-            // 1. Auto-prepend jdbc:mysql:// if user entered raw AWS RDS host without jdbc prefix
+
+            /*
+             * Add jdbc prefix if required
+             */
             if (!url.startsWith("jdbc:")) {
-                if (url.contains("5432") || url.toLowerCase().contains("postgres")) {
+
+                if (url.contains("5432")
+                        || url.toLowerCase().contains("postgres")) {
+
                     url = "jdbc:postgresql://" + url;
+
                 } else {
+
                     url = "jdbc:mysql://" + url;
                 }
             }
 
-            // 2. Ensure database name is present if only host was provided
-            if (url.startsWith("jdbc:mysql://") && !url.substring("jdbc:mysql://".length()).contains("/")) {
-                url = url + "/anushadb";
+            /*
+             * Add database name if missing
+             */
+            if (url.startsWith("jdbc:mysql://")) {
+
+                String mysqlPart = url.substring("jdbc:mysql://".length());
+
+                if (!mysqlPart.contains("/")) {
+                    url = url + "/anushadb";
+                }
             }
 
-            // 3. Add standard AWS RDS MySQL query parameters if missing
-            if (url.startsWith("jdbc:mysql:") && !url.contains("?")) {
-                url = url + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&createDatabaseIfNotExist=true";
+            /*
+             * MySQL connection parameters
+             */
+            if (url.startsWith("jdbc:mysql:")
+                    && !url.contains("?")) {
+
+                url = url +
+                        "?useSSL=true" +
+                        "&allowPublicKeyRetrieval=true" +
+                        "&serverTimezone=UTC";
             }
 
-            log.info("Configuring primary DataSource with URL: {}", url);
+            log.info(
+                    "Configuring primary DataSource with URL: {}",
+                    url);
         }
+
+        /*
+         * Create Hikari DataSource
+         */
+        HikariDataSource dataSource = new HikariDataSource();
 
         dataSource.setJdbcUrl(url);
 
-        // Driver class detection
-        String driver = configuredDriver;
-        if (StringUtils.hasText(driver) && !driver.trim().isEmpty()) {
-            dataSource.setDriverClassName(driver.trim());
+        /*
+         * IMPORTANT:
+         * Select driver based on JDBC URL.
+         *
+         * Never allow H2 driver to be used with MySQL URL.
+         */
+        if (url.startsWith("jdbc:mysql:")) {
+
+            dataSource.setDriverClassName(
+                    "com.mysql.cj.jdbc.Driver");
+
+            log.info(
+                    "Using MySQL JDBC driver: com.mysql.cj.jdbc.Driver");
+
+        } else if (url.startsWith("jdbc:postgresql:")) {
+
+            dataSource.setDriverClassName(
+                    "org.postgresql.Driver");
+
+            log.info(
+                    "Using PostgreSQL JDBC driver");
+
+        } else if (url.startsWith("jdbc:h2:")) {
+
+            dataSource.setDriverClassName(
+                    "org.h2.Driver");
+
+            log.info(
+                    "Using H2 JDBC driver");
+
         } else {
-            if (url.startsWith("jdbc:mysql:")) {
-                dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
-            } else if (url.startsWith("jdbc:postgresql:")) {
-                dataSource.setDriverClassName("org.postgresql.Driver");
-            } else {
-                dataSource.setDriverClassName("org.h2.Driver");
-            }
+
+            throw new IllegalStateException(
+                    "Unsupported database URL: " + url);
         }
 
-        dataSource.setUsername(StringUtils.hasText(configuredUsername) ? configuredUsername.trim() : "sa");
-        dataSource.setPassword(configuredPassword != null ? configuredPassword : "");
+        /*
+         * Username / password
+         */
+        dataSource.setUsername(
+                StringUtils.hasText(configuredUsername)
+                        ? configuredUsername.trim()
+                        : "sa");
+
+        dataSource.setPassword(
+                configuredPassword != null
+                        ? configuredPassword
+                        : "");
+
+        /*
+         * Hikari settings
+         */
         dataSource.setMaximumPoolSize(10);
         dataSource.setMinimumIdle(2);
         dataSource.setConnectionTimeout(20000);
