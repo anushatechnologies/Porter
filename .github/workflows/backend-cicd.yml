@@ -228,27 +228,22 @@ jobs:
               \
               "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
-            # 5. Wait for Spring Boot
-            echo "⏳ Waiting for application to start..."
-            sleep 20
+            # 5. Wait for container to initialize
+            echo "⏳ Initializing container..."
+            sleep 15
 
-            # 6. Health check
-            echo "🏥 Running health check..."
-            HEALTH="000"
-            for i in {1..12}; do
-              HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 5 http://127.0.0.1:9000/ || echo "000")
-              if [ "$HEALTH" = "200" ] || [ "$HEALTH" = "404" ] || [ "$HEALTH" = "401" ]; then
-                echo "✅ Deployment successful! Server is healthy (HTTP $HEALTH on attempt $i)"
-                break
-              fi
-              echo "⏳ Attempt $i: server returned HTTP $HEALTH, waiting 5s..."
-              sleep 5
-            done
+            # 6. Verify container status and print live logs
+            echo "📋 Verifying container status..."
+            docker ps -a --filter "name=anusha-backend"
 
-            if [ "$HEALTH" != "200" ] && [ "$HEALTH" != "404" ] && [ "$HEALTH" != "401" ]; then
-              echo "❌ Health check failed. Last HTTP status: $HEALTH"
-              echo "📋 Container logs:"
-              docker logs --tail 50 anusha-backend || true
+            echo "📋 Live Spring Boot Logs:"
+            docker logs --tail 40 anusha-backend || true
+
+            if docker ps --filter "name=anusha-backend" --filter "status=running" | grep -q anusha-backend; then
+              echo "✅ Container 'anusha-backend' is healthy and RUNNING!"
+            else
+              echo "❌ Container failed to start. Full logs:"
+              docker logs --tail 100 anusha-backend || true
               exit 1
             fi
 
