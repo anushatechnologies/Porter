@@ -43,6 +43,7 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/upload/**",
                         "/api/driver/documents/upload",
                         "/api/drivers/documents/upload",
+                        "/api/documents/**",
                         "/uploads/**"
                 );
     }

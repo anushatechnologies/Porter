@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document & Face Type Verification Portal | Anusha Porter</title>
+  <style>
+    :root {
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --bg: #0b0f19;
+      --card-bg: #151d30;
+      --card-inner: #0d1322;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #22304d;
+      --border-accent: #3b82f6;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: radial-gradient(circle at top, #182647 0%, #0b0f19 70%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 1050px;
+      width: 100%;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .badge-header {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.75rem;
+    }
+    header h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #60a5fa 0%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      max-width: 650px;
+      margin: 0 auto;
+    }
+
+    /* ─── DOCUMENT TYPE SELECTOR TABS ─── */
+    .tabs-wrapper {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      background: rgba(13, 19, 34, 0.8);
+      padding: 0.5rem;
+      border-radius: 0.85rem;
+      border: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    @media (max-width: 860px) {
+      .tabs-wrapper {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 480px) {
+      .tabs-wrapper {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    .tab-btn {
+      padding: 0.75rem 0.5rem;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      border-radius: 0.6rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .tab-btn:hover {
+      background: rgba(59, 130, 246, 0.1);
+      color: #93c5fd;
+    }
+    .tab-btn.active {
+      background: #2563eb;
+      color: #fff;
+      border-color: #3b82f6;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+    }
+    .tab-icon {
+      font-size: 1.25rem;
+    }
+
+    /* ─── MAIN WORKSPACE GRID ─── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1.1rem;
+      padding: 1.5rem;
+      box-shadow: 0 15px 30px -10px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .preview-box {
+      width: 100%;
+      height: 250px;
+      border-radius: 0.85rem;
+      border: 2px dashed var(--border);
+      background: var(--card-inner);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin-bottom: 1.25rem;
+      position: relative;
+    }
+    .preview-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+      background: #020617;
+    }
+    .preview-placeholder {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 1rem;
+    }
+    .preview-placeholder svg {
+      width: 50px;
+      height: 50px;
+      margin-bottom: 0.5rem;
+      stroke: #475569;
+    }
+
+    .action-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .btn {
+      padding: 0.85rem 1rem;
+      border-radius: 0.6rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .btn-secondary {
+      background: #1e293b;
+      color: #93c5fd;
+      border-color: #3b82f6;
+    }
+    .btn-secondary:hover {
+      background: #2563eb;
+      color: #fff;
+    }
+    .btn-upload {
+      background: #1e293b;
+      color: #cbd5e1;
+    }
+    .btn-upload:hover {
+      background: #334155;
+      color: #fff;
+    }
+    .btn-primary {
+      width: 100%;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: white;
+      border: none;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ─── SAMPLE GENERATOR PRESETS ─── */
+    .sample-presets {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .sample-presets label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .preset-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .chip-btn {
+      padding: 0.35rem 0.75rem;
+      border-radius: 2rem;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      color: #cbd5e1;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chip-btn:hover {
+      background: #334155;
+      border-color: #60a5fa;
+      color: #fff;
+    }
+    .chip-btn.mismatch {
+      border-color: #ef4444;
+      color: #fca5a5;
+    }
+    .chip-btn.mismatch:hover {
+      background: rgba(239, 68, 68, 0.2);
+    }
+
+    /* ─── RESULT CARD ─── */
+    .result-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 1rem;
+      border-radius: 2rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1.25rem;
+    }
+    .badge-idle { background: #334155; color: #cbd5e1; }
+    .badge-loading { background: #eab308; color: #78350f; }
+    .badge-success { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e; }
+    .badge-error { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+
+    .result-box {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .result-field {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.9rem;
+    }
+    .result-field:last-child {
+      border-bottom: none;
+    }
+    .result-field-label {
+      color: var(--text-muted);
+    }
+    .result-field-val {
+      font-weight: 600;
+      color: #f8fafc;
+      word-break: break-all;
+      text-align: right;
+    }
+    .reason-pill {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border-radius: 0.35rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: monospace;
+    }
+
+    pre {
+      background: #060913;
+      padding: 0.85rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      font-size: 0.75rem;
+      color: #93c5fd;
+      border: 1px solid var(--border);
+      max-height: 180px;
+    }
+
+    /* ─── LIVE CAMERA MODAL ─── */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 1rem;
+      backdrop-filter: blur(5px);
+    }
+    .modal-content {
+      background: #151d30;
+      border-radius: 1.25rem;
+      max-width: 500px;
+      width: 100%;
+      padding: 1.5rem;
+      border: 1px solid var(--border);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      text-align: center;
+      position: relative;
+    }
+    .camera-viewfinder {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #000;
+      border-radius: 0.85rem;
+      overflow: hidden;
+      margin: 1rem 0;
+      border: 2px solid #3b82f6;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .shutter-btn {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: #fff;
+      border: 5px solid #3b82f6;
+      cursor: pointer;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s;
+    }
+    .shutter-btn:hover {
+      transform: scale(1.05);
+    }
+    .shutter-inner {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #2563eb;
+    }
+    .close-modal-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge-header">Unified Verification Engine</div>
+      <h1>Document & Face Type Validator</h1>
+      <p>Instant OCR pattern matching, keyword detection, QR code scanning, and OpenCV biometric face verification.</p>
+    </header>
+
+    <!-- Document Type Tabs -->
+    <div class="tabs-wrapper">
+      <button class="tab-btn active" onclick="selectTab('AADHAAR')">
+        <span class="tab-icon">🪪</span>
+        <span>Aadhaar</span>
+      </button>
+      <button class="tab-btn" onclick="selectTab('PAN')">
+        <span class="tab-icon">💳</span>
+        <span>PAN Card</span>
+      </button>
+      <button class="tab-btn" onclick="selectTab('DRIVING_LICENCE')">
+        <span class="tab-icon">🚗</span>
+        <span>Driving Licence</span>
+      </button>
+      <button class="tab-btn" onclick="selectTab('RC')">
+        <span class="tab-icon">📜</span>
+        <span>Vehicle RC</span>
+      </button>
+      <button class="tab-btn" onclick="selectTab('BANK_DOCUMENT')">
+        <span class="tab-icon">🏦</span>
+        <span>Bank Doc</span>
+      </button>
+      <button class="tab-btn" onclick="selectTab('FACE')">
+        <span class="tab-icon">👤</span>
+        <span>Face Photo</span>
+      </button>
+    </div>
+
+    <!-- Workspace Grid -->
+    <div class="grid">
+      <!-- Upload / Capture Card -->
+      <div class="card">
+        <div class="card-title">
+          <span id="selectedTypeIcon">🪪</span>
+          <span id="selectedTypeTitle">Upload Aadhaar Card Image</span>
+        </div>
+
+        <div class="preview-box">
+          <img id="previewImg" class="preview-img" alt="Document Preview">
+          <div id="placeholder" class="preview-placeholder">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p style="font-weight: 500; color: #cbd5e1;">No document image selected</p>
+            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Open Camera or Choose File from device</p>
+          </div>
+        </div>
+
+        <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelected(event)">
+
+        <div class="action-buttons">
+          <button type="button" class="btn btn-secondary" onclick="openDeviceCamera()">
+            📷 Open Camera
+          </button>
+          <button type="button" class="btn btn-upload" onclick="document.getElementById('fileInput').click()">
+            📁 Choose File
+          </button>
+        </div>
+
+        <button id="validateBtn" class="btn btn-primary" onclick="submitValidation()" disabled>
+          ⚡ Validate Document Type
+        </button>
+
+        <!-- Fast Test Generators -->
+        <div class="sample-presets">
+          <label>🧪 1-Click Fast Test Presets:</label>
+          <div class="preset-chips">
+            <button type="button" class="chip-btn" onclick="generateSampleCard('MATCH')">✓ Valid Matching Sample</button>
+            <button type="button" class="chip-btn mismatch" onclick="generateSampleCard('MISMATCH')">✕ Wrong Document (RC → Current)</button>
+            <button type="button" class="chip-btn mismatch" onclick="generateSampleCard('RANDOM')">✕ Random Non-Document</button>
+            <button type="button" class="chip-btn mismatch" onclick="generateSampleCard('BLURRY')">✕ Blurry Image</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Backend Response Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>🔍</span>
+          <span>Validation Result & Inspection</span>
+        </div>
+
+        <div id="statusBadge" class="result-badge badge-idle">Ready to Validate</div>
+
+        <div class="result-box">
+          <div class="result-field">
+            <span class="result-field-label">Target Field Type</span>
+            <span id="resTargetType" class="result-field-val">AADHAAR</span>
+          </div>
+          <div class="result-field">
+            <span class="result-field-label">HTTP Status Code</span>
+            <span id="resHttpStatus" class="result-field-val">-</span>
+          </div>
+          <div class="result-field">
+            <span class="result-field-label">Validation Status</span>
+            <span id="resValidity" class="result-field-val">-</span>
+          </div>
+          <div class="result-field" id="reasonRow" style="display: none;">
+            <span class="result-field-label">Failure Reason Code</span>
+            <span id="resReason" class="reason-pill">-</span>
+          </div>
+          <div class="result-field">
+            <span class="result-field-label">Server Message</span>
+            <span id="resMessage" class="result-field-val" style="color: #93c5fd; font-size: 0.85rem;">Select or capture an image to validate.</span>
+          </div>
+        </div>
+
+        <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.35rem; display: block;">
+          Raw JSON Response (POST /api/documents/validate):
+        </label>
+        <pre id="rawResponse">{}</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera Modal -->
+  <div id="cameraModal" class="modal-overlay">
+    <div class="modal-content">
+      <button class="close-modal-btn" onclick="closeDeviceCamera()">&times;</button>
+      <h3 style="color: #60a5fa; margin-bottom: 0.25rem;">📸 Capture Document / Selfie</h3>
+      <p style="font-size: 0.85rem; color: #94a3b8;">Position the document or your face inside the frame</p>
+
+      <div class="camera-viewfinder">
+        <video id="videoElement" autoplay playsinline muted></video>
+        <canvas id="snapshotCanvas" style="display: none;"></canvas>
+      </div>
+
+      <button class="shutter-btn" onclick="snapPhoto()" title="Snap Photo">
+        <div class="shutter-inner"></div>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let currentDocumentType = 'AADHAAR';
+    let currentBlobOrFile = null;
+    let cameraStream = null;
+
+    const docMeta = {
+      AADHAAR: { title: 'Upload Aadhaar Card Image', icon: '🪪' },
+      PAN: { title: 'Upload PAN Card Image', icon: '💳' },
+      DRIVING_LICENCE: { title: 'Upload Driving Licence Image', icon: '🚗' },
+      RC: { title: 'Upload Vehicle RC Image', icon: '📜' },
+      BANK_DOCUMENT: { title: 'Upload Bank Passbook / Cheque', icon: '🏦' },
+      FACE: { title: 'Capture Live Face Selfie', icon: '👤' }
+    };
+
+    function selectTab(type) {
+      currentDocumentType = type;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      document.getElementById('selectedTypeIcon').innerText = docMeta[type].icon;
+      document.getElementById('selectedTypeTitle').innerText = docMeta[type].title;
+      document.getElementById('resTargetType').innerText = type;
+      resetResults();
+    }
+
+    function handleFileSelected(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      currentBlobOrFile = file;
+      displayPreview(file);
+    }
+
+    function displayPreview(blob) {
+      const img = document.getElementById('previewImg');
+      const placeholder = document.getElementById('placeholder');
+      img.src = URL.createObjectURL(blob);
+      img.style.display = 'block';
+      placeholder.style.display = 'none';
+      document.getElementById('validateBtn').removeAttribute('disabled');
+      resetResults();
+    }
+
+    function resetResults() {
+      const badge = document.getElementById('statusBadge');
+      badge.className = 'result-badge badge-idle';
+      badge.innerText = 'Ready to Validate';
+      document.getElementById('resHttpStatus').innerText = '-';
+      document.getElementById('resValidity').innerText = '-';
+      document.getElementById('resMessage').innerText = 'Select or capture an image to validate.';
+      document.getElementById('reasonRow').style.display = 'none';
+      document.getElementById('rawResponse').innerText = '{}';
+    }
+
+    /* ─── LIVE CAMERA ─── */
+    async function openDeviceCamera() {
+      const modal = document.getElementById('cameraModal');
+      const video = document.getElementById('videoElement');
+      modal.style.display = 'flex';
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: currentDocumentType === 'FACE' ? 'user' : 'environment', width: { ideal: 1280 } },
+          audio: false
+        });
+        video.srcObject = cameraStream;
+      } catch (err) {
+        alert('Could not access camera: ' + err.message);
+        closeDeviceCamera();
+      }
+    }
+
+    function closeDeviceCamera() {
+      const modal = document.getElementById('cameraModal');
+      modal.style.display = 'none';
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+      }
+    }
+
+    function snapPhoto() {
+      const video = document.getElementById('videoElement');
+      const canvas = document.getElementById('snapshotCanvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(blob => {
+        currentBlobOrFile = blob;
+        displayPreview(blob);
+        closeDeviceCamera();
+      }, 'image/jpeg', 0.95);
+    }
+
+    /* ─── 1-CLICK FAST TEST PRESET GENERATOR ─── */
+    function generateSampleCard(preset) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 500;
+      const ctx = canvas.getContext('2d');
+
+      if (preset === 'RANDOM') {
+        // Scenery or random colors
+        let grad = ctx.createLinearGradient(0, 0, 800, 500);
+        grad.addColorStop(0, '#f97316');
+        grad.addColorStop(1, '#ec4899');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 800, 500);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '32px sans-serif';
+        ctx.fillText('Sunset Mountain Landscape Photo', 120, 250);
+      } else if (preset === 'BLURRY') {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, 800, 500);
+        ctx.filter = 'blur(15px)';
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '24px sans-serif';
+        ctx.fillText('Extremely Blurry Document Text', 200, 250);
+      } else {
+        // MATCH vs MISMATCH
+        let docToDraw = (preset === 'MATCH') ? currentDocumentType : (currentDocumentType === 'RC' ? 'PAN' : 'RC');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 800, 500);
+        ctx.fillStyle = '#0f172a';
+
+        if (docToDraw === 'AADHAAR') {
+          ctx.fillStyle = '#f97316';
+          ctx.fillRect(0, 0, 800, 40);
+          ctx.fillStyle = '#15803d';
+          ctx.fillRect(0, 460, 800, 40);
+          ctx.fillStyle = '#000';
+          ctx.font = 'bold 26px sans-serif';
+          ctx.fillText('Government of India', 260, 90);
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillText('Unique Identification Authority of India', 190, 125);
+          ctx.font = '18px sans-serif';
+          ctx.fillText('Name: Rajesh Kumar', 60, 200);
+          ctx.fillText('DOB: 15/08/1990', 60, 235);
+          ctx.fillText('Gender: Male', 60, 270);
+          ctx.font = 'bold 36px sans-serif';
+          ctx.fillText('5489  3214  9081', 220, 390);
+          // Draw fake QR square
+          ctx.fillStyle = '#000';
+          ctx.fillRect(580, 180, 160, 160);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(600, 200, 120, 120);
+          ctx.fillStyle = '#000';
+          ctx.fillRect(620, 220, 80, 80);
+        } else if (docToDraw === 'PAN') {
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(0, 0, 800, 50);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillText('INCOME TAX DEPARTMENT', 240, 35);
+          ctx.fillStyle = '#000';
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillText('GOVT. OF INDIA', 320, 80);
+          ctx.fillText('Permanent Account Number Card', 230, 110);
+          ctx.font = '18px sans-serif';
+          ctx.fillText('Name: SURESH KUMAR', 60, 180);
+          ctx.fillText("Father's Name: RAMESH KUMAR", 60, 220);
+          ctx.fillText('Date of Birth: 12/05/1988', 60, 260);
+          ctx.font = 'bold 32px monospace';
+          ctx.fillText('ABCDE1234F', 60, 350);
+        } else if (docToDraw === 'DRIVING_LICENCE') {
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillRect(0, 0, 800, 500);
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 24px sans-serif';
+          ctx.fillText('INDIAN UNION DRIVING LICENCE', 200, 50);
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillText('TRANSPORT DEPARTMENT - MAHARASHTRA', 180, 85);
+          ctx.font = 'bold 22px monospace';
+          ctx.fillText('Licence No: MH12 20180012345', 60, 150);
+          ctx.font = '18px sans-serif';
+          ctx.fillText('Authorisation to Drive: LMV, MCWG', 60, 200);
+          ctx.fillText('Date of Issue (DOI): 10/01/2018', 60, 240);
+          ctx.fillText('Validity (Valid Till): 09/01/2038', 60, 280);
+        } else if (docToDraw === 'RC') {
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(0, 0, 800, 500);
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 24px sans-serif';
+          ctx.fillText('CERTIFICATE OF REGISTRATION', 200, 50);
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillText('FORM 23 - REGISTERING AUTHORITY', 210, 85);
+          ctx.font = 'bold 32px monospace';
+          ctx.fillText('Regn No: MH12AB1234', 60, 160);
+          ctx.font = '18px sans-serif';
+          ctx.fillText('Chassis No: MA3EWB2S880012345', 60, 220);
+          ctx.fillText('Engine No: K12MN8823145', 60, 260);
+          ctx.fillText('Vehicle Class: Light Goods Vehicle (LGV)', 60, 300);
+          ctx.fillText('Maker Name: TATA MOTORS LTD', 60, 340);
+        } else if (docToDraw === 'BANK_DOCUMENT') {
+          ctx.fillStyle = '#eff6ff';
+          ctx.fillRect(0, 0, 800, 500);
+          ctx.fillStyle = '#1e3a8a';
+          ctx.font = 'bold 26px sans-serif';
+          ctx.fillText('STATE BANK OF INDIA', 60, 60);
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 20px sans-serif';
+          ctx.fillText('PASSBOOK / STATEMENT', 60, 100);
+          ctx.font = '18px sans-serif';
+          ctx.fillText('Account Holder: AMIT SHARMA', 60, 170);
+          ctx.font = 'bold 22px monospace';
+          ctx.fillText('Account No: 30894567123', 60, 220);
+          ctx.fillText('IFSC Code: SBIN0001234', 60, 270);
+          ctx.font = '18px sans-serif';
+          ctx.fillText('Branch: KORAMANGALA BANGALORE', 60, 320);
+          ctx.fillText('MICR: 560002015', 60, 360);
+        } else if (docToDraw === 'FACE') {
+          // Portrait Face
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(0, 0, 800, 500);
+          // Head oval
+          ctx.fillStyle = '#fbcfe8';
+          ctx.beginPath();
+          ctx.ellipse(400, 240, 120, 160, 0, 0, 2 * Math.PI);
+          ctx.fill();
+          // Eyes
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(360, 210, 12, 0, 2 * Math.PI);
+          ctx.arc(440, 210, 12, 0, 2 * Math.PI);
+          ctx.fill();
+          // Smile
+          ctx.lineWidth = 6;
+          ctx.strokeStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(400, 270, 40, 0.2 * Math.PI, 0.8 * Math.PI);
+          ctx.stroke();
+        }
+      }
+
+      canvas.toBlob(blob => {
+        currentBlobOrFile = blob;
+        displayPreview(blob);
+      }, 'image/jpeg', 0.95);
+    }
+
+    /* ─── SUBMIT VALIDATION TO BACKEND ─── */
+    async function submitValidation() {
+      if (!currentBlobOrFile) return;
+
+      const badge = document.getElementById('statusBadge');
+      badge.className = 'result-badge badge-loading';
+      badge.innerText = 'Analyzing with Backend...';
+
+      const formData = new FormData();
+      formData.append('file', currentBlobOrFile, 'upload.jpg');
+
+      try {
+        const response = await fetch(`/api/documents/validate?type=${encodeURIComponent(currentDocumentType)}`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const status = response.status;
+        const data = await response.json();
+
+        document.getElementById('resHttpStatus').innerText = `${status} ${response.statusText || ''}`;
+        document.getElementById('rawResponse').innerText = JSON.stringify(data, null, 2);
+
+        if (status === 200 && data.valid) {
+          badge.className = 'result-badge badge-success';
+          badge.innerText = '✓ VALID DOCUMENT MATCH';
+          document.getElementById('resValidity').innerHTML = '<span style="color: #4ade80; font-weight: 700;">PASSED (Matches ' + currentDocumentType + ')</span>';
+          document.getElementById('resMessage').innerText = data.message || 'Validation passed.';
+          document.getElementById('reasonRow').style.display = 'none';
+        } else {
+          badge.className = 'result-badge badge-error';
+          badge.innerText = '✕ REJECTED (HTTP ' + status + ')';
+          document.getElementById('resValidity').innerHTML = '<span style="color: #f87171; font-weight: 700;">FAILED</span>';
+          document.getElementById('reasonRow').style.display = 'flex';
+          document.getElementById('resReason').innerText = data.reason || 'DOCUMENT_TYPE_MISMATCH';
+          document.getElementById('resMessage').innerText = data.message || 'Document validation failed.';
+        }
+      } catch (err) {
+        badge.className = 'result-badge badge-error';
+        badge.innerText = 'Network Error';
+        document.getElementById('resHttpStatus').innerText = '500';
+        document.getElementById('resMessage').innerText = 'Could not reach validation server: ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
