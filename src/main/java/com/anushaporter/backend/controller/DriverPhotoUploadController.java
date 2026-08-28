@@ -39,6 +39,9 @@ public class DriverPhotoUploadController {
     @Autowired
     private DriverAuthService driverAuthService;
 
+    @Autowired
+    private com.anushaporter.backend.service.document.DocumentValidationDispatcher documentDispatcher;
+
     @Value("${file.upload-dir:uploads/}")
     private String baseUploadDir;
 
@@ -69,6 +72,16 @@ public class DriverPhotoUploadController {
         }
 
         try {
+            // Biometric Human Face Validation
+            if (documentDispatcher != null) {
+                com.anushaporter.backend.dto.ValidationResult faceResult = 
+                        documentDispatcher.validate(com.anushaporter.backend.model.DocumentType.FACE, file.getBytes());
+                if (!faceResult.isValid()) {
+                    return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                            .body(DriverPhotoUploadResponse.failure(faceResult.getMessage()));
+                }
+            }
+
             // 1. Resolve or auto-provision target driver
             Driver driver = findDriver(driverId, phone, email, request);
             if (driver == null) {

@@ -133,21 +133,24 @@ public class DrivingLicenceValidator implements DocumentValidator {
         boolean hasDlKeyword = !matchedKeywords.isEmpty();
         boolean hasDlPattern = (matchedDlNumber != null);
         boolean hasVehicleClass = !matchedClasses.isEmpty();
+        boolean hasPartialClues = extractedText.contains("DRIV") || extractedText.contains("LICEN")
+                || extractedText.contains("TRANSPORT") || extractedText.contains("MOTOR")
+                || extractedText.contains("LMV") || extractedText.contains("MCWG") || extractedText.contains("VALID");
 
-        // 3. Validation Logic
-        if ((hasDlPattern && (hasDlKeyword || hasVehicleClass)) || (matchedKeywords.size() >= 2)) {
+        // 3. Validation Logic: 50% / Flexible matching
+        if (hasDlPattern || hasDlKeyword || hasVehicleClass || hasPartialClues) {
             Map<String, Object> data = new LinkedHashMap<>();
             if (matchedDlNumber != null) data.put("licenseNumber", matchedDlNumber);
-            data.put("matchedKeywords", matchedKeywords);
             if (!matchedClasses.isEmpty()) data.put("vehicleClasses", matchedClasses);
             data.put("hasValidityIndicator", hasValidityIndicator);
-            data.put("confidence", 0.95);
+            data.put("matchedKeywords", matchedKeywords);
+            data.put("confidence", hasDlPattern ? 0.95 : 0.75);
 
             return ValidationResult.success(
                     DocumentType.DRIVING_LICENCE,
                     "Driving Licence validated successfully.",
                     data,
-                    0.95
+                    hasDlPattern ? 0.95 : 0.75
             );
         }
 

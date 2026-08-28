@@ -93,32 +93,21 @@ public class PanValidator implements DocumentValidator {
 
         boolean hasPanPattern = (matchedPan != null);
         boolean hasPanKeyword = !matchedKeywords.isEmpty();
+        boolean hasPartialClues = extractedText.contains("INCOME") || extractedText.contains("ACCOUNT") 
+                || extractedText.contains("INDIA") || extractedText.contains("TAX") || extractedText.contains("FATHER");
 
-        // 3. Validation Logic: Pattern + Keyword match required
-        if (hasPanPattern && hasPanKeyword) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("panNumber", matchedPan);
-            data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", 0.98);
-
-            return ValidationResult.success(
-                    DocumentType.PAN,
-                    "PAN card validated successfully.",
-                    data,
-                    0.98
-            );
-        } else if (hasPanPattern || (matchedKeywords.size() >= 2)) {
-            // High confidence fallback
+        // 3. Validation Logic: 50% / Flexible matching
+        if (hasPanPattern || hasPanKeyword || hasPartialClues) {
             Map<String, Object> data = new LinkedHashMap<>();
             if (matchedPan != null) data.put("panNumber", matchedPan);
             data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", 0.85);
+            data.put("confidence", hasPanPattern ? 0.95 : 0.75);
 
             return ValidationResult.success(
                     DocumentType.PAN,
                     "PAN card validated successfully.",
                     data,
-                    0.85
+                    hasPanPattern ? 0.95 : 0.75
             );
         }
 

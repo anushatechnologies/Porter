@@ -120,9 +120,12 @@ public class AadhaarValidator implements DocumentValidator {
         // 5. Decision evaluation
         boolean hasPrimaryKeyword = !matchedKeywords.isEmpty();
         boolean hasAadhaarNumber = matchedAadhaarNumber != null;
+        boolean hasAadhaarClues = extractedText.contains("AADHAAR") || extractedText.contains("AADHAR")
+                || extractedText.contains("UIDAI") || extractedText.contains("आधार")
+                || extractedText.contains("UNIQUE IDENTIFICATION") || extractedText.contains("ENROLMENT");
 
-        // If UIDAI QR code is found or (Pattern + Keywords match)
-        if (isUidaiQr || (hasAadhaarNumber && hasPrimaryKeyword) || (matchedKeywords.size() >= 2)) {
+        // If UIDAI QR code is found or (Pattern or Aadhaar specific keywords match)
+        if (isUidaiQr || hasAadhaarNumber || hasPrimaryKeyword || hasAadhaarClues) {
             Map<String, Object> data = new LinkedHashMap<>();
             if (matchedAadhaarNumber != null) {
                 // Mask Aadhaar for privacy: XXXX XXXX 1234
@@ -133,13 +136,13 @@ public class AadhaarValidator implements DocumentValidator {
             }
             data.put("qrCodeDetected", qrFound);
             data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", 0.95);
+            data.put("confidence", hasAadhaarNumber ? 0.95 : 0.75);
 
             return ValidationResult.success(
                     DocumentType.AADHAAR,
                     "Aadhaar card validated successfully.",
                     data,
-                    0.95
+                    hasAadhaarNumber ? 0.95 : 0.75
             );
         }
 

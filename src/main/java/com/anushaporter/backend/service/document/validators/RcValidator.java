@@ -100,21 +100,24 @@ public class RcValidator implements DocumentValidator {
 
         boolean hasRcKeyword = !matchedKeywords.isEmpty();
         boolean hasVehiclePattern = (matchedVehicleNumber != null);
+        boolean hasPartialClues = extractedText.contains("REG") || extractedText.contains("VEHICLE")
+                || extractedText.contains("CHASSIS") || extractedText.contains("ENGINE")
+                || extractedText.contains("FORM") || extractedText.contains("AUTHORITY") || extractedText.contains("MODEL");
 
-        // 3. Validation Logic: Pattern + Keyword, or 2+ Strong Keywords (e.g. Chassis No + Engine No)
-        if ((hasVehiclePattern && hasRcKeyword) || (matchedKeywords.size() >= 2)) {
+        // 3. Validation Logic: 50% / Flexible matching
+        if (hasVehiclePattern || hasRcKeyword || hasPartialClues) {
             Map<String, Object> data = new LinkedHashMap<>();
             if (matchedVehicleNumber != null) {
                 data.put("vehicleNumber", matchedVehicleNumber);
             }
             data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", 0.95);
+            data.put("confidence", hasVehiclePattern ? 0.95 : 0.75);
 
             return ValidationResult.success(
                     DocumentType.RC,
                     "Vehicle Registration Certificate (RC) validated successfully.",
                     data,
-                    0.95
+                    hasVehiclePattern ? 0.95 : 0.75
             );
         }
 

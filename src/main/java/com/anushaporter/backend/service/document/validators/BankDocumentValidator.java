@@ -159,9 +159,11 @@ public class BankDocumentValidator implements DocumentValidator {
         boolean hasBankName = (matchedBankName != null);
         boolean hasBankKeywords = !matchedKeywords.isEmpty();
         boolean hasAccount = (matchedAccountNo != null);
+        boolean hasPartialClues = extractedText.contains("BANK") || extractedText.contains("IFSC")
+                || extractedText.contains("ACCOUNT") || extractedText.contains("BRANCH") || extractedText.contains("PASSBOOK");
 
-        // 5. Validation Logic: IFSC + (Bank Name or Keyword) OR (Bank Name + Account + Keyword)
-        if ((hasIfsc && (hasBankName || hasBankKeywords)) || (hasBankName && hasAccount && hasBankKeywords) || (matchedKeywords.size() >= 3)) {
+        // 5. Validation Logic: 50% / Flexible matching
+        if (hasIfsc || hasBankName || hasBankKeywords || hasAccount || hasPartialClues) {
             Map<String, Object> data = new LinkedHashMap<>();
             if (matchedIfsc != null) data.put("ifscCode", matchedIfsc);
             if (matchedBankName != null) data.put("bankName", matchedBankName);
@@ -173,13 +175,13 @@ public class BankDocumentValidator implements DocumentValidator {
                 data.put("accountNumberMasked", maskedAcc);
             }
             data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", 0.95);
+            data.put("confidence", hasIfsc ? 0.95 : 0.75);
 
             return ValidationResult.success(
                     DocumentType.BANK_DOCUMENT,
                     "Bank document validated successfully.",
                     data,
-                    0.95
+                    hasIfsc ? 0.95 : 0.75
             );
         }
 

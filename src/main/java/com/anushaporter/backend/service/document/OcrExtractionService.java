@@ -112,34 +112,69 @@ public class OcrExtractionService {
             return "";
         }
 
-        BufferedImage processedImage = preprocessForOcr(image);
+        if (tesseract == null || !tesseractInitialized) {
+            initTesseract();
+        }
 
         if (tesseract != null && tesseractInitialized) {
+            // Pass 1: Try with enhanced preprocessed image
             try {
+                BufferedImage processedImage = preprocessForOcr(image);
                 String ocrResult = tesseract.doOCR(processedImage);
                 if (ocrResult != null && !ocrResult.isBlank()) {
-                    return normalizeText(ocrResult);
-                }
-            } catch (TesseractException e) {
-                log.warn("Tesseract OCR exception on processed image: {}", e.getMessage());
-                // Retry with original image
-                try {
-                    String rawResult = tesseract.doOCR(image);
-                    if (rawResult != null && !rawResult.isBlank()) {
-                        return normalizeText(rawResult);
+                    String norm = normalizeText(ocrResult);
+                    if (isTextReadable(norm)) {
+                        return norm;
                     }
-                } catch (Exception ignored) {}
+                }
             } catch (Throwable t) {
-                log.warn("Tesseract native error during OCR execution: {}", t.getMessage());
+                log.debug("Pass 1 OCR attempt note: {}", t.getMessage());
             }
+
+            // Pass 2: Try directly on raw original image
+            try {
+                String rawResult = tesseract.doOCR(image);
+                if (rawResult != null && !rawResult.isBlank()) {
+                    String norm = normalizeText(rawResult);
+                    if (isTextReadable(norm)) {
+                        return norm;
+                    }
+                }
+            } catch (Throwable t) {
+                log.debug("Pass 2 OCR attempt note: {}", t.getMessage());
+            }
+
+            // Pass 3: Try with rotated image if text is still too short
+            try {
+                BufferedImage rotated = rotateImage(image, 90);
+                String rotResult = tesseract.doOCR(rotated);
+                if (rotResult != null && !rotResult.isBlank()) {
+                    String norm = normalizeText(rotResult);
+                    if (isTextReadable(norm)) {
+                        return norm;
+                    }
+                }
+            } catch (Throwable ignored) {}
         }
 
         return "";
     }
 
+    private BufferedImage rotateImage(BufferedImage img, double angleDegrees) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+        BufferedImage rotated = new BufferedImage(h, w, img.getType() == 0 ? BufferedImage.TYPE_INT_RGB : img.getType());
+        Graphics2D g2d = rotated.createGraphics();
+        g2d.translate((h - w) / 2.0, (h - w) / 2.0);
+        g2d.rotate(Math.toRadians(angleDegrees), w / 2.0, w / 2.0);
+        g2d.drawImage(img, 0, 0, null);
+        g2d.dispose();
+        return rotated;
+    }
+
     /**
      * Preprocesses image for improved OCR accuracy:
-     * - Upscales if image resolution is too low
+     * - Upscales if image resolution is low
      * - Converts to grayscale
      * - Enhances contrast
      */
@@ -149,7 +184,6 @@ public class OcrExtractionService {
         int width = original.getWidth();
         int height = original.getHeight();
 
-        // If image is too small (e.g. < 800px width), upscale for better OCR recognition
         double scale = 1.0;
         if (width < 900) {
             scale = 900.0 / width;
@@ -166,9 +200,8 @@ public class OcrExtractionService {
         g2d.drawImage(original, 0, 0, targetWidth, targetHeight, null);
         g2d.dispose();
 
-        // Contrast enhancement
         try {
-            RescaleOp rescale = new RescaleOp(1.2f, -10.0f, null);
+            RescaleOp rescale = new RescaleOp(1.15f, -5.0f, null);
             BufferedImage contrastImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_BYTE_GRAY);
             rescale.filter(grayImage, contrastImage);
             return contrastImage;
@@ -197,8 +230,8 @@ public class OcrExtractionService {
         if (text == null || text.trim().isEmpty()) {
             return false;
         }
-        // Count alphanumeric characters
+        // Count alphanumeric characters - threshold relaxed to 4 characters for mobile compressed photos
         long alnumCount = text.chars().filter(Character::isLetterOrDigit).count();
-        return alnumCount >= 8;
+        return alnumCount >= 4;
     }
 }
