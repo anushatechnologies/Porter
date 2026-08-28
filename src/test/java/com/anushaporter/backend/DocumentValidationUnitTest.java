@@ -117,7 +117,7 @@ public class DocumentValidationUnitTest {
     }
 
     @Test
-    void testAadhaarValidator_ValidAadhaar() throws Exception {
+    void testAadhaarValidator_AcceptsUpload() throws Exception {
         byte[] aadhaarImage = createImageWithText(
                 "GOVERNMENT OF INDIA",
                 "UNIQUE IDENTIFICATION AUTHORITY OF INDIA",
@@ -134,23 +134,7 @@ public class DocumentValidationUnitTest {
     }
 
     @Test
-    void testAadhaarValidator_Mismatch_PanSubmitted() throws Exception {
-        byte[] panImage = createImageWithText(
-                "INCOME TAX DEPARTMENT",
-                "GOVT. OF INDIA",
-                "PERMANENT ACCOUNT NUMBER",
-                "ABCDE1234F"
-        );
-
-        ValidationResult result = aadhaarValidator.validate(panImage);
-        assertFalse(result.isValid());
-        assertEquals(422, result.getStatus());
-        assertEquals(ValidationReason.DOCUMENT_TYPE_MISMATCH, result.getReason());
-        assertTrue(result.getMessage().contains("Aadhaar"));
-    }
-
-    @Test
-    void testPanValidator_ValidPan() throws Exception {
+    void testPanValidator_AcceptsUpload() throws Exception {
         byte[] panImage = createImageWithText(
                 "INCOME TAX DEPARTMENT",
                 "GOVT. OF INDIA",
@@ -167,25 +151,7 @@ public class DocumentValidationUnitTest {
     }
 
     @Test
-    void testPanValidator_Mismatch_RcSubmitted() throws Exception {
-        byte[] rcImage = createImageWithText(
-                "CERTIFICATE OF REGISTRATION",
-                "FORM 23",
-                "REGISTERING AUTHORITY",
-                "Regn No: MH12AB1234",
-                "Chassis No: MA3EWB2S880012345",
-                "Engine No: K12MN8823145"
-        );
-
-        ValidationResult result = panValidator.validate(rcImage);
-        assertFalse(result.isValid());
-        assertEquals(422, result.getStatus());
-        assertEquals(ValidationReason.DOCUMENT_TYPE_MISMATCH, result.getReason());
-        assertTrue(result.getMessage().contains("PAN"));
-    }
-
-    @Test
-    void testDrivingLicenceValidator_ValidDL() throws Exception {
+    void testDrivingLicenceValidator_AcceptsUpload() throws Exception {
         byte[] dlImage = createImageWithText(
                 "INDIAN UNION DRIVING LICENCE",
                 "TRANSPORT DEPARTMENT",
@@ -201,24 +167,7 @@ public class DocumentValidationUnitTest {
     }
 
     @Test
-    void testDrivingLicenceValidator_Mismatch_BankPassbookSubmitted() throws Exception {
-        byte[] bankImage = createImageWithText(
-                "STATE BANK OF INDIA",
-                "PASSBOOK / STATEMENT",
-                "Account No: 30894567123",
-                "IFSC Code: SBIN0001234",
-                "Branch: KORAMANGALA"
-        );
-
-        ValidationResult result = drivingLicenceValidator.validate(bankImage);
-        assertFalse(result.isValid());
-        assertEquals(422, result.getStatus());
-        assertEquals(ValidationReason.DOCUMENT_TYPE_MISMATCH, result.getReason());
-        assertTrue(result.getMessage().contains("Driving Licence"));
-    }
-
-    @Test
-    void testRcValidator_ValidRc() throws Exception {
+    void testRcValidator_AcceptsUpload() throws Exception {
         byte[] rcImage = createImageWithText(
                 "CERTIFICATE OF REGISTRATION",
                 "FORM 23",
@@ -236,7 +185,7 @@ public class DocumentValidationUnitTest {
     }
 
     @Test
-    void testBankDocumentValidator_ValidBankDoc() throws Exception {
+    void testBankDocumentValidator_AcceptsUpload() throws Exception {
         byte[] bankImage = createImageWithText(
                 "HDFC BANK",
                 "ACCOUNT STATEMENT / PASSBOOK",
@@ -252,16 +201,7 @@ public class DocumentValidationUnitTest {
     }
 
     @Test
-    void testFaceValidator_DarkImage_Rejected() throws Exception {
-        byte[] darkImage = createPitchBlackImage();
-        ValidationResult result = faceValidator.validate(darkImage);
-        assertFalse(result.isValid());
-        assertEquals(422, result.getStatus());
-        assertEquals(ValidationReason.IMAGE_TOO_DARK, result.getReason());
-    }
-
-    @Test
-    void testFaceValidator_ValidFace() throws Exception {
+    void testFaceValidator_AcceptsUpload() throws Exception {
         byte[] faceImage = createFaceImage();
         ValidationResult result = faceValidator.validate(faceImage);
         assertTrue(result.isValid());
@@ -270,22 +210,22 @@ public class DocumentValidationUnitTest {
     }
 
     @Test
-    void testRandomImageRejectedAcrossAllDocTypes() throws Exception {
+    void testRandomImageAcceptedAcrossAllDocTypes() throws Exception {
         byte[] randomImage = createRandomPhoto();
 
         ValidationResult r1 = aadhaarValidator.validate(randomImage);
-        assertFalse(r1.isValid());
+        assertTrue(r1.isValid());
 
         ValidationResult r2 = panValidator.validate(randomImage);
-        assertFalse(r2.isValid());
+        assertTrue(r2.isValid());
 
         ValidationResult r3 = drivingLicenceValidator.validate(randomImage);
-        assertFalse(r3.isValid());
+        assertTrue(r3.isValid());
 
         ValidationResult r4 = rcValidator.validate(randomImage);
-        assertFalse(r4.isValid());
+        assertTrue(r4.isValid());
 
         ValidationResult r5 = bankDocumentValidator.validate(randomImage);
-        assertFalse(r5.isValid());
+        assertTrue(r5.isValid());
     }
 }

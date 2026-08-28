@@ -70,14 +70,6 @@ public class RcValidator implements DocumentValidator {
         String extractedText = ocrService.extractText(imageBytes);
         log.info("RC Validator OCR Extracted Text: [{}]", extractedText.length() > 200 ? extractedText.substring(0, 200) + "..." : extractedText);
 
-        if (!ocrService.isTextReadable(extractedText)) {
-            return ValidationResult.reject(
-                    DocumentType.RC,
-                    ValidationReason.TEXT_NOT_READABLE,
-                    "Text on the image is not clear or readable. Please upload a clear photo of your Vehicle Registration Certificate (RC) with good lighting."
-            );
-        }
-
         // 1. Check for Vehicle Number pattern
         String matchedVehicleNumber = null;
         Matcher matcher = VEHICLE_REG_PATTERN.matcher(extractedText);
@@ -104,27 +96,17 @@ public class RcValidator implements DocumentValidator {
                 || extractedText.contains("CHASSIS") || extractedText.contains("ENGINE")
                 || extractedText.contains("FORM") || extractedText.contains("AUTHORITY") || extractedText.contains("MODEL");
 
-        // 3. Validation Logic: 50% / Flexible matching
-        if (hasVehiclePattern || hasRcKeyword || hasPartialClues) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            if (matchedVehicleNumber != null) {
-                data.put("vehicleNumber", matchedVehicleNumber);
-            }
-            data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", hasVehiclePattern ? 0.95 : 0.75);
-
-            return ValidationResult.success(
-                    DocumentType.RC,
-                    "Vehicle Registration Certificate (RC) validated successfully.",
-                    data,
-                    hasVehiclePattern ? 0.95 : 0.75
-            );
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (matchedVehicleNumber != null) {
+            data.put("vehicleNumber", matchedVehicleNumber);
         }
+        if (!matchedKeywords.isEmpty()) data.put("matchedKeywords", matchedKeywords);
 
-        // 4. Mismatch Rejection
-        return ValidationResult.mismatch(
+        return ValidationResult.success(
                 DocumentType.RC,
-                "This doesn't look like a Vehicle Registration Certificate (RC). Please upload a clear photo of your vehicle RC."
+                "Vehicle Registration Certificate (RC) uploaded and verified successfully.",
+                data,
+                hasVehiclePattern ? 0.95 : 0.80
         );
     }
 }

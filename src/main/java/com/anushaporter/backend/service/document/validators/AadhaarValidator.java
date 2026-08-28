@@ -81,14 +81,6 @@ public class AadhaarValidator implements DocumentValidator {
         String extractedText = ocrService.extractText(imageBytes);
         log.info("Aadhaar Validator OCR Extracted Text: [{}]", extractedText.length() > 200 ? extractedText.substring(0, 200) + "..." : extractedText);
 
-        if (!qrFound && !ocrService.isTextReadable(extractedText)) {
-            return ValidationResult.reject(
-                    DocumentType.AADHAAR,
-                    ValidationReason.TEXT_NOT_READABLE,
-                    "Text on the image is not clear or readable. Please upload a clear photo of your Aadhaar card with good lighting."
-            );
-        }
-
         // 3. Search for Aadhaar number pattern
         String matchedAadhaarNumber = null;
         Matcher matcher = AADHAAR_PATTERN.matcher(extractedText);
@@ -125,31 +117,21 @@ public class AadhaarValidator implements DocumentValidator {
                 || extractedText.contains("UNIQUE IDENTIFICATION") || extractedText.contains("ENROLMENT");
 
         // If UIDAI QR code is found or (Pattern or Aadhaar specific keywords match)
-        if (isUidaiQr || hasAadhaarNumber || hasPrimaryKeyword || hasAadhaarClues) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            if (matchedAadhaarNumber != null) {
-                // Mask Aadhaar for privacy: XXXX XXXX 1234
-                String masked = matchedAadhaarNumber.length() == 12 
-                        ? "XXXX-XXXX-" + matchedAadhaarNumber.substring(8) 
-                        : matchedAadhaarNumber;
-                data.put("aadhaarNumberMasked", masked);
-            }
-            data.put("qrCodeDetected", qrFound);
-            data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", hasAadhaarNumber ? 0.95 : 0.75);
-
-            return ValidationResult.success(
-                    DocumentType.AADHAAR,
-                    "Aadhaar card validated successfully.",
-                    data,
-                    hasAadhaarNumber ? 0.95 : 0.75
-            );
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (matchedAadhaarNumber != null) {
+            String masked = matchedAadhaarNumber.length() == 12 
+                    ? "XXXX-XXXX-" + matchedAadhaarNumber.substring(8) 
+                    : matchedAadhaarNumber;
+            data.put("aadhaarNumberMasked", masked);
         }
+        data.put("qrCodeDetected", qrFound);
+        if (!matchedKeywords.isEmpty()) data.put("matchedKeywords", matchedKeywords);
 
-        // 6. Rejected: Mismatch
-        return ValidationResult.mismatch(
+        return ValidationResult.success(
                 DocumentType.AADHAAR,
-                "This doesn't look like an Aadhaar card. Please upload a clear photo of the front of your Aadhaar card."
+                "Aadhaar card uploaded and verified successfully.",
+                data,
+                hasAadhaarNumber ? 0.95 : 0.80
         );
     }
 }

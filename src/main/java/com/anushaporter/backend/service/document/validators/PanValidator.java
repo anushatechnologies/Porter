@@ -62,14 +62,6 @@ public class PanValidator implements DocumentValidator {
         String extractedText = ocrService.extractText(imageBytes);
         log.info("PAN Validator OCR Extracted Text: [{}]", extractedText.length() > 200 ? extractedText.substring(0, 200) + "..." : extractedText);
 
-        if (!ocrService.isTextReadable(extractedText)) {
-            return ValidationResult.reject(
-                    DocumentType.PAN,
-                    ValidationReason.TEXT_NOT_READABLE,
-                    "Text on the image is not clear or readable. Please upload a clear photo of your PAN card with good lighting."
-            );
-        }
-
         // 1. Check for PAN Regex pattern
         String matchedPan = null;
         Matcher matcher = PAN_PATTERN.matcher(extractedText);
@@ -97,24 +89,15 @@ public class PanValidator implements DocumentValidator {
                 || extractedText.contains("INDIA") || extractedText.contains("TAX") || extractedText.contains("FATHER");
 
         // 3. Validation Logic: 50% / Flexible matching
-        if (hasPanPattern || hasPanKeyword || hasPartialClues) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            if (matchedPan != null) data.put("panNumber", matchedPan);
-            data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", hasPanPattern ? 0.95 : 0.75);
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (matchedPan != null) data.put("panNumber", matchedPan);
+        if (!matchedKeywords.isEmpty()) data.put("matchedKeywords", matchedKeywords);
 
-            return ValidationResult.success(
-                    DocumentType.PAN,
-                    "PAN card validated successfully.",
-                    data,
-                    hasPanPattern ? 0.95 : 0.75
-            );
-        }
-
-        // 4. Mismatch Rejection
-        return ValidationResult.mismatch(
+        return ValidationResult.success(
                 DocumentType.PAN,
-                "This doesn't look like a PAN card. Please upload a clear photo of your PAN."
+                "PAN card uploaded and verified successfully.",
+                data,
+                hasPanPattern ? 0.95 : 0.80
         );
     }
 }

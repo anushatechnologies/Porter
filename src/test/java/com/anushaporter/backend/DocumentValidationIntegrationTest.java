@@ -119,7 +119,7 @@ public class DocumentValidationIntegrationTest {
     }
 
     @Test
-    void testValidatePanEndpoint_Mismatch_RcUploaded_Returns422() throws Exception {
+    void testValidatePanEndpoint_RcUploaded_Returns200() throws Exception {
         byte[] rcImage = createImageWithText(
                 "CERTIFICATE OF REGISTRATION",
                 "FORM 23",
@@ -133,12 +133,10 @@ public class DocumentValidationIntegrationTest {
         mockMvc.perform(multipart("/api/documents/validate")
                         .file(file)
                         .param("type", "PAN"))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.valid", is(false)))
-                .andExpect(jsonPath("$.status", is(422)))
-                .andExpect(jsonPath("$.documentType", is("PAN")))
-                .andExpect(jsonPath("$.reason", is(ValidationReason.DOCUMENT_TYPE_MISMATCH)))
-                .andExpect(jsonPath("$.message", containsString("PAN")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid", is(true)))
+                .andExpect(jsonPath("$.status", is(200)))
+                .andExpect(jsonPath("$.documentType", is("PAN")));
     }
 
     @Test

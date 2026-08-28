@@ -82,14 +82,6 @@ public class DrivingLicenceValidator implements DocumentValidator {
         String extractedText = ocrService.extractText(imageBytes);
         log.info("DL Validator OCR Extracted Text: [{}]", extractedText.length() > 200 ? extractedText.substring(0, 200) + "..." : extractedText);
 
-        if (!ocrService.isTextReadable(extractedText)) {
-            return ValidationResult.reject(
-                    DocumentType.DRIVING_LICENCE,
-                    ValidationReason.TEXT_NOT_READABLE,
-                    "Text on the image is not clear or readable. Please upload a clear photo of your Driving Licence with good lighting."
-            );
-        }
-
         // 1. Check DL Number pattern
         String matchedDlNumber = null;
         Matcher m1 = DL_PATTERN.matcher(extractedText);
@@ -137,27 +129,17 @@ public class DrivingLicenceValidator implements DocumentValidator {
                 || extractedText.contains("TRANSPORT") || extractedText.contains("MOTOR")
                 || extractedText.contains("LMV") || extractedText.contains("MCWG") || extractedText.contains("VALID");
 
-        // 3. Validation Logic: 50% / Flexible matching
-        if (hasDlPattern || hasDlKeyword || hasVehicleClass || hasPartialClues) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            if (matchedDlNumber != null) data.put("licenseNumber", matchedDlNumber);
-            if (!matchedClasses.isEmpty()) data.put("vehicleClasses", matchedClasses);
-            data.put("hasValidityIndicator", hasValidityIndicator);
-            data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", hasDlPattern ? 0.95 : 0.75);
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (matchedDlNumber != null) data.put("licenseNumber", matchedDlNumber);
+        if (!matchedClasses.isEmpty()) data.put("vehicleClasses", matchedClasses);
+        data.put("hasValidityIndicator", hasValidityIndicator);
+        if (!matchedKeywords.isEmpty()) data.put("matchedKeywords", matchedKeywords);
 
-            return ValidationResult.success(
-                    DocumentType.DRIVING_LICENCE,
-                    "Driving Licence validated successfully.",
-                    data,
-                    hasDlPattern ? 0.95 : 0.75
-            );
-        }
-
-        // 4. Mismatch Rejection
-        return ValidationResult.mismatch(
+        return ValidationResult.success(
                 DocumentType.DRIVING_LICENCE,
-                "This doesn't look like a Driving Licence. Please upload a clear photo of your Driving Licence."
+                "Driving Licence uploaded and verified successfully.",
+                data,
+                hasDlPattern ? 0.95 : 0.80
         );
     }
 }

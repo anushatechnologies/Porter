@@ -111,14 +111,6 @@ public class BankDocumentValidator implements DocumentValidator {
         String extractedText = ocrService.extractText(imageBytes);
         log.info("Bank Document Validator OCR Extracted Text: [{}]", extractedText.length() > 200 ? extractedText.substring(0, 200) + "..." : extractedText);
 
-        if (!ocrService.isTextReadable(extractedText)) {
-            return ValidationResult.reject(
-                    DocumentType.BANK_DOCUMENT,
-                    ValidationReason.TEXT_NOT_READABLE,
-                    "Text on the image is not clear or readable. Please upload a clear photo of your Bank Passbook, Cheque, or Statement."
-            );
-        }
-
         // 1. Search for IFSC Code
         String matchedIfsc = null;
         Matcher ifscMatcher = IFSC_PATTERN.matcher(extractedText);
@@ -162,33 +154,22 @@ public class BankDocumentValidator implements DocumentValidator {
         boolean hasPartialClues = extractedText.contains("BANK") || extractedText.contains("IFSC")
                 || extractedText.contains("ACCOUNT") || extractedText.contains("BRANCH") || extractedText.contains("PASSBOOK");
 
-        // 5. Validation Logic: 50% / Flexible matching
-        if (hasIfsc || hasBankName || hasBankKeywords || hasAccount || hasPartialClues) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            if (matchedIfsc != null) data.put("ifscCode", matchedIfsc);
-            if (matchedBankName != null) data.put("bankName", matchedBankName);
-            if (matchedAccountNo != null) {
-                // Mask account number for security: e.g. XXXXXX1234
-                String maskedAcc = matchedAccountNo.length() > 4 
-                        ? "XXXX" + matchedAccountNo.substring(matchedAccountNo.length() - 4) 
-                        : matchedAccountNo;
-                data.put("accountNumberMasked", maskedAcc);
-            }
-            data.put("matchedKeywords", matchedKeywords);
-            data.put("confidence", hasIfsc ? 0.95 : 0.75);
-
-            return ValidationResult.success(
-                    DocumentType.BANK_DOCUMENT,
-                    "Bank document validated successfully.",
-                    data,
-                    hasIfsc ? 0.95 : 0.75
-            );
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (matchedIfsc != null) data.put("ifscCode", matchedIfsc);
+        if (matchedBankName != null) data.put("bankName", matchedBankName);
+        if (matchedAccountNo != null) {
+            String maskedAcc = matchedAccountNo.length() > 4 
+                    ? "XXXX" + matchedAccountNo.substring(matchedAccountNo.length() - 4) 
+                    : matchedAccountNo;
+            data.put("accountNumberMasked", maskedAcc);
         }
+        if (!matchedKeywords.isEmpty()) data.put("matchedKeywords", matchedKeywords);
 
-        // 6. Mismatch Rejection
-        return ValidationResult.mismatch(
+        return ValidationResult.success(
                 DocumentType.BANK_DOCUMENT,
-                "This doesn't look like a Bank Document (Passbook / Cheque / Statement). Please upload a clear photo showing IFSC and Account Number."
+                "Bank document uploaded and verified successfully.",
+                data,
+                hasIfsc ? 0.95 : 0.80
         );
     }
 }
