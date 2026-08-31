@@ -124,17 +124,49 @@ public class DriverController {
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAll(
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "kyc", required = false) String kyc,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "query", required = false) String query,
             @RequestParam(value = "minWallet", required = false) Double minWallet,
             @RequestParam(value = "minBalance", required = false) Double minBalance
     ) {
         List<Driver> drivers = repository.findAll();
 
         Double filterMinWallet = minWallet != null ? minWallet : minBalance;
+        String searchTerm = search != null ? search.trim().toLowerCase() : (q != null ? q.trim().toLowerCase() : (query != null ? query.trim().toLowerCase() : null));
 
         List<Map<String, Object>> items = drivers.stream()
                 .filter(d -> {
-                    if (status != null && !status.isBlank()) {
+                    // Ignore status filter if "all" or empty
+                    if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status.trim())) {
                         if (d.getStatus() == null || !d.getStatus().equalsIgnoreCase(status.trim())) {
+                            return false;
+                        }
+                    }
+                    // KYC filter
+                    if (kyc != null && !kyc.isBlank() && !"all".equalsIgnoreCase(kyc.trim())) {
+                        if (d.getKyc() == null || !d.getKyc().equalsIgnoreCase(kyc.trim())) {
+                            return false;
+                        }
+                    }
+                    // Search term filter (matches Name, Phone, Email, Vehicle Plate, or ID)
+                    if (searchTerm != null && !searchTerm.isBlank()) {
+                        String name = d.getName() != null ? d.getName().toLowerCase() : "";
+                        String phone = d.getPhone() != null ? d.getPhone().toLowerCase() : "";
+                        String email = d.getEmail() != null ? d.getEmail().toLowerCase() : "";
+                        String vNum = d.getVehicleNumber() != null ? d.getVehicleNumber().toLowerCase() : "";
+                        String vType = d.getVehicleType() != null ? d.getVehicleType().toLowerCase() : "";
+                        String idStr = d.getId() != null ? d.getId().toString() : "";
+                        String drvId = "drv-" + idStr;
+
+                        if (!name.contains(searchTerm)
+                                && !phone.contains(searchTerm)
+                                && !email.contains(searchTerm)
+                                && !vNum.contains(searchTerm)
+                                && !vType.contains(searchTerm)
+                                && !idStr.equals(searchTerm)
+                                && !drvId.equals(searchTerm)) {
                             return false;
                         }
                     }

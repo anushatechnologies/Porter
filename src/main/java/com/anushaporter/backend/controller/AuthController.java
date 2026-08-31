@@ -37,8 +37,10 @@ public class AuthController {
 
         // Support 'username', 'email', or 'phone' fields
         String identifier = body.get("username");
-        if (identifier == null) identifier = body.get("phone");
-        if (identifier == null) identifier = body.get("email");
+        if (identifier == null)
+            identifier = body.get("phone");
+        if (identifier == null)
+            identifier = body.get("email");
 
         String password = body.get("password");
 
@@ -73,7 +75,8 @@ public class AuthController {
                 userProfile.put("role", user.getRole());
                 userProfile.put("email", user.getEmail());
                 userProfile.put("phone", user.getPhone());
-                userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed=" + (user.getName() != null ? user.getName().replace(" ", "") : "User"));
+                userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed="
+                        + (user.getName() != null ? user.getName().replace(" ", "") : "User"));
 
                 String token = jwtUtil.generateToken(user.getEmail() != null ? user.getEmail() : user.getPhone());
 
@@ -135,7 +138,8 @@ public class AuthController {
         userProfile.put("phone", savedUser.getPhone());
         userProfile.put("role", savedUser.getRole());
 
-        String token = jwtUtil.generateToken(savedUser.getEmail() != null ? savedUser.getEmail() : savedUser.getPhone());
+        String token = jwtUtil
+                .generateToken(savedUser.getEmail() != null ? savedUser.getEmail() : savedUser.getPhone());
 
         response.put("success", true);
         response.put("message", "Account created successfully.");
@@ -155,9 +159,12 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
 
         String phone = body != null ? body.get("phone") : null;
-        if (phone == null && body != null) phone = body.get("phoneNumber");
-        if (phone == null && body != null) phone = body.get("mobile");
-        if (phone == null && body != null) phone = body.get("email");
+        if (phone == null && body != null)
+            phone = body.get("phoneNumber");
+        if (phone == null && body != null)
+            phone = body.get("mobile");
+        if (phone == null && body != null)
+            phone = body.get("email");
 
         if (phone == null || phone.trim().isEmpty()) {
             phone = "9876543210";
@@ -181,7 +188,8 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
 
         String phone = body != null ? body.get("phone") : null;
-        if (phone == null && body != null) phone = body.get("phoneNumber");
+        if (phone == null && body != null)
+            phone = body.get("phoneNumber");
 
         response.put("success", true);
         response.put("message", "OTP resent successfully.");
@@ -193,7 +201,8 @@ public class AuthController {
 
     /**
      * POST /api/auth/verify-otp
-     * Verifies Firebase ID Token OR direct OTP code and returns user profile + JWT tokens.
+     * Verifies Firebase ID Token OR direct OTP code and returns user profile + JWT
+     * tokens.
      */
     @PostMapping("/api/auth/verify-otp")
     public ResponseEntity<Map<String, Object>> verifyOtp(@RequestBody Map<String, String> body) {
@@ -203,7 +212,8 @@ public class AuthController {
         String mode = body != null ? body.get("mode") : "login"; // "login" or "signup"
         String name = body != null ? body.get("name") : null;
         String rawPhone = body != null ? body.get("phone") : null;
-        if (rawPhone == null && body != null) rawPhone = body.get("phoneNumber");
+        if (rawPhone == null && body != null)
+            rawPhone = body.get("phoneNumber");
 
         String verifiedPhone = null;
 
@@ -217,7 +227,8 @@ public class AuthController {
                 FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(cleanToken);
                 verifiedPhone = (String) decodedToken.getClaims().get("phone_number");
             } catch (Exception e) {
-                // If Firebase token fails but phone was supplied directly, fallback to direct verification
+                // If Firebase token fails but phone was supplied directly, fallback to direct
+                // verification
             }
         }
 
@@ -235,7 +246,8 @@ public class AuthController {
         if (localPhone.length() > 10) {
             localPhone = localPhone.substring(localPhone.length() - 10);
         }
-        if (localPhone.isEmpty()) localPhone = "9876543210";
+        if (localPhone.isEmpty())
+            localPhone = "9876543210";
 
         Optional<AppUser> userOpt = userRepository.findFirstByPhoneOrderByIdDesc(localPhone);
         AppUser user;
@@ -275,7 +287,8 @@ public class AuthController {
         userProfile.put("id", user.getId().toString());
         userProfile.put("name", user.getName());
         userProfile.put("phone", user.getPhone());
-        userProfile.put("email", user.getEmail() != null && !user.getEmail().contains("@anushaporter.com") ? user.getEmail() : "");
+        userProfile.put("email",
+                user.getEmail() != null && !user.getEmail().contains("@anushaporter.com") ? user.getEmail() : "");
         userProfile.put("role", user.getRole() != null ? user.getRole() : "Customer");
         userProfile.put("isPhoneVerified", true);
 

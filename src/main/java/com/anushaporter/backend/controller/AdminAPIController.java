@@ -44,7 +44,9 @@ public class AdminAPIController {
         List<com.anushaporter.backend.model.Order> allOrders = orderRepository.findAll();
 
         long activeOrders = allOrders.stream()
-                .filter(o -> "driver_assigned".equalsIgnoreCase(o.getStatus()) || "picked_up".equalsIgnoreCase(o.getStatus()) || "assigned".equalsIgnoreCase(o.getStatus()) || "accepted".equalsIgnoreCase(o.getStatus()) || "transit".equalsIgnoreCase(o.getStatus()))
+                .filter(o -> "driver_assigned".equalsIgnoreCase(o.getStatus())
+                        || "picked_up".equalsIgnoreCase(o.getStatus()) || "assigned".equalsIgnoreCase(o.getStatus())
+                        || "accepted".equalsIgnoreCase(o.getStatus()) || "transit".equalsIgnoreCase(o.getStatus()))
                 .count();
 
         java.time.LocalDate today = java.time.LocalDate.now();
@@ -64,8 +66,7 @@ public class AdminAPIController {
                 "pendingKyc", pendingKyc,
                 "activeOrders", activeOrders,
                 "totalOrdersToday", totalOrdersToday,
-                "revenueToday", revenueToday
-        ));
+                "revenueToday", revenueToday));
     }
 
     @GetMapping("/drivers")
@@ -85,8 +86,10 @@ public class AdminAPIController {
             m.put("name", d.getName() != null ? d.getName() : "Unknown");
             m.put("email", d.getEmail() != null ? d.getEmail() : "");
             m.put("phone", d.getPhone() != null ? d.getPhone() : "");
-            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
-            String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
+            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType()
+                    : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
+            String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle()
+                    : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
             m.put("vehicle", v);
             m.put("vehicleType", vType);
             m.put("vehicle_type", vType);
@@ -120,7 +123,8 @@ public class AdminAPIController {
             driverRepository.save(driver);
         }
 
-        return ResponseEntity.ok(Map.of("success", true, "driverId", driver.getId().toString(), "kycStatus", driver.getKyc()));
+        return ResponseEntity
+                .ok(Map.of("success", true, "driverId", driver.getId().toString(), "kycStatus", driver.getKyc()));
     }
 
     /**
@@ -128,7 +132,8 @@ public class AdminAPIController {
      * GET /api/admin/analytics?period=week|month|year
      */
     @GetMapping("/analytics")
-    public ResponseEntity<Map<String, Object>> getAnalytics(@RequestParam(required = false, defaultValue = "week") String period) {
+    public ResponseEntity<Map<String, Object>> getAnalytics(
+            @RequestParam(required = false, defaultValue = "week") String period) {
         long totalOrders = orderRepository.count();
         long activeDrivers = driverRepository.findAll().stream()
                 .filter(d -> "online".equalsIgnoreCase(d.getStatus()) || "active".equalsIgnoreCase(d.getStatus()))
@@ -138,15 +143,17 @@ public class AdminAPIController {
                 .mapToDouble(o -> o.getAmount() != null ? o.getAmount() : 0.0)
                 .sum();
 
-        if (totalRevenue == 0.0) totalRevenue = 48500.0;
-        if (totalOrders == 0) totalOrders = 320;
-        if (activeDrivers == 0) activeDrivers = 14;
+        if (totalRevenue == 0.0)
+            totalRevenue = 48500.0;
+        if (totalOrders == 0)
+            totalOrders = 320;
+        if (activeDrivers == 0)
+            activeDrivers = 14;
 
         List<Map<String, Object>> distribution = List.of(
                 Map.of("type", "Scooter", "percentage", 45.0),
                 Map.of("type", "3 Wheeler", "percentage", 35.0),
-                Map.of("type", "Tata Ace", "percentage", 20.0)
-        );
+                Map.of("type", "Tata Ace", "percentage", 20.0));
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
