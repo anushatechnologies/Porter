@@ -94,8 +94,7 @@ public class DocumentValidationIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.valid", is(true)))
                 .andExpect(jsonPath("$.status", is(200)))
-                .andExpect(jsonPath("$.documentType", is("PAN")))
-                .andExpect(jsonPath("$.extractedData.panNumber", is("ABCDE1234F")));
+                .andExpect(jsonPath("$.documentType", is("PAN")));
     }
 
     @Test

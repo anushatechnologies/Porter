@@ -21,8 +21,8 @@ public class PanValidator implements DocumentValidator {
 
     private final OcrExtractionService ocrService;
 
-    // Standard 10-character PAN pattern: 5 letters, 4 digits, 1 letter
-    private static final Pattern PAN_PATTERN = Pattern.compile("\\b([A-Z]{5}[0-9]{4}[A-Z])\\b");
+    // Standard 10-character PAN pattern: 5 letters, optional space, 4 digits, optional space, 1 letter
+    private static final Pattern PAN_PATTERN = Pattern.compile("([A-Za-z]{5}\\s*[0-9]{4}\\s*[A-Za-z])");
 
     private static final List<String> PAN_KEYWORDS = Arrays.asList(
             "INCOME TAX DEPARTMENT",
@@ -66,7 +66,12 @@ public class PanValidator implements DocumentValidator {
         String matchedPan = null;
         Matcher matcher = PAN_PATTERN.matcher(extractedText);
         if (matcher.find()) {
-            matchedPan = matcher.group(1);
+            matchedPan = matcher.group(1).replaceAll("\\s+", "").toUpperCase();
+        } else {
+            Matcher strippedMatcher = Pattern.compile("([A-Z]{5}[0-9]{4}[A-Z])").matcher(extractedText.replaceAll("[^A-Za-z0-9]", "").toUpperCase());
+            if (strippedMatcher.find()) {
+                matchedPan = strippedMatcher.group(1);
+            }
         }
 
         // 2. Check for PAN Keywords
