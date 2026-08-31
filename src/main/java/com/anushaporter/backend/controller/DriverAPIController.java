@@ -81,6 +81,9 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.StorageService storageService;
 
+    @Autowired
+    private com.anushaporter.backend.service.S3ImageService s3ImageService;
+
     @GetMapping({ "/drivers/me", "/driver/me" })
     public ResponseEntity<?> getDriverProfile(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
@@ -617,32 +620,17 @@ public class DriverAPIController {
 
     // A. Upload Documents
     @PostMapping({ "/upload", "/driver/documents/upload", "/drivers/documents/upload" })
-    public ResponseEntity<?> uploadDocument(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> uploadDocument(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "category", defaultValue = "documents") String category) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "File is empty", "success", false));
+        }
         try {
-            if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
-            }
-
-            String uploadDir = "uploads/";
-            File directory = new File(uploadDir);
-            if (!directory.exists()) {
-                directory.mkdirs();
-            }
-
-            String originalFileName = file.getOriginalFilename();
-            String extension = originalFileName != null && originalFileName.contains(".")
-                    ? originalFileName.substring(originalFileName.lastIndexOf("."))
-                    : ".jpg";
-            String newFileName = UUID.randomUUID().toString() + extension;
-
-            Path path = Paths.get(uploadDir + newFileName);
-            Files.write(path, file.getBytes());
-
-            return ResponseEntity.ok(Map.of("url", "/uploads/" + newFileName, "success", true));
-
-        } catch (IOException e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("error", "Failed to upload file"));
+            String s3Url = s3ImageService.uploadImage(file, category);
+            return ResponseEntity.ok(Map.of("url", s3Url, "success", true));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to upload file: " + e.getMessage(), "success", false));
         }
     }
 
@@ -742,14 +730,38 @@ public class DriverAPIController {
         driver.setKyc("pending");
         driver.setStatus("offline"); // initial status
 
+        // Process all KYC documents to S3
         @SuppressWarnings("unchecked")
         Map<String, String> docs = (Map<String, String>) payload.get("documents");
-        if (docs != null) {
-            driver.setProfilePhotoUri(storageService.sanitizeUri(docs.get("profilePhotoUrl")));
-            driver.setAadhaarUri(storageService.sanitizeUri(docs.get("aadhaarUrl")));
-            driver.setLicenseUri(storageService.sanitizeUri(docs.get("licenseUrl")));
-            driver.setRcUri(storageService.sanitizeUri(docs.get("rcUrl")));
-            driver.setBankPassbookUri(storageService.sanitizeUri(docs.get("bankPassbookUrl")));
+        String profilePhotoInput = docs != null ? docs.get("profilePhotoUrl") : text(payload, "profilePhotoUri");
+        if (profilePhotoInput == null) profilePhotoInput = text(payload, "profilePhotoUrl");
+
+        String aadhaarInput = docs != null ? docs.get("aadhaarUrl") : text(payload, "aadhaarUri");
+        if (aadhaarInput == null) aadhaarInput = text(payload, "aadhaarUrl");
+
+        String licenseInput = docs != null ? docs.get("licenseUrl") : text(payload, "licenseUri");
+        if (licenseInput == null) licenseInput = text(payload, "licenseUrl");
+
+        String rcInput = docs != null ? docs.get("rcUrl") : text(payload, "rcUri");
+        if (rcInput == null) rcInput = text(payload, "rcUrl");
+
+        String bankPassbookInput = docs != null ? docs.get("bankPassbookUrl") : text(payload, "bankPassbookUri");
+        if (bankPassbookInput == null) bankPassbookInput = text(payload, "bankPassbookUrl");
+
+        if (profilePhotoInput != null && !profilePhotoInput.isBlank()) {
+            driver.setProfilePhotoUri(s3ImageService.processAndUploadImageUri(profilePhotoInput, "profile-photo"));
+        }
+        if (aadhaarInput != null && !aadhaarInput.isBlank()) {
+            driver.setAadhaarUri(s3ImageService.processAndUploadImageUri(aadhaarInput, "aadhaar"));
+        }
+        if (licenseInput != null && !licenseInput.isBlank()) {
+            driver.setLicenseUri(s3ImageService.processAndUploadImageUri(licenseInput, "license"));
+        }
+        if (rcInput != null && !rcInput.isBlank()) {
+            driver.setRcUri(s3ImageService.processAndUploadImageUri(rcInput, "rc"));
+        }
+        if (bankPassbookInput != null && !bankPassbookInput.isBlank()) {
+            driver.setBankPassbookUri(s3ImageService.processAndUploadImageUri(bankPassbookInput, "bank-passbook"));
         }
 
         Driver saved = driverRepository.save(driver);

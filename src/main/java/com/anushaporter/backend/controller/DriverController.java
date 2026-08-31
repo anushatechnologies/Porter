@@ -111,6 +111,9 @@ public class DriverController {
     private com.anushaporter.backend.service.StorageService storageService;
 
     @Autowired
+    private com.anushaporter.backend.service.S3ImageService s3ImageService;
+
+    @Autowired
     private com.anushaporter.backend.service.DriverWalletService driverWalletService;
 
     @Autowired
@@ -252,11 +255,22 @@ public class DriverController {
         entity.setVehicle(resolvedVeh);
         entity.setVehicleType(resolvedVeh);
 
-        if (entity.getLicenseUri() != null) entity.setLicenseUri(storageService.sanitizeUri(entity.getLicenseUri()));
-        if (entity.getRcUri() != null) entity.setRcUri(storageService.sanitizeUri(entity.getRcUri()));
-        if (entity.getAadhaarUri() != null) entity.setAadhaarUri(storageService.sanitizeUri(entity.getAadhaarUri()));
-        if (entity.getProfilePhotoUri() != null) entity.setProfilePhotoUri(storageService.sanitizeUri(entity.getProfilePhotoUri()));
-        if (entity.getBankPassbookUri() != null) entity.setBankPassbookUri(storageService.sanitizeUri(entity.getBankPassbookUri()));
+        // Upload/migrate all Driver document images to S3 under dedicated folder names
+        if (entity.getLicenseUri() != null && !entity.getLicenseUri().isBlank()) {
+            entity.setLicenseUri(s3ImageService.processAndUploadImageUri(entity.getLicenseUri(), "license"));
+        }
+        if (entity.getRcUri() != null && !entity.getRcUri().isBlank()) {
+            entity.setRcUri(s3ImageService.processAndUploadImageUri(entity.getRcUri(), "rc"));
+        }
+        if (entity.getAadhaarUri() != null && !entity.getAadhaarUri().isBlank()) {
+            entity.setAadhaarUri(s3ImageService.processAndUploadImageUri(entity.getAadhaarUri(), "aadhaar"));
+        }
+        if (entity.getProfilePhotoUri() != null && !entity.getProfilePhotoUri().isBlank()) {
+            entity.setProfilePhotoUri(s3ImageService.processAndUploadImageUri(entity.getProfilePhotoUri(), "profile-photo"));
+        }
+        if (entity.getBankPassbookUri() != null && !entity.getBankPassbookUri().isBlank()) {
+            entity.setBankPassbookUri(s3ImageService.processAndUploadImageUri(entity.getBankPassbookUri(), "bank-passbook"));
+        }
 
         Driver savedDriver = repository.save(entity);
 
@@ -277,6 +291,73 @@ public class DriverController {
             });
         }
         return savedDriver;
+    }
+
+    @PutMapping("/{id:[0-9]+}")
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Driver updated) {
+        return repository.findById(id).map(existing -> {
+            if (updated.getName() != null) existing.setName(updated.getName());
+            if (updated.getPhone() != null) existing.setPhone(updated.getPhone());
+            if (updated.getEmail() != null) existing.setEmail(updated.getEmail());
+            if (updated.getDob() != null) existing.setDob(updated.getDob());
+            if (updated.getGender() != null) existing.setGender(updated.getGender());
+            if (updated.getVehicle() != null) existing.setVehicle(updated.getVehicle());
+            if (updated.getVehicleType() != null) existing.setVehicleType(updated.getVehicleType());
+            if (updated.getVehicleNumber() != null) existing.setVehicleNumber(updated.getVehicleNumber());
+            if (updated.getRcNumber() != null) existing.setRcNumber(updated.getRcNumber());
+            if (updated.getAadhaarNumber() != null) existing.setAadhaarNumber(updated.getAadhaarNumber());
+            if (updated.getLicenseNumber() != null) existing.setLicenseNumber(updated.getLicenseNumber());
+            if (updated.getAddressLine1() != null) existing.setAddressLine1(updated.getAddressLine1());
+            if (updated.getCity() != null) existing.setCity(updated.getCity());
+            if (updated.getState() != null) existing.setState(updated.getState());
+            if (updated.getPincode() != null) existing.setPincode(updated.getPincode());
+            if (updated.getBankName() != null) existing.setBankName(updated.getBankName());
+            if (updated.getAccountHolderName() != null) existing.setAccountHolderName(updated.getAccountHolderName());
+            if (updated.getAccountNumber() != null) existing.setAccountNumber(updated.getAccountNumber());
+            if (updated.getIfscCode() != null) existing.setIfscCode(updated.getIfscCode());
+            if (updated.getStatus() != null) existing.setStatus(driverAuthService.normalizeStatus(updated.getStatus()));
+            if (updated.getKyc() != null) existing.setKyc(updated.getKyc());
+
+            // Handle image updates and clean up old S3 images if replaced
+            if (updated.getProfilePhotoUri() != null && !updated.getProfilePhotoUri().equals(existing.getProfilePhotoUri())) {
+                s3ImageService.deleteImage(existing.getProfilePhotoUri());
+                existing.setProfilePhotoUri(s3ImageService.processAndUploadImageUri(updated.getProfilePhotoUri(), "profile-photo"));
+            }
+            if (updated.getAadhaarUri() != null && !updated.getAadhaarUri().equals(existing.getAadhaarUri())) {
+                s3ImageService.deleteImage(existing.getAadhaarUri());
+                existing.setAadhaarUri(s3ImageService.processAndUploadImageUri(updated.getAadhaarUri(), "aadhaar"));
+            }
+            if (updated.getLicenseUri() != null && !updated.getLicenseUri().equals(existing.getLicenseUri())) {
+                s3ImageService.deleteImage(existing.getLicenseUri());
+                existing.setLicenseUri(s3ImageService.processAndUploadImageUri(updated.getLicenseUri(), "license"));
+            }
+            if (updated.getRcUri() != null && !updated.getRcUri().equals(existing.getRcUri())) {
+                s3ImageService.deleteImage(existing.getRcUri());
+                existing.setRcUri(s3ImageService.processAndUploadImageUri(updated.getRcUri(), "rc"));
+            }
+            if (updated.getBankPassbookUri() != null && !updated.getBankPassbookUri().equals(existing.getBankPassbookUri())) {
+                s3ImageService.deleteImage(existing.getBankPassbookUri());
+                existing.setBankPassbookUri(s3ImageService.processAndUploadImageUri(updated.getBankPassbookUri(), "bank-passbook"));
+            }
+
+            Driver saved = repository.save(existing);
+            return ResponseEntity.ok((Object) saved);
+        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + id)));
+    }
+
+    @DeleteMapping("/{id:[0-9]+}")
+    public ResponseEntity<?> delete(@PathVariable Long id) {
+        return repository.findById(id).<ResponseEntity<?>>map(driver -> {
+            // Clean up S3 objects
+            s3ImageService.deleteImage(driver.getProfilePhotoUri());
+            s3ImageService.deleteImage(driver.getAadhaarUri());
+            s3ImageService.deleteImage(driver.getLicenseUri());
+            s3ImageService.deleteImage(driver.getRcUri());
+            s3ImageService.deleteImage(driver.getBankPassbookUri());
+
+            repository.delete(driver);
+            return ResponseEntity.ok(Map.of("success", true, "message", "Driver deleted successfully", "id", id));
+        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + id)));
     }
 
     @GetMapping("/{id:[0-9]+}")

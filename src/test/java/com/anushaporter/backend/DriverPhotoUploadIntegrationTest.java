@@ -106,12 +106,12 @@ public class DriverPhotoUploadIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.driverId", is(testDriver.getId().intValue())))
-                .andExpect(jsonPath("$.url", containsString("/uploads/driver_photos/")))
+                .andExpect(jsonPath("$.url", containsString("s3.ap-south-2.amazonaws.com/profile-photo/")))
                 .andExpect(jsonPath("$.message", containsString("Driver photo uploaded successfully")));
 
         // Verify driver profile photo URI is updated in DB
         Driver updated = driverRepository.findById(testDriver.getId()).orElseThrow();
-        assertTrue(updated.getProfilePhotoUri() != null && updated.getProfilePhotoUri().contains("/uploads/driver_photos/"));
+        assertTrue(updated.getProfilePhotoUri() != null && updated.getProfilePhotoUri().contains("s3.ap-south-2.amazonaws.com/profile-photo/"));
     }
 
     @Test
@@ -130,11 +130,11 @@ public class DriverPhotoUploadIntegrationTest {
                         .param("phone", uniquePhone))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.url", containsString("/uploads/driver_photos/")));
+                .andExpect(jsonPath("$.url", containsString("s3.ap-south-2.amazonaws.com/profile-photo/")));
 
         Optional<Driver> createdOpt = driverRepository.findByPhone(uniquePhone);
         assertTrue(createdOpt.isPresent());
-        assertTrue(createdOpt.get().getProfilePhotoUri() != null);
+        assertTrue(createdOpt.get().getProfilePhotoUri() != null && createdOpt.get().getProfilePhotoUri().contains("s3.ap-south-2.amazonaws.com/profile-photo/"));
     }
 
     @Test
@@ -162,7 +162,7 @@ public class DriverPhotoUploadIntegrationTest {
                 .andExpect(jsonPath("$.success", is(true)));
 
         AppUser updatedUser = appUserRepository.findFirstByPhoneOrderByIdDesc(testPhone).orElseThrow();
-        assertTrue(updatedUser.getProfilePhotoUri() != null && updatedUser.getProfilePhotoUri().contains("/uploads/driver_photos/"));
+        assertTrue(updatedUser.getProfilePhotoUri() != null && updatedUser.getProfilePhotoUri().contains("s3.ap-south-2.amazonaws.com/profile-photo/"));
     }
 
     @Test

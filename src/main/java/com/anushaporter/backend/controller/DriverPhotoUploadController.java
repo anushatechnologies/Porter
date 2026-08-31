@@ -42,8 +42,8 @@ public class DriverPhotoUploadController {
     @Autowired
     private com.anushaporter.backend.service.document.DocumentValidationDispatcher documentDispatcher;
 
-    @Value("${file.upload-dir:uploads/}")
-    private String baseUploadDir;
+    @Autowired
+    private com.anushaporter.backend.service.S3ImageService s3ImageService;
 
     @PostMapping({
             "/api/driver/photo",
@@ -89,32 +89,18 @@ public class DriverPhotoUploadController {
                 log.info("Auto-created driver profile ID #{} for photo upload.", driver.getId());
             }
 
-            // 2. Ensure target upload directory exists
-            String targetDir = baseUploadDir.endsWith("/") ? baseUploadDir + "driver_photos/" : baseUploadDir + "/driver_photos/";
-            File dir = new File(targetDir);
-            if (!dir.exists()) {
-                dir.mkdirs();
+            // 2. Clean up old S3 photo if present and upload new photo directly to S3
+            if (driver.getProfilePhotoUri() != null && !driver.getProfilePhotoUri().isBlank()) {
+                s3ImageService.deleteImage(driver.getProfilePhotoUri());
             }
 
-            // 3. Save photo to storage
-            String originalFileName = file.getOriginalFilename();
-            String extension = (originalFileName != null && originalFileName.contains("."))
-                    ? originalFileName.substring(originalFileName.lastIndexOf("."))
-                    : ".jpg";
-            String savedFileName = "driver-photo-" + driver.getId() + "-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 6) + extension;
-            Path savePath = Paths.get(targetDir + savedFileName);
+            String photoUrl = s3ImageService.uploadImage(file, "profile-photo");
 
-            try (InputStream in = file.getInputStream()) {
-                Files.copy(in, savePath, StandardCopyOption.REPLACE_EXISTING);
-            }
-
-            String photoUrl = "/uploads/driver_photos/" + savedFileName;
-
-            // 4. Update Driver profile photo URI
+            // 3. Update Driver profile photo URI
             driver.setProfilePhotoUri(photoUrl);
             driverRepository.save(driver);
 
-            // 5. Also synchronize with AppUser profile if present
+            // 4. Also synchronize with AppUser profile if present
             if (driver.getPhone() != null && !driver.getPhone().isBlank()) {
                 try {
                     appUserRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone().trim()).ifPresent(u -> {
@@ -126,7 +112,7 @@ public class DriverPhotoUploadController {
                 }
             }
 
-            log.info("✓ Driver photo successfully saved for driver ID #{}: {}", driver.getId(), photoUrl);
+            log.info("✓ Driver photo successfully saved to S3 for driver ID #{}: {}", driver.getId(), photoUrl);
 
             return ResponseEntity.ok(DriverPhotoUploadResponse.success(
                     driver.getId(),
