@@ -40,7 +40,7 @@ public class DriverWalletService {
     private DriverRepository driverRepository;
 
     private static final double DEFAULT_COMMISSION_PERCENTAGE = 5.0; // 5% Platform Commission
-    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 0.0;
+    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 1000.0; // Default minimum balance ₹1000.0
 
     public DriverWallet getWallet(String driverId) {
         return driverWalletRepository.findByDriverId(driverId).orElseGet(() -> {
@@ -85,6 +85,7 @@ public class DriverWalletService {
 
         settings.put("commissionPercentage", commissionPercentage);
         settings.put("minRequiredBalance", minRequiredBalance);
+        settings.put("minimumBalance", minRequiredBalance);
         settings.put("walletRequiredForRides", walletRequiredForRides);
         settings.put("autoOfflineWhenBalanceInsufficient", autoOfflineWhenBalanceInsufficient);
         return settings;
@@ -102,9 +103,15 @@ public class DriverWalletService {
         if (payload.containsKey("commissionPercentage")) {
             saveSetting("wallet_commission_percentage", String.valueOf(payload.get("commissionPercentage")));
         }
-        if (payload.containsKey("minRequiredBalance")) {
-            saveSetting("wallet_min_required_balance", String.valueOf(payload.get("minRequiredBalance")));
+
+        Object minBalObj = payload.get("minRequiredBalance");
+        if (minBalObj == null) minBalObj = payload.get("minimumBalance");
+        if (minBalObj == null) minBalObj = payload.get("minWalletBalance");
+        if (minBalObj == null) minBalObj = payload.get("minimumWalletBalance");
+        if (minBalObj != null) {
+            saveSetting("wallet_min_required_balance", String.valueOf(minBalObj));
         }
+
         if (payload.containsKey("walletRequiredForRides")) {
             saveSetting("wallet_required_for_rides", String.valueOf(payload.get("walletRequiredForRides")));
         }
@@ -113,6 +120,36 @@ public class DriverWalletService {
         }
 
         return getAdminWalletSettings();
+    }
+
+    /**
+     * Applies minimum wallet balance across all existing drivers whose balance is below minimum.
+     */
+    @Transactional
+    public Map<String, Object> applyMinimumBalanceToExistingDrivers(double newMinBalance, String reason) {
+        List<Driver> drivers = driverRepository.findAll();
+        int updatedCount = 0;
+        double totalCredited = 0.0;
+
+        for (Driver driver : drivers) {
+            double current = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+            if (current < newMinBalance) {
+                double diff = Math.round((newMinBalance - current) * 100.0) / 100.0;
+                modifyDriverWallet(String.valueOf(driver.getId()), newMinBalance, "set",
+                        (reason != null && !reason.isBlank()) ? reason : "Admin updated platform minimum wallet balance to ₹" + newMinBalance,
+                        "MIN_BALANCE_APPLY");
+                updatedCount++;
+                totalCredited += diff;
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("minRequiredBalance", newMinBalance);
+        result.put("driversUpdated", updatedCount);
+        result.put("totalAmountCredited", Math.round(totalCredited * 100.0) / 100.0);
+        result.put("message", "Applied minimum balance of ₹" + newMinBalance + " across " + updatedCount + " driver(s).");
+        return result;
     }
 
     private void saveSetting(String key, String value) {
@@ -263,6 +300,118 @@ public class DriverWalletService {
         response.put("rechargedAmount", amount);
         response.put("newWalletBalance", newBalance);
         response.put("transactionId", txId);
+        return response;
+    }
+
+    /**
+     * Direct driver wallet balance modification by Admin.
+     * Supports:
+     * - "set": Sets absolute balance to `amount` (e.g. 500.0)
+     * - "credit" / "add": Adds `amount` to current balance
+     * - "debit" / "deduct": Subtracts `amount` from current balance
+     * - "adjust": Applies signed `amount` (+ or -)
+     *
+     * Synchronizes Driver entity and DriverWallet entity.
+     * Recalculates online/offline status (auto-offlines if balance <= 0, re-enables online if balance > 0).
+     * Emits auditable WalletTransaction with transactionType = "ADMIN_ADJUSTMENT".
+     */
+    @Transactional
+    public Map<String, Object> modifyDriverWallet(String driverIdStr, Double amount, String action, String reason, String notes) {
+        Driver driver = findDriverEntity(driverIdStr);
+        if (driver == null) {
+            throw new IllegalArgumentException("Driver not found with identifier: " + driverIdStr);
+        }
+
+        if (amount == null) {
+            throw new IllegalArgumentException("Wallet amount is required");
+        }
+
+        double previousBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+        String resolvedAction = (action != null && !action.isBlank()) ? action.trim().toLowerCase() : "set";
+
+        double newBalance;
+        double netChange;
+
+        switch (resolvedAction) {
+            case "credit":
+            case "add":
+                netChange = Math.abs(amount);
+                newBalance = previousBalance + netChange;
+                break;
+            case "debit":
+            case "deduct":
+                netChange = -Math.abs(amount);
+                newBalance = previousBalance + netChange;
+                break;
+            case "adjust":
+                netChange = amount;
+                newBalance = previousBalance + netChange;
+                break;
+            case "set":
+            default:
+                newBalance = amount;
+                netChange = newBalance - previousBalance;
+                resolvedAction = "set";
+                break;
+        }
+
+        newBalance = Math.round(newBalance * 100.0) / 100.0;
+        netChange = Math.round(netChange * 100.0) / 100.0;
+
+        // Auto-status adjustment based on balance
+        if (previousBalance <= 0.0 && newBalance > 0.0) {
+            driver.setStatus("online");
+        } else if (newBalance <= 0.0) {
+            driver.setStatus("offline");
+        }
+        driver.setWalletBalance(newBalance);
+        driverRepository.save(driver);
+
+        // Sync DriverWallet entity
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        wallet.setAvailableBalance(newBalance);
+        driverWalletRepository.save(wallet);
+
+        // Audit log in wallet_transactions
+        String txId = "TXN_W_" + System.currentTimeMillis();
+        WalletTransaction tx = new WalletTransaction();
+        tx.setId(txId);
+        tx.setDriverId(String.valueOf(driver.getId()));
+        tx.setTransactionType("ADMIN_ADJUSTMENT");
+        tx.setGrossAmount(Math.abs(netChange));
+        tx.setCommissionAmount(0.0);
+        tx.setAmount(netChange);
+        tx.setBalanceBefore(previousBalance);
+        tx.setBalanceAfter(newBalance);
+        tx.setStatus("SUCCESS");
+        tx.setReferenceId(notes != null && !notes.isBlank() ? notes : "ADMIN_MANUAL_ADJUSTMENT");
+
+        String description;
+        if (reason != null && !reason.isBlank()) {
+            description = reason;
+        } else if ("set".equalsIgnoreCase(resolvedAction)) {
+            description = "Admin set wallet balance to ₹" + newBalance;
+        } else if (netChange >= 0) {
+            description = "Admin credited ₹" + netChange + " to wallet";
+        } else {
+            description = "Admin debited ₹" + Math.abs(netChange) + " from wallet";
+        }
+        tx.setDescription(description);
+        tx.setCreatedAt(LocalDateTime.now());
+        walletTransactionRepository.save(tx);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("driverId", "DRV-" + driver.getId());
+        response.put("id", driver.getId());
+        response.put("action", resolvedAction);
+        response.put("previousBalance", previousBalance);
+        response.put("netChange", netChange);
+        response.put("walletBalance", newBalance);
+        response.put("newBalance", newBalance);
+        response.put("status", driver.getStatus());
+        response.put("transactionId", txId);
+        response.put("message", "Driver wallet updated successfully");
         return response;
     }
 

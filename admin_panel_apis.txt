@@ -81,7 +81,7 @@ DELETE /api/pricing/{id}
   Response: { "success": true }
 
 --------------------------------------------------------------
-5. Finance & Payout Settlement
+5. Finance & Wallet Management
 --------------------------------------------------------------
 GET /api/payouts
   Response: [ { payout details... }, ... ]
@@ -90,9 +90,31 @@ POST /api/payouts/{id}/release
   Request: {}
   Response: { "success": true, "status": "settled" }
 
+PUT /api/admin/drivers/{id}/wallet (or PUT /api/drivers/{id}/wallet)
+  Request: { "walletBalance": 500.0, "action": "set", "reason": "Admin adjustment" }
+  OR: { "amount": 200.0, "action": "credit", "reason": "Trip bonus" }
+  OR: { "amount": 50.0, "action": "debit", "reason": "Penalty" }
+  Response: { "success": true, "driverId": "DRV-12", "walletBalance": 500.0, "status": "online", "transactionId": "TXN_W_..." }
+
+PUT /api/admin/customers/{id}/wallet (or PUT /api/customers/{id}/wallet)
+  Request: { "walletBalance": 350.0, "action": "set" }
+  Response: { "success": true, "id": 12, "walletBalance": 350.0, "wallet": 350.0 }
+
 POST /api/customers/{id}/topup
   Request: { "amount": 500.0 }
   Response: { "success": true, "wallet": 500.0 }
+
+POST /api/admin/wallet/modify
+  Request: { "userType": "driver"|"customer", "id": "12", "amount": 500.0, "action": "set" }
+  Response: { "success": true, "walletBalance": 500.0, ... }
+
+GET /api/admin/wallet/minimum-balance
+  Response: { "success": true, "minRequiredBalance": 1000.0, "minimumBalance": 1000.0 }
+
+PUT /api/admin/wallet/minimum-balance
+  Request: { "minimumBalance": 1000.0, "applyToExistingDrivers": false }
+  Response: { "success": true, "minRequiredBalance": 1000.0, "message": "Minimum wallet balance updated to ₹1000.0 for all drivers" }
+
 
 --------------------------------------------------------------
 6. Support Ticketing & Chat
