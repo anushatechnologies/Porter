@@ -838,7 +838,9 @@ public class DriverAPIController {
                     || Boolean.TRUE.equals(payload.get("isFinalSubmit"))
                     || "submit".equalsIgnoreCase(String.valueOf(payload.get("action")));
             if (isFinalSubmit || (!isSaveAndNext && (driver.getKyc() == null || !"draft".equalsIgnoreCase(text(payload, "kyc"))))) {
-                driver.setKyc("pending");
+                // Auto-approve driver registration; no need of admin approval
+                driver.setKyc("approved");
+                driver.setVerificationStatus("approved");
             } else if (driver.getKyc() == null) {
                 driver.setKyc("draft");
             }
@@ -852,7 +854,7 @@ public class DriverAPIController {
 
         Map<String, Object> resp = new java.util.LinkedHashMap<>();
         resp.put("success", true);
-        resp.put("message", isSaveAndNext ? "Step data saved successfully" : "Driver profile created successfully");
+        resp.put("message", isSaveAndNext ? "Step data saved successfully" : "Driver profile created and approved successfully");
         resp.put("driverId", saved.getId().toString());
         resp.put("id", saved.getId().toString());
         resp.put("kycStatus", saved.getKyc());

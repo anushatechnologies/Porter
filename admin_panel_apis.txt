@@ -55,6 +55,10 @@ POST /api/drivers/{id}/reject
   Request: {}
   Response: { "success": true, "driver": { ... "kyc": "rejected" } }
 
+DELETE /api/admin/drivers/{id} (or DELETE /api/drivers/{id})
+  Request: {} (supports numeric id e.g. 12 or formatted id e.g. DRV-12)
+  Response: { "success": true, "message": "Driver profile removed successfully", "id": 12, "driverId": "12" }
+
 --------------------------------------------------------------
 4. Dynamic Pricing & Vehicle Config
 --------------------------------------------------------------

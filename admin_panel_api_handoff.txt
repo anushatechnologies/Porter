@@ -71,6 +71,12 @@ POST /api/drivers/{id}/reject
 No body required.
 Response: {"success":true,"driver":{..."kyc":"rejected"}}
 
+DELETE /api/admin/drivers/{id}
+DELETE /api/drivers/{id}
+No body required. Supports numeric ID (e.g. 12), formatted ID (e.g. DRV-12), phone, or email.
+Removes driver profile from database and purges uploaded document storage in S3.
+Response: {"success":true,"message":"Driver profile removed successfully","driverId":"12"}
+
 FINANCE AND CUSTOMERS
 =====================
 POST /api/customers/{id}/topup

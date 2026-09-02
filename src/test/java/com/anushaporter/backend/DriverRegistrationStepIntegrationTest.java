@@ -214,7 +214,7 @@ public class DriverRegistrationStepIntegrationTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.registrationStep", is(4)));
 
-        // Final Submission: Submit application for KYC review
+        // Final Submission: Submit application - auto-approves without requiring admin approval
         Map<String, Object> finalSubmit = new HashMap<>();
         finalSubmit.put("submit", true);
 
@@ -224,12 +224,54 @@ public class DriverRegistrationStepIntegrationTest {
                         .content(objectMapper.writeValueAsString(finalSubmit)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.kycStatus", is("pending")));
+                .andExpect(jsonPath("$.kycStatus", is("approved")));
 
         Driver finalInDb = driverRepository.findByPhone(testPhone).orElseThrow();
-        assertEquals("pending", finalInDb.getKyc());
+        assertEquals("approved", finalInDb.getKyc());
+        assertEquals("approved", finalInDb.getVerificationStatus());
         assertEquals("Ramesh Kumar", finalInDb.getName());
         assertEquals("DL1234567890ABC", finalInDb.getLicenseNumber());
         assertEquals("50100012345678", finalInDb.getAccountNumber());
+    }
+
+    @Test
+    public void testAdminDeleteDriver_RemovesProfileFromDatabase() throws Exception {
+        // Create a driver in DB
+        Driver driver = new Driver();
+        driver.setName("Driver To Remove");
+        driver.setPhone("9988776655");
+        driver.setEmail("remove.me@anushaporter.com");
+        driver.setKyc("approved");
+        Driver saved = driverRepository.save(driver);
+        Long driverId = saved.getId();
+
+        // Admin deletes the driver by numeric ID
+        mockMvc.perform(delete("/api/admin/drivers/" + driverId)
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.message", containsString("Driver profile removed successfully")));
+
+        // Verify driver is removed from database
+        assertTrue(driverRepository.findById(driverId).isEmpty());
+
+        // Deleting non-existent driver returns 404
+        mockMvc.perform(delete("/api/admin/drivers/" + driverId)
+                        .header("Authorization", testToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success", is(false)));
+
+        // Create another driver and test deletion by DRV- formatted ID
+        Driver driver2 = new Driver();
+        driver2.setName("Driver Two");
+        driver2.setPhone("9988776656");
+        Driver saved2 = driverRepository.save(driver2);
+
+        mockMvc.perform(delete("/api/admin/drivers/DRV-" + saved2.getId())
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        assertTrue(driverRepository.findById(saved2.getId()).isEmpty());
     }
 }

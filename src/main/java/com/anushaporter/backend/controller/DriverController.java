@@ -346,18 +346,37 @@ public class DriverController {
         }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + id)));
     }
 
-    @DeleteMapping("/{id:[0-9]+}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
-        return repository.findById(id).<ResponseEntity<?>>map(driver -> {
-            // Clean up S3 objects
-            s3ImageService.deleteImage(driver.getProfilePhotoUri());
-            s3ImageService.deleteImage(driver.getAadhaarUri());
-            s3ImageService.deleteImage(driver.getLicenseUri());
-            s3ImageService.deleteImage(driver.getRcUri());
-            s3ImageService.deleteImage(driver.getBankPassbookUri());
+    @DeleteMapping({"/{id:[0-9]+}", "/{id:DRV-[0-9]+}"})
+    public ResponseEntity<?> delete(@PathVariable String id) {
+        Long driverId = null;
+        String cleanId = id != null ? id.trim() : "";
+        if (cleanId.toUpperCase().startsWith("DRV-")) {
+            cleanId = cleanId.substring(4).trim();
+        }
+        try {
+            driverId = Long.parseLong(cleanId);
+        } catch (NumberFormatException ignored) {}
 
+        Optional<Driver> driverOpt = driverId != null ? repository.findById(driverId) : Optional.empty();
+
+        return driverOpt.<ResponseEntity<?>>map(driver -> {
+            // Clean up S3 objects
+            if (s3ImageService != null) {
+                try { s3ImageService.deleteImage(driver.getProfilePhotoUri()); } catch (Exception ignored) {}
+                try { s3ImageService.deleteImage(driver.getAadhaarUri()); } catch (Exception ignored) {}
+                try { s3ImageService.deleteImage(driver.getLicenseUri()); } catch (Exception ignored) {}
+                try { s3ImageService.deleteImage(driver.getRcUri()); } catch (Exception ignored) {}
+                try { s3ImageService.deleteImage(driver.getBankPassbookUri()); } catch (Exception ignored) {}
+            }
+
+            Long deletedId = driver.getId();
             repository.delete(driver);
-            return ResponseEntity.ok(Map.of("success", true, "message", "Driver deleted successfully", "id", id));
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Driver profile removed successfully",
+                    "id", deletedId,
+                    "driverId", deletedId.toString()
+            ));
         }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + id)));
     }
 
