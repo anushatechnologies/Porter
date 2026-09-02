@@ -38,9 +38,6 @@ public class OrderController {
     @Autowired
     private DeliveryCompletionService deliveryCompletionService;
 
-    @Autowired
-    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
-
     /**
      * GET /api/orders
      * Returns formatted orders list for Admin Dashboard, Orders view, and Live Dispatch screen.
@@ -106,6 +103,9 @@ public class OrderController {
     public Order create(@RequestBody Order entity) {
         return repository.save(entity);
     }
+
+    @Autowired
+    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
 
     @PostMapping("/{id}/assign")
     public ResponseEntity<?> assignDriver(@PathVariable String id, @RequestBody Map<String, Object> payload) {
@@ -206,18 +206,6 @@ public class OrderController {
                 return ResponseEntity.status(409).body(conflict);
             }
 
-            // ── 2. Pre-condition Check: Driver must maintain active balance (>0) and at least 5% ride commission ──
-            com.anushaporter.backend.model.Driver driverEntity = driver != null ? driver : (driverWalletService != null ? driverWalletService.findDriverEntity(driverId != null ? driverId : driverPhone) : null);
-            if (driverEntity != null && driverWalletService != null) {
-                Map<String, Object> eligibility = driverWalletService.checkRideAcceptanceEligibility(driverEntity, order);
-                if (!Boolean.TRUE.equals(eligibility.get("canAccept"))) {
-                    eligibility.put("statusCode", 400);
-                    eligibility.put("error", "INSUFFICIENT_WALLET_BALANCE");
-                    Map<String, Object> errMap = new LinkedHashMap<>(eligibility);
-                    return ResponseEntity.status(400).body(errMap);
-                }
-            }
-
             java.time.LocalDateTime now = java.time.LocalDateTime.now();
             int rows = repository.claimOrderByIdAtomic(order.getId(), driverId, driverName, driverEmail, driverPhone, driverVehicle, now);
             if (rows == 0) {
@@ -260,32 +248,10 @@ public class OrderController {
                 pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
             }
 
-            // ── 3. Deduct 5% Platform Commission immediately upon Ride Acceptance ──
-            double fare = savedOrder.getAmount() != null && savedOrder.getAmount() > 0 ? savedOrder.getAmount() : (order.getAmount() != null ? order.getAmount() : 0.0);
-            double deductedCommission = Math.round(fare * 0.05 * 100.0) / 100.0;
-            if (driverEntity != null && driverWalletService != null && fare > 0) {
-                try {
-                    driverWalletService.deductCommissionOnRideAcceptance(
-                            String.valueOf(driverEntity.getId()),
-                            savedOrder.getBookingId() != null ? savedOrder.getBookingId() : String.valueOf(savedOrder.getId()),
-                            fare
-                    );
-                    driverEntity = driverRepository.findById(driverEntity.getId()).orElse(driverEntity);
-                } catch (Exception e) {
-                    System.err.println("[Wallet] Error deducting acceptance commission: " + e.getMessage());
-                }
-            }
-
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("success", true);
             resp.put("statusCode", 200);
             resp.put("message", "Order accepted successfully");
-            resp.put("commissionPercentage", 5.0);
-            resp.put("commissionDeducted", deductedCommission);
-            if (driverEntity != null) {
-                resp.put("walletBalance", driverEntity.getWalletBalance());
-                resp.put("driverStatus", driverEntity.getStatus());
-            }
             resp.put("order", savedOrder);
             return ResponseEntity.ok(resp);
         }
@@ -501,17 +467,6 @@ public class OrderController {
             return ResponseEntity.status(409).body(conflict);
         }
 
-        // Pre-condition Check: Driver must maintain active balance (>0) and at least 5% ride commission
-        com.anushaporter.backend.model.Driver driverEntity = driver != null ? driver : (driverWalletService != null ? driverWalletService.findDriverEntity(driverId != null ? driverId : driverPhone) : null);
-        if (driverEntity != null && driverWalletService != null) {
-            Map<String, Object> eligibility = driverWalletService.checkRideAcceptanceEligibility(driverEntity, order);
-            if (!Boolean.TRUE.equals(eligibility.get("canAccept"))) {
-                eligibility.put("statusCode", 400);
-                eligibility.put("error", "INSUFFICIENT_WALLET_BALANCE");
-                return ResponseEntity.status(400).body(eligibility);
-            }
-        }
-
         // Atomic update with race condition prevention
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
         int rows = repository.claimOrderByIdAtomic(order.getId(), driverId, driverName, driverEmail, driverPhone, driverVehicle, now);
@@ -555,60 +510,12 @@ public class OrderController {
             pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
         }
 
-        // Deduct 5% Platform Commission immediately upon Ride Acceptance
-        double fare = savedOrder.getAmount() != null && savedOrder.getAmount() > 0 ? savedOrder.getAmount() : (order.getAmount() != null ? order.getAmount() : 0.0);
-        double deductedCommission = Math.round(fare * 0.05 * 100.0) / 100.0;
-        if (driverEntity != null && driverWalletService != null && fare > 0) {
-            try {
-                driverWalletService.deductCommissionOnRideAcceptance(
-                        String.valueOf(driverEntity.getId()),
-                        savedOrder.getBookingId() != null ? savedOrder.getBookingId() : String.valueOf(savedOrder.getId()),
-                        fare
-                );
-                driverEntity = driverRepository.findById(driverEntity.getId()).orElse(driverEntity);
-            } catch (Exception e) {
-                System.err.println("[Wallet] Error deducting acceptance commission: " + e.getMessage());
-            }
-        }
-
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("statusCode", 200);
         response.put("message", "Order accepted successfully");
-        response.put("commissionPercentage", 5.0);
-        response.put("commissionDeducted", deductedCommission);
-        if (driverEntity != null) {
-            response.put("walletBalance", driverEntity.getWalletBalance());
-            response.put("driverStatus", driverEntity.getStatus());
-        }
         response.put("order", savedOrder);
         return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Pre-ride wallet check endpoint for driver.
-     * GET /api/orders/{id}/ride-wallet-check
-     */
-    @GetMapping("/{id}/ride-wallet-check")
-    public ResponseEntity<?> checkRideWallet(
-            @PathVariable String id,
-            HttpServletRequest request
-    ) {
-        Optional<Order> orderOpt = repository.findByBookingId(id);
-        if (orderOpt.isEmpty()) {
-            try { orderOpt = repository.findById(Long.valueOf(id)); } catch (Exception ignored) {}
-        }
-        if (orderOpt.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found: " + id));
-        }
-
-        com.anushaporter.backend.model.Driver driver = driverAuthService.resolveAuthenticatedDriver(request);
-        if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver not authenticated"));
-        }
-
-        Map<String, Object> check = driverWalletService.checkRideAcceptanceEligibility(driver, orderOpt.get());
-        return ResponseEntity.ok(check);
     }
 
     @GetMapping("/{id}/timeline")

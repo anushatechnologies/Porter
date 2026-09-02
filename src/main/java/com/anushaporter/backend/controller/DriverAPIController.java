@@ -58,9 +58,6 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.TripStateMachineService tripStateMachineService;
 
-    @Autowired
-    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
-
     public Driver getAuthenticatedDriver(HttpServletRequest request) {
         return driverAuthService.resolveAuthenticatedDriver(request);
     }
@@ -326,17 +323,6 @@ public class DriverAPIController {
             return ResponseEntity.status(409).body(conflict);
         }
 
-        // ── 2. Pre-condition Check: Driver must maintain active balance (>0) and at least 5% ride commission ──
-        Driver driverEntity = driver != null ? driver : (driverWalletService != null ? driverWalletService.findDriverEntity(driverId != null ? driverId : driverPhone) : null);
-        if (driverEntity != null && driverWalletService != null) {
-            Map<String, Object> eligibility = driverWalletService.checkRideAcceptanceEligibility(driverEntity, order);
-            if (!Boolean.TRUE.equals(eligibility.get("canAccept"))) {
-                eligibility.put("statusCode", 400);
-                eligibility.put("error", "INSUFFICIENT_WALLET_BALANCE");
-                return ResponseEntity.status(400).body(eligibility);
-            }
-        }
-
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
         int rows = orderRepository.claimOrderByIdAtomic(
                 order.getId(),
@@ -390,62 +376,14 @@ public class DriverAPIController {
             pushNotificationService.notifyOrderStatus(saved, saved.getStatus());
         }
 
-        // ── 3. Deduct 5% Platform Commission from Driver Wallet immediately upon Ride Acceptance ──
-        double fare = saved.getAmount() != null && saved.getAmount() > 0 ? saved.getAmount() : (order.getAmount() != null ? order.getAmount() : 0.0);
-        double deductedCommission = Math.round(fare * 0.05 * 100.0) / 100.0;
-        if (driverEntity != null && driverWalletService != null && fare > 0) {
-            try {
-                driverWalletService.deductCommissionOnRideAcceptance(
-                        String.valueOf(driverEntity.getId()),
-                        saved.getBookingId() != null ? saved.getBookingId() : String.valueOf(saved.getId()),
-                        fare
-                );
-                driverEntity = driverRepository.findById(driverEntity.getId()).orElse(driverEntity);
-            } catch (Exception e) {
-                System.err.println("[Wallet] Commission deduction on ride acceptance notice: " + e.getMessage());
-            }
-        }
-
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("statusCode", 200);
         response.put("message", "Order accepted successfully");
         response.put("bookingId", saved.getBookingId() != null ? saved.getBookingId() : bookingId);
         response.put("status", "accepted");
-        response.put("commissionPercentage", 5.0);
-        response.put("commissionDeducted", deductedCommission);
-        if (driverEntity != null) {
-            response.put("walletBalance", driverEntity.getWalletBalance());
-            response.put("driverStatus", driverEntity.getStatus());
-        }
         response.put("order", saved);
         return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Pre-ride wallet check: checks if driver has at least 5% commission of ride fare in wallet.
-     * Returns canAccept boolean and exact remainingAmount needed if balance is insufficient.
-     * GET /api/driver/orders/{bookingId}/ride-wallet-check
-     */
-    @GetMapping({ "/driver/orders/{bookingId}/ride-wallet-check", "/drivers/orders/{bookingId}/ride-wallet-check" })
-    public ResponseEntity<?> checkRideWalletEligibility(
-            HttpServletRequest request,
-            @PathVariable String bookingId) {
-        Driver driver = getAuthenticatedDriver(request);
-        if (driver == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver not authenticated"));
-        }
-
-        Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
-        if (orderOpt.isEmpty()) {
-            try { orderOpt = orderRepository.findById(Long.valueOf(bookingId)); } catch (Exception ignored) {}
-        }
-        if (orderOpt.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found: " + bookingId));
-        }
-
-        Map<String, Object> check = driverWalletService.checkRideAcceptanceEligibility(driver, orderOpt.get());
-        return ResponseEntity.ok(check);
     }
 
     /**
@@ -914,14 +852,6 @@ public class DriverAPIController {
 
         Driver saved = driverRepository.save(driver);
 
-        // If driver registration is approved/submitted, initialize registration minimum wallet balance (default ₹1000, modifiable by Admin)
-        if ("approved".equalsIgnoreCase(saved.getKyc()) || "verified".equalsIgnoreCase(saved.getKyc())) {
-            if (driverWalletService != null) {
-                driverWalletService.initializeDriverRegistrationWallet(saved);
-                saved = driverRepository.findById(saved.getId()).orElse(saved);
-            }
-        }
-
         Map<String, Object> resp = new java.util.LinkedHashMap<>();
         resp.put("success", true);
         resp.put("message", isSaveAndNext ? "Step data saved successfully" : "Driver profile created and approved successfully");
@@ -932,10 +862,6 @@ public class DriverAPIController {
         resp.put("nextStep", saved.getRegistrationStep() != null ? saved.getRegistrationStep() : 1);
         resp.put("vehicle", saved.getVehicle());
         resp.put("vehicleType", saved.getVehicleType());
-        resp.put("walletBalance", saved.getWalletBalance() != null ? saved.getWalletBalance() : 0.0);
-        if (driverWalletService != null) {
-            resp.put("registrationMinBalance", driverWalletService.getRegistrationMinBalance());
-        }
         resp.put("driver", saved);
 
         return ResponseEntity.ok(resp);

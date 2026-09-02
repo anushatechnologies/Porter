@@ -81,7 +81,7 @@ DELETE /api/pricing/{id}
   Response: { "success": true }
 
 --------------------------------------------------------------
-5. Finance & Wallet Management
+5. Finance & Payout Settlement
 --------------------------------------------------------------
 GET /api/payouts
   Response: [ { payout details... }, ... ]
@@ -90,50 +90,9 @@ POST /api/payouts/{id}/release
   Request: {}
   Response: { "success": true, "status": "settled" }
 
-PUT /api/admin/drivers/{id}/wallet (or PUT /api/drivers/{id}/wallet)
-  Request: { "walletBalance": 500.0, "action": "set", "reason": "Admin adjustment" }
-  OR: { "amount": 200.0, "action": "credit", "reason": "Trip bonus" }
-  OR: { "amount": 50.0, "action": "debit", "reason": "Penalty" }
-  Response: { "success": true, "driverId": "DRV-12", "walletBalance": 500.0, "status": "online", "transactionId": "TXN_W_..." }
-
-PUT /api/admin/customers/{id}/wallet (or PUT /api/customers/{id}/wallet)
-  Request: { "walletBalance": 350.0, "action": "set" }
-  Response: { "success": true, "id": 12, "walletBalance": 350.0, "wallet": 350.0 }
-
 POST /api/customers/{id}/topup
   Request: { "amount": 500.0 }
   Response: { "success": true, "wallet": 500.0 }
-
-POST /api/admin/wallet/modify
-  Request: { "userType": "driver"|"customer", "id": "12", "amount": 500.0, "action": "set" }
-  Response: { "success": true, "walletBalance": 500.0, ... }
-
-GET /api/admin/wallet/minimum-balance
-  Response: { "success": true, "minRequiredBalance": 1000.0, "minimumBalance": 1000.0 }
-
-PUT /api/admin/wallet/minimum-balance
-  Request: { "minimumBalance": 1000.0, "applyToExistingDrivers": false }
-  Response: { "success": true, "minRequiredBalance": 1000.0, "message": "Minimum wallet balance updated to ₹1000.0 for all drivers" }
-
-GET /api/admin/settings/wallet/registration-minimum-balance (or GET /api/admin/wallet/registration-minimum-balance)
-  Response: { "success": true, "registrationMinBalance": 1000.0 }
-
-PUT /api/admin/settings/wallet/registration-minimum-balance (or PUT /api/admin/wallet/registration-minimum-balance)
-  Request: { "registrationMinBalance": 1000.0 }
-  Response: { "success": true, "registrationMinBalance": 1000.0, "message": "Driver registration minimum balance updated successfully to ₹1000.0" }
-
-GET /api/driver/orders/{bookingId}/ride-wallet-check
-  Response: { "success": true, "canAccept": false, "requiredCommission": 25.0, "currentWalletBalance": 10.0, "remainingAmount": 15.0, "rechargeRequired": true }
-
-POST /api/driver/orders/{bookingId}/recharge-remaining
-  Request: { "amount": 15.0, "paymentId": "pay_xyz" }
-  Response: { "success": true, "rechargedAmount": 15.0, "newWalletBalance": 25.0, "canAccept": true }
-
-POST /api/driver/orders/{bookingId}/accept
-  Behavior: Pre-validates balance >= 5% ride commission and balance > 0. Immediately deducts 5% on acceptance.
-  Response: { "success": true, "commissionDeducted": 25.0, "walletBalance": 0.0, "driverStatus": "offline", ... }
-
-
 
 --------------------------------------------------------------
 6. Support Ticketing & Chat
