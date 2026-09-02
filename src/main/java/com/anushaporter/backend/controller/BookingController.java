@@ -467,6 +467,15 @@ public class BookingController {
             }
             order.setCancellationReason(reason);
 
+            // Refund 5% commission to driver if previously deducted upon ride acceptance
+            String assignedDriverId = order.getDriverId();
+            String bookingIdStr = order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId());
+            if (assignedDriverId != null && !assignedDriverId.isBlank() && driverWalletService != null) {
+                try {
+                    driverWalletService.refundCommissionOnRideCancellation(assignedDriverId, bookingIdStr);
+                } catch (Exception ignored) {}
+            }
+
             order.setStatus("cancelled");
             // Unassign driver
             order.setDriverId(null);
@@ -528,6 +537,16 @@ public class BookingController {
             }
 
             order.setCancellationReason(reason);
+
+            // Refund 5% commission to driver if previously deducted upon ride acceptance
+            String assignedDriverId = order.getDriverId();
+            String bookingIdStr = order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId());
+            if (assignedDriverId != null && !assignedDriverId.isBlank() && driverWalletService != null) {
+                try {
+                    driverWalletService.refundCommissionOnRideCancellation(assignedDriverId, bookingIdStr);
+                } catch (Exception ignored) {}
+            }
+
             order.setStatus("cancelled");
             order.setDriverId(null);
             order.setDriverName(null);

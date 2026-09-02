@@ -33,6 +33,9 @@ public class DriverOfferService {
     @Autowired(required = false)
     private PushNotificationService pushNotificationService;
 
+    @Autowired(required = false)
+    private DriverWalletService driverWalletService;
+
     public List<DriverOffer> createAndDispatchOffers(Order order, List<DriverRankingService.RankedDriver> rankedDrivers, double radiusTierKm, int timeoutSeconds) {
         if (order == null || rankedDrivers == null || rankedDrivers.isEmpty()) {
             return List.of();
@@ -175,6 +178,22 @@ public class DriverOfferService {
         String driverPhone = driver.getPhone();
         String driverVehicle = driver.getVehicleNumber();
 
+        // Check if driver has sufficient wallet balance (at least 5% commission of ride fare and balance > 0)
+        Order order = orderRepository.findByBookingId(bookingId).orElse(null);
+        if (order != null && driverWalletService != null) {
+            Map<String, Object> eligibility = driverWalletService.checkRideAcceptanceEligibility(driver, order);
+            if (!Boolean.TRUE.equals(eligibility.get("canAccept"))) {
+                response.put("success", false);
+                response.put("status", "INSUFFICIENT_WALLET_BALANCE");
+                response.put("message", eligibility.get("message"));
+                response.put("requiredCommission", eligibility.get("requiredCommission"));
+                response.put("currentWalletBalance", eligibility.get("currentWalletBalance"));
+                response.put("remainingAmount", eligibility.get("remainingAmount"));
+                response.put("rechargeRequired", true);
+                return response;
+            }
+        }
+
         // Perform ATOMIC assignment check
         int rowsUpdated = orderRepository.atomicAssignDriverToBooking(
                 bookingId,
@@ -201,6 +220,17 @@ public class DriverOfferService {
             Order assignedOrder = orderRepository.findByBookingId(bookingId).orElse(null);
             if (pushNotificationService != null && assignedOrder != null) {
                 pushNotificationService.notifyOrderStatus(assignedOrder, "ASSIGNED");
+            }
+
+            // Deduct 5% platform commission immediately upon ride acceptance
+            double fare = assignedOrder != null && assignedOrder.getAmount() != null && assignedOrder.getAmount() > 0
+                    ? assignedOrder.getAmount() : (order != null && order.getAmount() != null ? order.getAmount() : 0.0);
+            if (driverWalletService != null && fare > 0) {
+                try {
+                    driverWalletService.deductCommissionOnRideAcceptance(driverIdStr, bookingId, fare);
+                } catch (Exception e) {
+                    log.warn("Commission deduction on offer win notice: {}", e.getMessage());
+                }
             }
 
             response.put("success", true);

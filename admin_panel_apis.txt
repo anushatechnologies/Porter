@@ -115,6 +115,25 @@ PUT /api/admin/wallet/minimum-balance
   Request: { "minimumBalance": 1000.0, "applyToExistingDrivers": false }
   Response: { "success": true, "minRequiredBalance": 1000.0, "message": "Minimum wallet balance updated to ₹1000.0 for all drivers" }
 
+GET /api/admin/settings/wallet/registration-minimum-balance (or GET /api/admin/wallet/registration-minimum-balance)
+  Response: { "success": true, "registrationMinBalance": 1000.0 }
+
+PUT /api/admin/settings/wallet/registration-minimum-balance (or PUT /api/admin/wallet/registration-minimum-balance)
+  Request: { "registrationMinBalance": 1000.0 }
+  Response: { "success": true, "registrationMinBalance": 1000.0, "message": "Driver registration minimum balance updated successfully to ₹1000.0" }
+
+GET /api/driver/orders/{bookingId}/ride-wallet-check
+  Response: { "success": true, "canAccept": false, "requiredCommission": 25.0, "currentWalletBalance": 10.0, "remainingAmount": 15.0, "rechargeRequired": true }
+
+POST /api/driver/orders/{bookingId}/recharge-remaining
+  Request: { "amount": 15.0, "paymentId": "pay_xyz" }
+  Response: { "success": true, "rechargedAmount": 15.0, "newWalletBalance": 25.0, "canAccept": true }
+
+POST /api/driver/orders/{bookingId}/accept
+  Behavior: Pre-validates balance >= 5% ride commission and balance > 0. Immediately deducts 5% on acceptance.
+  Response: { "success": true, "commissionDeducted": 25.0, "walletBalance": 0.0, "driverStatus": "offline", ... }
+
+
 
 --------------------------------------------------------------
 6. Support Ticketing & Chat

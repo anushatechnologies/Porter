@@ -40,7 +40,8 @@ public class DriverWalletService {
     private DriverRepository driverRepository;
 
     private static final double DEFAULT_COMMISSION_PERCENTAGE = 5.0; // 5% Platform Commission
-    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 1000.0; // Default minimum balance ₹1000.0
+    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 1000.0; // Platform minimum balance setting ₹1000.0
+    private static final double DEFAULT_REGISTRATION_MIN_BALANCE = 1000.0; // Registration minimum balance ₹1000.0 (Admin modifiable)
 
     public DriverWallet getWallet(String driverId) {
         return driverWalletRepository.findByDriverId(driverId).orElseGet(() -> {
@@ -48,6 +49,20 @@ public class DriverWalletService {
             newWallet.setDriverId(driverId);
             return driverWalletRepository.save(newWallet);
         });
+    }
+
+    public double getRegistrationMinBalance() {
+        if (globalSettingsRepository != null) {
+            Optional<GlobalSettings> regBalOpt = globalSettingsRepository.findBySettingKey("driver_registration_min_balance");
+            if (regBalOpt.isPresent() && regBalOpt.get().getSettingValue() != null) {
+                try { return Double.parseDouble(regBalOpt.get().getSettingValue()); } catch (Exception ignored) {}
+            }
+        }
+        return DEFAULT_REGISTRATION_MIN_BALANCE;
+    }
+
+    public void updateRegistrationMinBalance(double amount) {
+        saveSetting("driver_registration_min_balance", String.valueOf(amount));
     }
 
     /**
@@ -58,6 +73,7 @@ public class DriverWalletService {
 
         double commissionPercentage = DEFAULT_COMMISSION_PERCENTAGE;
         double minRequiredBalance = DEFAULT_MIN_REQUIRED_BALANCE;
+        double registrationMinBalance = getRegistrationMinBalance();
         boolean walletRequiredForRides = true;
         boolean autoOfflineWhenBalanceInsufficient = true;
 
@@ -86,6 +102,8 @@ public class DriverWalletService {
         settings.put("commissionPercentage", commissionPercentage);
         settings.put("minRequiredBalance", minRequiredBalance);
         settings.put("minimumBalance", minRequiredBalance);
+        settings.put("registrationMinBalance", registrationMinBalance);
+        settings.put("driverRegistrationMinBalance", registrationMinBalance);
         settings.put("walletRequiredForRides", walletRequiredForRides);
         settings.put("autoOfflineWhenBalanceInsufficient", autoOfflineWhenBalanceInsufficient);
         return settings;
@@ -112,6 +130,14 @@ public class DriverWalletService {
             saveSetting("wallet_min_required_balance", String.valueOf(minBalObj));
         }
 
+        Object regBalObj = payload.get("registrationMinBalance");
+        if (regBalObj == null) regBalObj = payload.get("driverRegistrationMinBalance");
+        if (regBalObj != null) {
+            try {
+                updateRegistrationMinBalance(Double.parseDouble(String.valueOf(regBalObj)));
+            } catch (Exception ignored) {}
+        }
+
         if (payload.containsKey("walletRequiredForRides")) {
             saveSetting("wallet_required_for_rides", String.valueOf(payload.get("walletRequiredForRides")));
         }
@@ -120,6 +146,46 @@ public class DriverWalletService {
         }
 
         return getAdminWalletSettings();
+    }
+
+    /**
+     * Initializes a driver's wallet with the required registration minimum balance (default ₹1,000)
+     * and sets driver status to 'online' (active).
+     */
+    @Transactional
+    public void initializeDriverRegistrationWallet(Driver driver) {
+        if (driver == null || driver.getId() == null) return;
+        double minBalance = getRegistrationMinBalance();
+        double currentBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+
+        if (currentBalance < minBalance) {
+            driver.setWalletBalance(minBalance);
+            driver.setStatus("online");
+            driverRepository.save(driver);
+
+            DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+            wallet.setAvailableBalance(minBalance);
+            driverWalletRepository.save(wallet);
+
+            String txId = "TXN_REG_" + System.currentTimeMillis();
+            WalletTransaction tx = new WalletTransaction();
+            tx.setId(txId);
+            tx.setDriverId(String.valueOf(driver.getId()));
+            tx.setTransactionType("REGISTRATION_MINIMUM_CREDIT");
+            tx.setGrossAmount(minBalance);
+            tx.setCommissionAmount(0.0);
+            tx.setAmount(minBalance - currentBalance);
+            tx.setBalanceBefore(currentBalance);
+            tx.setBalanceAfter(minBalance);
+            tx.setStatus("SUCCESS");
+            tx.setReferenceId("REGISTRATION_ONBOARDING");
+            tx.setDescription("Initial registration minimum balance maintained (₹" + minBalance + ")");
+            tx.setCreatedAt(LocalDateTime.now());
+            walletTransactionRepository.save(tx);
+        } else if (currentBalance > 0.0) {
+            driver.setStatus("online");
+            driverRepository.save(driver);
+        }
     }
 
     /**
@@ -416,9 +482,187 @@ public class DriverWalletService {
     }
 
     /**
-     * Assigns order to driver after verifying active wallet balance (wallet_balance > 0.00).
-     * DO NOT deduct wallet balance or create wallet_transactions here.
+     * Checks if a driver has sufficient wallet balance (at least 5% commission of ride fare and balance > 0)
+     * to accept a specific ride. Computes exact remaining amount if balance is insufficient.
      */
+    public Map<String, Object> checkRideAcceptanceEligibility(Driver driver, Order order) {
+        Map<String, Object> res = new LinkedHashMap<>();
+        if (driver == null || order == null) {
+            res.put("canAccept", false);
+            res.put("message", "Driver or order not found");
+            return res;
+        }
+
+        double fare = order.getAmount() != null && order.getAmount() > 0 ? order.getAmount() : 0.0;
+        double commissionPercentage = getCommissionPercentage();
+        double requiredCommission = Math.round(fare * (commissionPercentage / 100.0) * 100.0) / 100.0;
+
+        double currentBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+        if (currentBalance <= 0.0) {
+            DriverWallet wallet = driverWalletRepository.findByDriverId(String.valueOf(driver.getId())).orElse(null);
+            if (wallet != null && wallet.getAvailableBalance() != null && wallet.getAvailableBalance() > 0.0) {
+                currentBalance = wallet.getAvailableBalance();
+            }
+        }
+
+        boolean active = currentBalance > 0.0;
+        boolean hasSufficientCommission = currentBalance >= requiredCommission;
+        boolean canAccept = active && hasSufficientCommission;
+
+        double remainingAmount = 0.0;
+        if (!canAccept) {
+            if (currentBalance < 0.0) {
+                remainingAmount = Math.round((Math.abs(currentBalance) + requiredCommission) * 100.0) / 100.0;
+            } else if (currentBalance == 0.0 && requiredCommission == 0.0) {
+                remainingAmount = 1.0;
+            } else {
+                remainingAmount = Math.round(Math.max(0.0, requiredCommission - currentBalance) * 100.0) / 100.0;
+            }
+        }
+
+        res.put("success", true);
+        res.put("canAccept", canAccept);
+        res.put("active", active);
+        res.put("orderId", order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId()));
+        res.put("orderFare", fare);
+        res.put("commissionPercentage", commissionPercentage);
+        res.put("requiredCommission", requiredCommission);
+        res.put("currentWalletBalance", currentBalance);
+        res.put("remainingAmount", remainingAmount);
+        res.put("rechargeRequired", !canAccept);
+
+        if (canAccept) {
+            res.put("message", "Eligible to accept ride. 5% platform commission (₹" + requiredCommission + ") will be deducted upon acceptance.");
+        } else if (!active) {
+            res.put("message", "Wallet balance is ₹" + currentBalance + ". You must maintain a positive balance of at least ₹" + (remainingAmount > 0 ? remainingAmount : "1.00") + " to accept this ride.");
+        } else {
+            res.put("message", "Insufficient wallet balance. You need at least ₹" + requiredCommission + " (5% commission) to accept this ride. Current balance: ₹" + currentBalance + ". Please add ₹" + remainingAmount + " to accept.");
+        }
+
+        return res;
+    }
+
+    /**
+     * Deducts 5% platform commission immediately upon ride acceptance.
+     * Updates Driver and DriverWallet balances.
+     * If wallet balance <= 0, automatically sets driver status to offline.
+     */
+    @Transactional
+    public WalletTransaction deductCommissionOnRideAcceptance(String driverIdStr, String orderId, double orderFare) {
+        Driver driver = findDriverEntity(driverIdStr);
+        if (driver == null) {
+            throw new IllegalArgumentException("Driver not found: " + driverIdStr);
+        }
+
+        // Idempotency: prevent double deduction if driver already accepted this order
+        if (orderId != null && !orderId.isBlank()) {
+            Optional<WalletTransaction> existingTx = walletTransactionRepository
+                    .findFirstByDriverIdAndOrderIdAndTransactionType(String.valueOf(driver.getId()), orderId, "COMMISSION_DEDUCTION");
+            if (existingTx.isPresent()) {
+                return existingTx.get();
+            }
+        }
+
+        double commissionPercentage = getCommissionPercentage();
+        double commission = Math.round(orderFare * (commissionPercentage / 100.0) * 100.0) / 100.0;
+
+        double balanceBefore = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+        if (balanceBefore < commission || balanceBefore <= 0.0) {
+            double remaining = Math.round(Math.max(0.0, commission - balanceBefore) * 100.0) / 100.0;
+            throw new IllegalStateException("Insufficient wallet balance to accept this ride. Required 5% commission: ₹" + commission + ", Current: ₹" + balanceBefore + ". Please add ₹" + remaining + ".");
+        }
+
+        double balanceAfter = Math.round((balanceBefore - commission) * 100.0) / 100.0;
+        driver.setWalletBalance(balanceAfter);
+        if (balanceAfter <= 0.0) {
+            driver.setStatus("offline");
+        } else {
+            driver.setStatus("online");
+        }
+        driverRepository.save(driver);
+
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        wallet.setAvailableBalance(balanceAfter);
+        wallet.setPlatformCommission((wallet.getPlatformCommission() != null ? wallet.getPlatformCommission() : 0.0) + commission);
+        wallet.setTotalEarned((wallet.getTotalEarned() != null ? wallet.getTotalEarned() : 0.0) + orderFare);
+        driverWalletRepository.save(wallet);
+
+        String txId = "TXN_W_" + System.currentTimeMillis();
+        WalletTransaction commTx = new WalletTransaction();
+        commTx.setId(txId);
+        commTx.setDriverId(String.valueOf(driver.getId()));
+        commTx.setOrderId(orderId);
+        commTx.setTransactionType("COMMISSION_DEDUCTION");
+        commTx.setGrossAmount(orderFare);
+        commTx.setCommissionAmount(commission);
+        commTx.setAmount(-commission);
+        commTx.setBalanceBefore(balanceBefore);
+        commTx.setBalanceAfter(balanceAfter);
+        commTx.setStatus("SUCCESS");
+        commTx.setDescription("5% Platform Commission Cut on Ride Acceptance");
+        commTx.setCreatedAt(LocalDateTime.now());
+        return walletTransactionRepository.save(commTx);
+    }
+
+    /**
+     * Refunds 5% commission to driver's wallet if an accepted ride is cancelled.
+     */
+    @Transactional
+    public WalletTransaction refundCommissionOnRideCancellation(String driverIdStr, String orderId) {
+        if (orderId == null || orderId.isBlank()) return null;
+        Driver driver = findDriverEntity(driverIdStr);
+        if (driver == null) return null;
+
+        Optional<WalletTransaction> deductionTxOpt = walletTransactionRepository
+                .findFirstByDriverIdAndOrderIdAndTransactionType(String.valueOf(driver.getId()), orderId, "COMMISSION_DEDUCTION");
+        if (deductionTxOpt.isEmpty()) {
+            return null; // No commission was deducted for this order
+        }
+
+        Optional<WalletTransaction> refundTxOpt = walletTransactionRepository
+                .findFirstByDriverIdAndOrderIdAndTransactionType(String.valueOf(driver.getId()), orderId, "COMMISSION_REFUND");
+        if (refundTxOpt.isPresent()) {
+            return refundTxOpt.get(); // Idempotent: already refunded
+        }
+
+        WalletTransaction deductionTx = deductionTxOpt.get();
+        double refundAmount = deductionTx.getCommissionAmount() != null && deductionTx.getCommissionAmount() > 0
+                ? deductionTx.getCommissionAmount()
+                : (deductionTx.getAmount() != null ? Math.abs(deductionTx.getAmount()) : 0.0);
+
+        if (refundAmount <= 0) return null;
+
+        double balanceBefore = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+        double balanceAfter = Math.round((balanceBefore + refundAmount) * 100.0) / 100.0;
+
+        driver.setWalletBalance(balanceAfter);
+        if (balanceAfter > 0.0) {
+            driver.setStatus("online");
+        }
+        driverRepository.save(driver);
+
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        wallet.setAvailableBalance(balanceAfter);
+        wallet.setPlatformCommission(Math.max(0.0, (wallet.getPlatformCommission() != null ? wallet.getPlatformCommission() : 0.0) - refundAmount));
+        driverWalletRepository.save(wallet);
+
+        String txId = "TXN_W_REF_" + System.currentTimeMillis();
+        WalletTransaction refundTx = new WalletTransaction();
+        refundTx.setId(txId);
+        refundTx.setDriverId(String.valueOf(driver.getId()));
+        refundTx.setOrderId(orderId);
+        refundTx.setTransactionType("COMMISSION_REFUND");
+        refundTx.setGrossAmount(deductionTx.getGrossAmount());
+        refundTx.setCommissionAmount(0.0);
+        refundTx.setAmount(refundAmount);
+        refundTx.setBalanceBefore(balanceBefore);
+        refundTx.setBalanceAfter(balanceAfter);
+        refundTx.setStatus("SUCCESS");
+        refundTx.setDescription("5% Platform Commission Refund for Cancelled Ride");
+        refundTx.setCreatedAt(LocalDateTime.now());
+        return walletTransactionRepository.save(refundTx);
+    }
+
     @Transactional
     public Map<String, Object> assignOrder(Order order, Driver driver) {
         DriverWallet wallet = getWallet(String.valueOf(driver.getId()));

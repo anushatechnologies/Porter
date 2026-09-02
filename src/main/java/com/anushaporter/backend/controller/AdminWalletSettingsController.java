@@ -147,5 +147,53 @@ public class AdminWalletSettingsController {
 
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * GET /api/admin/settings/wallet/registration-minimum-balance
+     * Returns current minimum balance required/maintained for driver registration (default 1000.0).
+     */
+    @GetMapping("/registration-minimum-balance")
+    public ResponseEntity<?> getRegistrationMinimumBalance() {
+        double regMin = driverWalletService.getRegistrationMinBalance();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "registrationMinBalance", regMin,
+                "driverRegistrationMinBalance", regMin
+        ));
+    }
+
+    /**
+     * PUT or POST /api/admin/settings/wallet/registration-minimum-balance
+     * Admin modifies the driver registration minimum balance.
+     * Payload: { "registrationMinBalance": 1000.0 }
+     */
+    @RequestMapping(value = "/registration-minimum-balance", method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
+    public ResponseEntity<?> updateRegistrationMinimumBalance(@RequestBody Map<String, Object> payload) {
+        Object valObj = payload.get("registrationMinBalance");
+        if (valObj == null) valObj = payload.get("driverRegistrationMinBalance");
+        if (valObj == null) valObj = payload.get("minimumBalance");
+        if (valObj == null) valObj = payload.get("amount");
+
+        if (valObj == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Registration minimum balance amount is required"));
+        }
+
+        double amount;
+        try {
+            amount = Double.parseDouble(String.valueOf(valObj));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid registration minimum balance amount"));
+        }
+
+        driverWalletService.updateRegistrationMinBalance(amount);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "registrationMinBalance", amount,
+                "driverRegistrationMinBalance", amount,
+                "message", "Driver registration minimum balance updated successfully to ₹" + amount
+        ));
+    }
 }
+
 

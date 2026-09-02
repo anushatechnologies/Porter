@@ -404,5 +404,50 @@ public class AdminAPIController {
 
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * GET /api/admin/wallet/registration-minimum-balance
+     */
+    @GetMapping("/wallet/registration-minimum-balance")
+    public ResponseEntity<?> getRegistrationMinimumBalanceAdmin() {
+        double regMin = driverWalletService.getRegistrationMinBalance();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "registrationMinBalance", regMin,
+                "driverRegistrationMinBalance", regMin
+        ));
+    }
+
+    /**
+     * PUT or POST /api/admin/wallet/registration-minimum-balance
+     */
+    @RequestMapping(value = "/wallet/registration-minimum-balance", method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
+    public ResponseEntity<?> updateRegistrationMinimumBalanceAdmin(@RequestBody Map<String, Object> payload) {
+        Object valObj = payload.get("registrationMinBalance");
+        if (valObj == null) valObj = payload.get("driverRegistrationMinBalance");
+        if (valObj == null) valObj = payload.get("minimumBalance");
+        if (valObj == null) valObj = payload.get("amount");
+
+        if (valObj == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Registration minimum balance amount is required"));
+        }
+
+        double amount;
+        try {
+            amount = Double.parseDouble(String.valueOf(valObj));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid registration minimum balance amount"));
+        }
+
+        driverWalletService.updateRegistrationMinBalance(amount);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "registrationMinBalance", amount,
+                "driverRegistrationMinBalance", amount,
+                "message", "Driver registration minimum balance updated successfully to ₹" + amount
+        ));
+    }
 }
+
 
