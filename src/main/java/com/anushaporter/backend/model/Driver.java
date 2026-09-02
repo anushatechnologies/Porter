@@ -31,7 +31,12 @@ public class Driver {
     private String vehicleNumber;
     private String rcNumber;
     private String aadhaarNumber;
+
+    @Column(name = "license_number", length = 100)
     private String licenseNumber;
+
+    @Column(name = "registration_step")
+    private Integer registrationStep = 1;
 
     private String addressLine1;
     private String city;
@@ -151,5 +156,12 @@ public class Driver {
     }
     public void setWalletBalance(Double walletBalance) {
         this.walletBalance = walletBalance != null ? walletBalance : 0.0;
+    }
+
+    public Integer getRegistrationStep() {
+        return registrationStep != null ? registrationStep : 1;
+    }
+    public void setRegistrationStep(Integer registrationStep) {
+        this.registrationStep = registrationStep;
     }
 }

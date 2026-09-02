@@ -101,6 +101,7 @@ public class DriverAPIController {
         map.put("status", driver.getStatus() != null ? driver.getStatus().toLowerCase() : "offline");
         map.put("kyc", driver.getKyc() != null ? driver.getKyc() : "pending");
         map.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "pending");
+        map.put("registrationStep", driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
         map.put("rating", driver.getRating() != null ? driver.getRating() : "4.8");
         String vType = driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType()
                 : (driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle() : "Vehicle");
@@ -634,8 +635,9 @@ public class DriverAPIController {
         }
     }
 
-    // B. Submit Registration
-    @PostMapping("/drivers/register")
+    // B. Submit Registration / Save & Next
+    @PostMapping({ "/drivers/register", "/driver/register", "/drivers/register/step", "/driver/register/step",
+            "/drivers/register/save-and-next", "/driver/register/save-and-next" })
     public ResponseEntity<?> registerDriver(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
         AppUser appUser = getAuthenticatedAppUser(request);
         if (appUser == null) {
@@ -644,14 +646,45 @@ public class DriverAPIController {
         }
 
         String phone = appUser.getPhone();
-        Driver driver = driverRepository.findByPhone(phone).orElse(new Driver());
+        Driver driver = driverRepository.findByPhone(phone).orElse(null);
+        if (driver == null && appUser.getEmail() != null && !appUser.getEmail().isBlank()) {
+            driver = driverRepository.findByEmail(appUser.getEmail()).orElse(null);
+        }
+        if (driver == null) {
+            driver = new Driver();
+            driver.setPhone(phone);
+            driver.setEmail(appUser.getEmail());
+            driver.setStatus("offline");
+            driver.setRegistrationStep(1);
+        }
 
-        // Check if KYC application already exists (HTTP 409)
+        String uri = request != null ? request.getRequestURI() : null;
+        boolean isSaveAndNext = Boolean.TRUE.equals(payload.get("saveAndNext"))
+                || Boolean.TRUE.equals(payload.get("save_and_next"))
+                || Boolean.TRUE.equals(payload.get("isSaveAndNext"))
+                || "save_and_next".equalsIgnoreCase(String.valueOf(payload.get("action")))
+                || "saveAndNext".equalsIgnoreCase(String.valueOf(payload.get("action")))
+                || Boolean.TRUE.equals(payload.get("draft"))
+                || Boolean.TRUE.equals(payload.get("isDraft"))
+                || (uri != null && (uri.endsWith("/save-and-next") || uri.endsWith("/step")));
+
+        // Check if KYC application already approved or verified (HTTP 409)
         if (driver.getId() != null && driver.getKyc() != null &&
-                ("pending".equalsIgnoreCase(driver.getKyc()) || "verified".equalsIgnoreCase(driver.getKyc())
-                        || "approved".equalsIgnoreCase(driver.getKyc()))) {
+                ("verified".equalsIgnoreCase(driver.getKyc()) || "approved".equalsIgnoreCase(driver.getKyc()))) {
             return ResponseEntity.status(409).body(
-                    Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists."));
+                    Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists and is approved."));
+        }
+
+        // If KYC is already pending review and this is a new submit attempt (not save-and-next / draft resume)
+        if (!isSaveAndNext && driver.getId() != null && driver.getKyc() != null
+                && "pending".equalsIgnoreCase(driver.getKyc())) {
+            boolean isUpdate = Boolean.TRUE.equals(payload.get("update"))
+                    || Boolean.TRUE.equals(payload.get("allowUpdate"))
+                    || "pending".equalsIgnoreCase(text(payload, "kyc"));
+            if (!isUpdate) {
+                return ResponseEntity.status(409).body(
+                        Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists."));
+            }
         }
 
         String name = text(payload, "name");
@@ -683,9 +716,13 @@ public class DriverAPIController {
             return ResponseEntity.badRequest()
                     .body(Map.of("success", false, "message", "Bank Account number must contain 9 to 18 digits."));
         }
+        // Driving licence validation: only numbers and alphabets up to 100 characters
+        if (licenseNumber != null && !licenseNumber.matches("^[a-zA-Z0-9]{1,100}$")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message",
+                    "Driving licence must contain only numbers and alphabets (up to 100 characters)."));
+        }
 
         // ── Vehicle type validation ──────────────────────────────────────────
-        // If vehicleId is provided, verify it exists and is active in the DB
         String vehicleId = text(payload, "vehicleId");
         if (vehicleId != null && !vehicleId.isBlank() && vehicleTypeRepository != null) {
             boolean isValid = vehicleTypeRepository
@@ -706,29 +743,40 @@ public class DriverAPIController {
         String resolvedVehicle = vehicleVal != null ? vehicleVal
                 : (vehicleTypeVal != null ? vehicleTypeVal
                         : (vehicle_typeVal != null ? vehicle_typeVal
-                                : (vehicleNameVal != null ? vehicleNameVal : "Vehicle")));
+                                : (vehicleNameVal != null ? vehicleNameVal : null)));
 
-        driver.setPhone(phone);
-        driver.setEmail(text(payload, "email") != null ? text(payload, "email") : appUser.getEmail());
-        driver.setName(name);
-        driver.setDob(text(payload, "dob"));
-        driver.setGender(text(payload, "gender"));
-        driver.setVehicle(resolvedVehicle);
-        driver.setVehicleType(resolvedVehicle);
-        driver.setVehicleNumber(text(payload, "vehicleNumber"));
-        driver.setAadhaarNumber(aadhaar);
-        driver.setRcNumber(rcNumber);
-        driver.setLicenseNumber(licenseNumber);
-        driver.setAddressLine1(text(payload, "addressLine1"));
-        driver.setCity(text(payload, "city"));
-        driver.setState(text(payload, "state"));
-        driver.setPincode(pincode);
-        driver.setBankName(text(payload, "bankName"));
-        driver.setAccountHolderName(text(payload, "accountHolderName"));
-        driver.setAccountNumber(accountNumber);
-        driver.setIfscCode(ifsc);
-        driver.setKyc("pending");
-        driver.setStatus("offline"); // initial status
+        // Non-destructive field updates (preserve existing data across steps)
+        if (phone != null && !phone.isBlank()) driver.setPhone(phone);
+        if (text(payload, "email") != null) {
+            driver.setEmail(text(payload, "email"));
+        } else if (driver.getEmail() == null || driver.getEmail().isBlank()) {
+            driver.setEmail(appUser.getEmail());
+        }
+
+        if (name != null) driver.setName(name);
+        if (text(payload, "dob") != null) driver.setDob(text(payload, "dob"));
+        if (text(payload, "gender") != null) driver.setGender(text(payload, "gender"));
+
+        if (resolvedVehicle != null) {
+            driver.setVehicle(resolvedVehicle);
+            driver.setVehicleType(resolvedVehicle);
+        } else if (driver.getVehicle() == null) {
+            driver.setVehicle("Vehicle");
+            driver.setVehicleType("Vehicle");
+        }
+
+        if (text(payload, "vehicleNumber") != null) driver.setVehicleNumber(text(payload, "vehicleNumber"));
+        if (rcNumber != null) driver.setRcNumber(rcNumber);
+        if (aadhaar != null) driver.setAadhaarNumber(aadhaar);
+        if (licenseNumber != null) driver.setLicenseNumber(licenseNumber);
+        if (text(payload, "addressLine1") != null) driver.setAddressLine1(text(payload, "addressLine1"));
+        if (text(payload, "city") != null) driver.setCity(text(payload, "city"));
+        if (text(payload, "state") != null) driver.setState(text(payload, "state"));
+        if (pincode != null) driver.setPincode(pincode);
+        if (text(payload, "bankName") != null) driver.setBankName(text(payload, "bankName"));
+        if (text(payload, "accountHolderName") != null) driver.setAccountHolderName(text(payload, "accountHolderName"));
+        if (accountNumber != null) driver.setAccountNumber(accountNumber);
+        if (ifsc != null) driver.setIfscCode(ifsc);
 
         // Process all KYC documents to S3
         @SuppressWarnings("unchecked")
@@ -764,19 +812,113 @@ public class DriverAPIController {
             driver.setBankPassbookUri(s3ImageService.processAndUploadImageUri(bankPassbookInput, "bank-passbook"));
         }
 
+        // Registration step tracking
+        Integer stepParam = null;
+        if (payload.get("step") instanceof Number) {
+            stepParam = ((Number) payload.get("step")).intValue();
+        } else if (payload.get("currentStep") instanceof Number) {
+            stepParam = ((Number) payload.get("currentStep")).intValue();
+        } else if (payload.get("registrationStep") instanceof Number) {
+            stepParam = ((Number) payload.get("registrationStep")).intValue();
+        } else if (text(payload, "step") != null) {
+            try { stepParam = Integer.parseInt(text(payload, "step")); } catch (Exception ignored) {}
+        }
+
+        if (isSaveAndNext) {
+            int currentStepVal = stepParam != null ? stepParam : (driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
+            driver.setRegistrationStep(currentStepVal + 1);
+            if (driver.getKyc() == null || "draft".equalsIgnoreCase(driver.getKyc()) || "in_progress".equalsIgnoreCase(driver.getKyc())) {
+                driver.setKyc("draft");
+            }
+        } else {
+            if (stepParam != null) {
+                driver.setRegistrationStep(stepParam);
+            }
+            boolean isFinalSubmit = Boolean.TRUE.equals(payload.get("submit"))
+                    || Boolean.TRUE.equals(payload.get("isFinalSubmit"))
+                    || "submit".equalsIgnoreCase(String.valueOf(payload.get("action")));
+            if (isFinalSubmit || (!isSaveAndNext && (driver.getKyc() == null || !"draft".equalsIgnoreCase(text(payload, "kyc"))))) {
+                driver.setKyc("pending");
+            } else if (driver.getKyc() == null) {
+                driver.setKyc("draft");
+            }
+        }
+
+        if (driver.getStatus() == null) {
+            driver.setStatus("offline");
+        }
+
         Driver saved = driverRepository.save(driver);
 
         Map<String, Object> resp = new java.util.LinkedHashMap<>();
         resp.put("success", true);
-        resp.put("message", "Driver profile created successfully");
+        resp.put("message", isSaveAndNext ? "Step data saved successfully" : "Driver profile created successfully");
         resp.put("driverId", saved.getId().toString());
         resp.put("id", saved.getId().toString());
         resp.put("kycStatus", saved.getKyc());
+        resp.put("registrationStep", saved.getRegistrationStep());
+        resp.put("nextStep", saved.getRegistrationStep() != null ? saved.getRegistrationStep() : 1);
         resp.put("vehicle", saved.getVehicle());
         resp.put("vehicleType", saved.getVehicleType());
         resp.put("driver", saved);
 
         return ResponseEntity.ok(resp);
+    }
+
+    // C. Get Registration Progress / Draft
+    @GetMapping({ "/drivers/register/progress", "/driver/register/progress", "/drivers/register/draft", "/driver/register/draft" })
+    public ResponseEntity<?> getRegistrationProgress(HttpServletRequest request) {
+        AppUser appUser = getAuthenticatedAppUser(request);
+        if (appUser == null) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "error", "Unauthorized", "message",
+                    "Your session has expired. Please login again."));
+        }
+        String phone = appUser.getPhone();
+        Driver driver = driverRepository.findByPhone(phone).orElse(null);
+        if (driver == null && appUser.getEmail() != null && !appUser.getEmail().isBlank()) {
+            driver = driverRepository.findByEmail(appUser.getEmail()).orElse(null);
+        }
+        if (driver == null) {
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "hasDraft", false,
+                    "registrationStep", 1,
+                    "kycStatus", "not_started"
+            ));
+        }
+
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("success", true);
+        data.put("hasDraft", true);
+        data.put("driverId", driver.getId());
+        data.put("registrationStep", driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
+        data.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "draft");
+        data.put("name", driver.getName());
+        data.put("phone", driver.getPhone());
+        data.put("email", driver.getEmail());
+        data.put("dob", driver.getDob());
+        data.put("gender", driver.getGender());
+        data.put("vehicle", driver.getVehicle());
+        data.put("vehicleType", driver.getVehicleType());
+        data.put("vehicleNumber", driver.getVehicleNumber());
+        data.put("rcNumber", driver.getRcNumber());
+        data.put("licenseNumber", driver.getLicenseNumber());
+        data.put("aadhaarNumber", driver.getAadhaarNumber());
+        data.put("addressLine1", driver.getAddressLine1());
+        data.put("city", driver.getCity());
+        data.put("state", driver.getState());
+        data.put("pincode", driver.getPincode());
+        data.put("bankName", driver.getBankName());
+        data.put("accountHolderName", driver.getAccountHolderName());
+        data.put("accountNumber", driver.getAccountNumber());
+        data.put("ifscCode", driver.getIfscCode());
+        data.put("profilePhotoUri", storageService.getPresignedOrSanitizedUrl(driver.getProfilePhotoUri()));
+        data.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(driver.getAadhaarUri()));
+        data.put("licenseUri", storageService.getPresignedOrSanitizedUrl(driver.getLicenseUri()));
+        data.put("rcUri", storageService.getPresignedOrSanitizedUrl(driver.getRcUri()));
+        data.put("bankPassbookUri", storageService.getPresignedOrSanitizedUrl(driver.getBankPassbookUri()));
+
+        return ResponseEntity.ok(data);
     }
 
     private String text(Map<String, Object> payload, String key) {

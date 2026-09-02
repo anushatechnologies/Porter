@@ -317,6 +317,7 @@ public class DriverController {
             if (updated.getIfscCode() != null) existing.setIfscCode(updated.getIfscCode());
             if (updated.getStatus() != null) existing.setStatus(driverAuthService.normalizeStatus(updated.getStatus()));
             if (updated.getKyc() != null) existing.setKyc(updated.getKyc());
+            if (updated.getRegistrationStep() != null) existing.setRegistrationStep(updated.getRegistrationStep());
 
             // Handle image updates and clean up old S3 images if replaced
             if (updated.getProfilePhotoUri() != null && !updated.getProfilePhotoUri().equals(existing.getProfilePhotoUri())) {
@@ -392,6 +393,7 @@ public class DriverController {
             map.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
             map.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
+            map.put("registrationStep", d.getRegistrationStep() != null ? d.getRegistrationStep() : 1);
             map.put("rating", d.getRating() != null ? d.getRating() : "4.8");
             map.put("trips", d.getTrips() != null ? d.getTrips() : 0);
             map.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
