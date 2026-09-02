@@ -85,4 +85,67 @@ public class AdminWalletSettingsController {
                 "message", "Driver wallet balance successfully recalculated from transaction history."
         ));
     }
+
+    /**
+     * GET /api/admin/settings/wallet/minimum-balance
+     * Returns current minimum required balance for drivers.
+     */
+    @GetMapping("/minimum-balance")
+    public ResponseEntity<?> getMinimumBalance() {
+        double minBalance = driverWalletService.getMinRequiredBalance();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "minRequiredBalance", minBalance,
+                "minimumBalance", minBalance
+        ));
+    }
+
+    /**
+     * PUT or POST /api/admin/settings/wallet/minimum-balance
+     * Admin modifies the minimum wallet balance for all drivers.
+     * Payload: { "minimumBalance": 1000.0, "applyToExistingDrivers": false }
+     */
+    @RequestMapping(value = "/minimum-balance", method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
+    public ResponseEntity<?> updateMinimumBalance(@RequestBody Map<String, Object> payload) {
+        Object minObj = payload.get("minimumBalance");
+        if (minObj == null) minObj = payload.get("minRequiredBalance");
+        if (minObj == null) minObj = payload.get("minWalletBalance");
+        if (minObj == null) minObj = payload.get("amount");
+
+        if (minObj == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Minimum balance amount is required"));
+        }
+
+        double minVal;
+        try {
+            minVal = Double.parseDouble(String.valueOf(minObj));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid minimum balance amount"));
+        }
+
+        boolean applyToExisting = Boolean.TRUE.equals(payload.get("applyToExistingDrivers"));
+        String reason = (String) payload.getOrDefault("reason", "Admin updated minimum wallet balance");
+
+        driverWalletService.updateAdminWalletSettings(Map.of(
+                "minRequiredBalance", minVal,
+                "applyToExistingDrivers", applyToExisting,
+                "reason", reason
+        ));
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("minRequiredBalance", minVal);
+        response.put("minimumBalance", minVal);
+        response.put("message", "Minimum wallet balance updated to ₹" + minVal + " for all drivers");
+
+        if (applyToExisting) {
+            Map<String, Object> bulkResult = driverWalletService.applyMinimumBalanceToExistingDrivers(minVal, reason);
+            response.put("appliedToExistingDrivers", true);
+            response.put("driversUpdated", bulkResult.get("driversUpdated"));
+            response.put("totalAmountCredited", bulkResult.get("totalAmountCredited"));
+        }
+
+        return ResponseEntity.ok(response);
+    }
 }
+

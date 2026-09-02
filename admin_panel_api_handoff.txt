@@ -77,15 +77,111 @@ No body required. Supports numeric ID (e.g. 12), formatted ID (e.g. DRV-12), pho
 Removes driver profile from database and purges uploaded document storage in S3.
 Response: {"success":true,"message":"Driver profile removed successfully","driverId":"12"}
 
-FINANCE AND CUSTOMERS
-=====================
+FINANCE AND WALLET MANAGEMENT
+==============================
+1. Modify Driver Wallet Balance:
+PUT /api/admin/drivers/{id}/wallet
+POST /api/admin/drivers/{id}/wallet
+PUT /api/drivers/{id}/wallet
+Body (Set Exact Balance):
+{
+  "walletBalance": 500.0,
+  "action": "set",
+  "reason": "Admin balance adjustment"
+}
+Body (Credit/Add Funds):
+{
+  "amount": 200.0,
+  "action": "credit",
+  "reason": "Trip bonus incentive"
+}
+Body (Debit/Deduct Funds):
+{
+  "amount": 50.0,
+  "action": "debit",
+  "reason": "Manual penalty"
+}
+Response:
+{
+  "success": true,
+  "driverId": "DRV-12",
+  "action": "set",
+  "previousBalance": 0.0,
+  "netChange": 500.0,
+  "walletBalance": 500.0,
+  "status": "online",
+  "transactionId": "TXN_W_1725280000",
+  "message": "Driver wallet updated successfully"
+}
+
+2. Modify Customer Wallet Balance:
+PUT /api/admin/customers/{id}/wallet
+POST /api/admin/customers/{id}/wallet
+PUT /api/customers/{id}/wallet
+Body:
+{
+  "walletBalance": 350.0,
+  "action": "set"
+}
+Response:
+{
+  "success": true,
+  "id": 12,
+  "action": "set",
+  "previousBalance": 100.0,
+  "walletBalance": 350.0,
+  "wallet": 350.0,
+  "message": "Customer wallet updated successfully"
+}
+
+3. Customer Top-Up (Legacy / Quick Top-up):
 POST /api/customers/{id}/topup
-Body: {"amount":500}
-Response: {"success":true,"wallet":500}
+Body: {"amount": 500}
+Response: {"success": true, "wallet": 500, "walletBalance": 500}
+
+4. Unified Admin Wallet Modify Endpoint:
+POST /api/admin/wallet/modify
+Body:
+{
+  "userType": "driver", // or "customer"
+  "id": "12",
+  "amount": 500.0,
+  "action": "set", // "set", "credit", "debit", or "adjust"
+  "reason": "Administrative adjustment"
+}
+Response: {"success": true, "walletBalance": 500.0, ...}
+
+5. Minimum Wallet Balance Policy for All Drivers (Default: ₹1000.0):
+GET /api/admin/wallet/minimum-balance
+GET /api/admin/settings/wallet/minimum-balance
+Response:
+{
+  "success": true,
+  "minRequiredBalance": 1000.0,
+  "minimumBalance": 1000.0
+}
+
+PUT /api/admin/wallet/minimum-balance
+PUT /api/admin/settings/wallet/minimum-balance
+POST /api/admin/settings/wallet
+Body (Update minimum threshold):
+{
+  "minimumBalance": 1000.0,
+  "applyToExistingDrivers": false // set true to also elevate all existing drivers whose balance < 1000.0
+}
+Response:
+{
+  "success": true,
+  "minRequiredBalance": 1000.0,
+  "minimumBalance": 1000.0,
+  "appliedToExistingDrivers": false,
+  "message": "Minimum wallet balance updated to ₹1000.0 for all drivers"
+}
 
 POST /api/payouts/{id}/release
 No body required.
 Response: {"success":true,"status":"settled"}
+
 
 SUPPORT TICKETS
 ===============
