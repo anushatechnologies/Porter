@@ -193,6 +193,16 @@ public class OrderController {
                 return ResponseEntity.ok(resp);
             }
 
+            com.anushaporter.backend.model.Driver targetDriver = driver != null ? driver : (driverId != null ? driverWalletService.findDriverEntity(driverId) : null);
+            if (targetDriver != null && !driverWalletService.canDriverAcceptRide(targetDriver)) {
+                Map<String, Object> err = new LinkedHashMap<>();
+                err.put("success", false);
+                err.put("statusCode", 400);
+                err.put("error", "INSUFFICIENT_WALLET_BALANCE");
+                err.put("message", "Driver wallet balance must be greater than ₹0 to accept rides. Please recharge your wallet.");
+                return ResponseEntity.badRequest().body(err);
+            }
+
             if (!isOrderClaimable(order.getStatus())) {
                 Map<String, Object> conflict = new LinkedHashMap<>();
                 conflict.put("success", false);
@@ -451,6 +461,16 @@ public class OrderController {
             idempotentSuccess.put("message", "You have already accepted this order.");
             idempotentSuccess.put("order", order);
             return ResponseEntity.ok(idempotentSuccess);
+        }
+
+        com.anushaporter.backend.model.Driver targetDriver = driver != null ? driver : (driverId != null ? driverWalletService.findDriverEntity(driverId) : null);
+        if (targetDriver != null && !driverWalletService.canDriverAcceptRide(targetDriver)) {
+            Map<String, Object> err = new LinkedHashMap<>();
+            err.put("success", false);
+            err.put("statusCode", 400);
+            err.put("error", "INSUFFICIENT_WALLET_BALANCE");
+            err.put("message", "Driver wallet balance must be greater than ₹0 to accept rides. Please recharge your wallet.");
+            return ResponseEntity.badRequest().body(err);
         }
 
         // If order is not in a claimable status and not accepted by this driver -> 409 Conflict

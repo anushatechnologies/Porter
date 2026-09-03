@@ -169,6 +169,15 @@ public class DriverOfferService {
             return response;
         }
 
+        Double walletBalance = driver.getWalletBalance();
+        if (walletBalance == null || walletBalance <= 0.0) {
+            response.put("success", false);
+            response.put("status", "INSUFFICIENT_WALLET_BALANCE");
+            response.put("error", "INSUFFICIENT_WALLET_BALANCE");
+            response.put("message", "Driver wallet balance must be greater than ₹0 to accept rides. Please recharge your wallet.");
+            return response;
+        }
+
         String driverIdStr = driver.getId().toString();
         String driverName = driver.getName() != null ? driver.getName() : "Driver";
         String driverEmail = driver.getEmail();

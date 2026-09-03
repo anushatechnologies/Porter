@@ -642,6 +642,14 @@ public class BookingController {
             pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
         }
 
+        if (order.getDriverId() != null && !order.getDriverId().isBlank() && order.getAmount() != null && order.getAmount() > 0) {
+            try {
+                driverWalletService.deductCommissionOnCompletion(order.getDriverId(), bookingId, order.getAmount());
+            } catch (Exception e) {
+                System.err.println("[Wallet] Warning: error deducting driver commission: " + e.getMessage());
+            }
+        }
+
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "status", "completed",

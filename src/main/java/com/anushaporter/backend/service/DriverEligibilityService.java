@@ -52,9 +52,9 @@ public class DriverEligibilityService {
             return false;
         }
 
-        // 4. Check wallet balance (must not be zero/negative)
+        // 4. Check wallet balance (must be greater than 0, cannot be zero/negative)
         Double wallet = driver.getWalletBalance();
-        if (wallet != null && wallet <= 0.0) {
+        if (wallet == null || wallet <= 0.0) {
             return false;
         }
 

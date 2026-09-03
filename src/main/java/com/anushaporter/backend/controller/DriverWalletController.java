@@ -54,9 +54,12 @@ public class DriverWalletController {
         walletData.put("pendingBalance", wallet.getPendingBalance());
         walletData.put("totalEarned", wallet.getTotalEarned());
         walletData.put("totalWithdrawn", wallet.getTotalWithdrawn());
+        double minRechargeAmount = driverWalletService.getMinRechargeAmount();
         walletData.put("platformCommission", wallet.getPlatformCommission());
         walletData.put("commissionPercentage", commissionPercent);
         walletData.put("minRequiredBalance", minRequiredBalance);
+        walletData.put("minRechargeAmount", minRechargeAmount);
+        walletData.put("minimumBalance", minRequiredBalance);
         walletData.put("isEligible", isEligible);
         walletData.put("eligibilityReason", eligibilityReason);
         walletData.put("minPayoutAmount", 100.00);
@@ -75,6 +78,7 @@ public class DriverWalletController {
         response.put("totalEarned", wallet.getTotalEarned());
         response.put("totalWithdrawn", wallet.getTotalWithdrawn());
         response.put("platformCommission", wallet.getPlatformCommission());
+        response.put("minRechargeAmount", minRechargeAmount);
         response.put("wallet", walletData);
 
         return ResponseEntity.ok(response);

@@ -1,11 +1,15 @@
 package com.anushaporter.backend.service;
 
+import com.anushaporter.backend.model.AppUser;
+import com.anushaporter.backend.model.Customer;
 import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.model.DriverWallet;
 import com.anushaporter.backend.model.GlobalSettings;
 import com.anushaporter.backend.model.Order;
 import com.anushaporter.backend.model.WalletTransaction;
 import com.anushaporter.backend.model.WithdrawalRequest;
+import com.anushaporter.backend.repository.AppUserRepository;
+import com.anushaporter.backend.repository.CustomerRepository;
 import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.repository.DriverWalletRepository;
 import com.anushaporter.backend.repository.GlobalSettingsRepository;
@@ -39,8 +43,15 @@ public class DriverWalletService {
     @Autowired
     private DriverRepository driverRepository;
 
+    @Autowired(required = false)
+    private CustomerRepository customerRepository;
+
+    @Autowired(required = false)
+    private AppUserRepository appUserRepository;
+
     private static final double DEFAULT_COMMISSION_PERCENTAGE = 5.0; // 5% Platform Commission
-    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 0.0;
+    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 1000.0;
+    private static final double DEFAULT_MIN_RECHARGE_AMOUNT = 1000.0;
 
     public DriverWallet getWallet(String driverId) {
         return driverWalletRepository.findByDriverId(driverId).orElseGet(() -> {
@@ -58,6 +69,7 @@ public class DriverWalletService {
 
         double commissionPercentage = DEFAULT_COMMISSION_PERCENTAGE;
         double minRequiredBalance = DEFAULT_MIN_REQUIRED_BALANCE;
+        double minRechargeAmount = DEFAULT_MIN_RECHARGE_AMOUNT;
         boolean walletRequiredForRides = true;
         boolean autoOfflineWhenBalanceInsufficient = true;
 
@@ -70,6 +82,13 @@ public class DriverWalletService {
             Optional<GlobalSettings> minBalOpt = globalSettingsRepository.findBySettingKey("wallet_min_required_balance");
             if (minBalOpt.isPresent() && minBalOpt.get().getSettingValue() != null) {
                 try { minRequiredBalance = Double.parseDouble(minBalOpt.get().getSettingValue()); } catch (Exception ignored) {}
+            }
+
+            Optional<GlobalSettings> minRechOpt = globalSettingsRepository.findBySettingKey("wallet_min_recharge_amount");
+            if (minRechOpt.isPresent() && minRechOpt.get().getSettingValue() != null) {
+                try { minRechargeAmount = Double.parseDouble(minRechOpt.get().getSettingValue()); } catch (Exception ignored) {}
+            } else {
+                minRechargeAmount = minRequiredBalance;
             }
 
             Optional<GlobalSettings> reqOpt = globalSettingsRepository.findBySettingKey("wallet_required_for_rides");
@@ -85,6 +104,8 @@ public class DriverWalletService {
 
         settings.put("commissionPercentage", commissionPercentage);
         settings.put("minRequiredBalance", minRequiredBalance);
+        settings.put("minimumBalance", minRequiredBalance);
+        settings.put("minRechargeAmount", minRechargeAmount);
         settings.put("walletRequiredForRides", walletRequiredForRides);
         settings.put("autoOfflineWhenBalanceInsufficient", autoOfflineWhenBalanceInsufficient);
         return settings;
@@ -104,6 +125,13 @@ public class DriverWalletService {
         }
         if (payload.containsKey("minRequiredBalance")) {
             saveSetting("wallet_min_required_balance", String.valueOf(payload.get("minRequiredBalance")));
+        } else if (payload.containsKey("minimumBalance")) {
+            saveSetting("wallet_min_required_balance", String.valueOf(payload.get("minimumBalance")));
+        }
+        if (payload.containsKey("minRechargeAmount")) {
+            saveSetting("wallet_min_recharge_amount", String.valueOf(payload.get("minRechargeAmount")));
+        } else if (payload.containsKey("minimumRechargeAmount")) {
+            saveSetting("wallet_min_recharge_amount", String.valueOf(payload.get("minimumRechargeAmount")));
         }
         if (payload.containsKey("walletRequiredForRides")) {
             saveSetting("wallet_required_for_rides", String.valueOf(payload.get("walletRequiredForRides")));
@@ -113,6 +141,176 @@ public class DriverWalletService {
         }
 
         return getAdminWalletSettings();
+    }
+
+    /**
+     * Modifies platform minimum wallet balance, with optional elevation of existing drivers.
+     */
+    @Transactional
+    public Map<String, Object> updateMinimumBalance(double minimumBalance, boolean applyToExistingDrivers, String reason) {
+        saveSetting("wallet_min_required_balance", String.valueOf(minimumBalance));
+        saveSetting("wallet_min_recharge_amount", String.valueOf(minimumBalance));
+
+        int driversUpdated = 0;
+        if (applyToExistingDrivers && driverRepository != null) {
+            List<Driver> allDrivers = driverRepository.findAll();
+            for (Driver driver : allDrivers) {
+                double currentBal = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+                if (currentBal < minimumBalance) {
+                    driver.setWalletBalance(minimumBalance);
+                    if (minimumBalance > 0.0) {
+                        driver.setStatus("online");
+                    }
+                    driverRepository.save(driver);
+
+                    DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+                    wallet.setAvailableBalance(minimumBalance);
+                    driverWalletRepository.save(wallet);
+
+                    String txId = "TXN_ADJ_" + System.currentTimeMillis() + "_" + driver.getId();
+                    WalletTransaction tx = new WalletTransaction();
+                    tx.setId(txId);
+                    tx.setDriverId(String.valueOf(driver.getId()));
+                    tx.setTransactionType("ADMIN_ADJUSTMENT");
+                    tx.setAmount(minimumBalance);
+                    tx.setBalanceBefore(currentBal);
+                    tx.setBalanceAfter(minimumBalance);
+                    tx.setStatus("SUCCESS");
+                    tx.setDescription(reason != null && !reason.isBlank() ? reason : "Platform policy minimum balance update");
+                    tx.setCreatedAt(LocalDateTime.now());
+                    walletTransactionRepository.save(tx);
+
+                    driversUpdated++;
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "Minimum balance updated successfully");
+        result.put("minRequiredBalance", minimumBalance);
+        result.put("appliedToExistingDrivers", applyToExistingDrivers);
+        if (applyToExistingDrivers) {
+            result.put("driversUpdated", driversUpdated);
+        }
+        return result;
+    }
+
+    /**
+     * Admin adjusts driver wallet (set, credit, or debit).
+     */
+    @Transactional
+    public Map<String, Object> adminAdjustDriverWallet(String driverIdStr, Double targetBalance, Double deltaAmount, String action, String reason) {
+        Driver driver = findDriverEntity(driverIdStr);
+        if (driver == null) {
+            throw new IllegalArgumentException("Driver not found with id: " + driverIdStr);
+        }
+
+        double prevBal = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+        double newBal = prevBal;
+
+        String act = action != null ? action.trim().toLowerCase() : "set";
+        if ("credit".equals(act)) {
+            double add = deltaAmount != null ? deltaAmount : (targetBalance != null ? targetBalance : 0.0);
+            newBal = prevBal + add;
+        } else if ("debit".equals(act)) {
+            double sub = deltaAmount != null ? deltaAmount : (targetBalance != null ? targetBalance : 0.0);
+            newBal = prevBal - sub;
+        } else { // "set"
+            newBal = targetBalance != null ? targetBalance : (deltaAmount != null ? deltaAmount : prevBal);
+        }
+        newBal = Math.round(newBal * 100.0) / 100.0;
+
+        if (prevBal <= 0.0 && newBal > 0.0) {
+            driver.setStatus("online");
+        } else if (newBal <= 0.0) {
+            driver.setStatus("offline");
+        }
+        driver.setWalletBalance(newBal);
+        driverRepository.save(driver);
+
+        DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+        wallet.setAvailableBalance(newBal);
+        driverWalletRepository.save(wallet);
+
+        String txId = "TXN_ADJ_" + System.currentTimeMillis();
+        WalletTransaction tx = new WalletTransaction();
+        tx.setId(txId);
+        tx.setDriverId(String.valueOf(driver.getId()));
+        tx.setTransactionType("ADMIN_ADJUSTMENT");
+        tx.setAmount(newBal - prevBal);
+        tx.setBalanceBefore(prevBal);
+        tx.setBalanceAfter(newBal);
+        tx.setStatus("SUCCESS");
+        tx.setDescription(reason != null && !reason.isBlank() ? reason : "Admin wallet adjustment (" + act + ")");
+        tx.setCreatedAt(LocalDateTime.now());
+        walletTransactionRepository.save(tx);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("driverId", driver.getId());
+        response.put("walletBalance", newBal);
+        response.put("previousBalance", prevBal);
+        response.put("status", driver.getStatus());
+        response.put("message", "Driver wallet updated successfully");
+        return response;
+    }
+
+    /**
+     * Admin adjusts customer wallet (set, credit, or debit) and synchronizes AppUser.
+     */
+    @Transactional
+    public Map<String, Object> adminAdjustCustomerWallet(String customerIdStr, Double targetBalance, Double deltaAmount, String action, String reason) {
+        if (customerRepository == null) {
+            throw new IllegalStateException("Customer repository is not available");
+        }
+
+        Long cId = Long.parseLong(customerIdStr.replaceAll("\\D+", ""));
+        Customer customer = customerRepository.findById(cId)
+                .orElseThrow(() -> new IllegalArgumentException("Customer not found with id: " + customerIdStr));
+
+        double prevBal = customer.getWallet() != null ? customer.getWallet() : 0.0;
+        double newBal = prevBal;
+
+        String act = action != null ? action.trim().toLowerCase() : "set";
+        if ("credit".equals(act)) {
+            double add = deltaAmount != null ? deltaAmount : (targetBalance != null ? targetBalance : 0.0);
+            newBal = prevBal + add;
+        } else if ("debit".equals(act)) {
+            double sub = deltaAmount != null ? deltaAmount : (targetBalance != null ? targetBalance : 0.0);
+            newBal = prevBal - sub;
+        } else { // "set"
+            newBal = targetBalance != null ? targetBalance : (deltaAmount != null ? deltaAmount : prevBal);
+        }
+        newBal = Math.round(newBal * 100.0) / 100.0;
+
+        customer.setWallet(newBal);
+        customerRepository.save(customer);
+
+        // Synchronize AppUser
+        final double finalBal = newBal;
+        if (appUserRepository != null) {
+            if (customer.getEmail() != null && !customer.getEmail().isBlank()) {
+                appUserRepository.findFirstByEmailOrderByIdDesc(customer.getEmail()).ifPresent(user -> {
+                    user.setWalletBalance(finalBal);
+                    appUserRepository.save(user);
+                });
+            }
+            if (customer.getPhone() != null && !customer.getPhone().isBlank()) {
+                appUserRepository.findByPhone(customer.getPhone()).ifPresent(user -> {
+                    user.setWalletBalance(finalBal);
+                    appUserRepository.save(user);
+                });
+            }
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("customerId", customer.getId());
+        response.put("walletBalance", newBal);
+        response.put("previousBalance", prevBal);
+        response.put("message", "Customer wallet updated successfully");
+        return response;
     }
 
     private void saveSetting(String key, String value) {
@@ -126,6 +324,11 @@ public class DriverWalletService {
     public double getCommissionPercentage() {
         Object val = getAdminWalletSettings().get("commissionPercentage");
         return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_COMMISSION_PERCENTAGE;
+    }
+
+    public double getMinRechargeAmount() {
+        Object val = getAdminWalletSettings().get("minRechargeAmount");
+        return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_MIN_RECHARGE_AMOUNT;
     }
 
     @Autowired
@@ -152,6 +355,23 @@ public class DriverWalletService {
         return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_MIN_REQUIRED_BALANCE;
     }
 
+    public boolean canDriverAcceptRide(Driver driver) {
+        if (driver == null) return false;
+        double balance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+        if (driver.getId() != null) {
+            DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
+            if (wallet != null && wallet.getAvailableBalance() != null && driver.getWalletBalance() == null) {
+                balance = wallet.getAvailableBalance();
+            }
+        }
+        return balance > 0.0;
+    }
+
+    public boolean canDriverAcceptRide(String driverIdStr) {
+        Driver driver = findDriverEntity(driverIdStr);
+        return canDriverAcceptRide(driver);
+    }
+
     public boolean isDriverEligibleForRides(String driverId) {
         Driver driver = findDriverEntity(driverId);
         double minRequired = getMinRequiredBalance();
@@ -159,7 +379,7 @@ public class DriverWalletService {
             return driver.getWalletBalance() >= minRequired && driver.getWalletBalance() > 0.0;
         }
         DriverWallet wallet = getWallet(driverId);
-        return wallet.getAvailableBalance() >= minRequired && wallet.getAvailableBalance() > 0.0;
+        return wallet.getAvailableBalance() != null && wallet.getAvailableBalance() >= minRequired && wallet.getAvailableBalance() > 0.0;
     }
 
     public String getEligibilityReason(String driverId) {

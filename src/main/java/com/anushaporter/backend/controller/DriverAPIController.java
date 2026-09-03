@@ -58,6 +58,9 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.TripStateMachineService tripStateMachineService;
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
+
     public Driver getAuthenticatedDriver(HttpServletRequest request) {
         return driverAuthService.resolveAuthenticatedDriver(request);
     }
@@ -305,6 +308,17 @@ public class DriverAPIController {
             idempotentSuccess.put("status", "accepted");
             idempotentSuccess.put("order", order);
             return ResponseEntity.ok(idempotentSuccess);
+        }
+
+        // Check that driver's wallet balance is greater than 0
+        Driver targetDriver = driver != null ? driver : (driverId != null ? driverWalletService.findDriverEntity(driverId) : null);
+        if (targetDriver != null && !driverWalletService.canDriverAcceptRide(targetDriver)) {
+            Map<String, Object> err = new LinkedHashMap<>();
+            err.put("success", false);
+            err.put("statusCode", 400);
+            err.put("error", "INSUFFICIENT_WALLET_BALANCE");
+            err.put("message", "Driver wallet balance must be greater than ₹0 to accept rides. Please recharge your wallet.");
+            return ResponseEntity.badRequest().body(err);
         }
 
         // If order is not in a claimable status and not accepted by this driver -> 409

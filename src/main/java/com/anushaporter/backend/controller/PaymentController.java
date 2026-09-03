@@ -68,7 +68,16 @@ public class PaymentController {
                 if (bookingId == null || bookingId.isBlank()) {
                     bookingId = "RECH_" + System.currentTimeMillis();
                 }
-                double finalAmount = amount != null ? amount : 500.0;
+                double minRecharge = driverWalletService.getMinRechargeAmount();
+                double finalAmount = amount != null ? amount : minRecharge;
+                if (finalAmount < minRecharge) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "error", "MINIMUM_RECHARGE_AMOUNT_NOT_MET",
+                            "message", "Minimum recharge amount is ₹" + (minRecharge == (long) minRecharge ? String.format("%d", (long) minRecharge) : String.format("%.2f", minRecharge)),
+                            "minRechargeAmount", minRecharge
+                    ));
+                }
                 com.anushaporter.backend.model.Driver driver = driverAPIController != null ? driverAPIController.getAuthenticatedDriver(request) : null;
                 String driverId = driver != null ? String.valueOf(driver.getId()) : (String) payload.get("driverId");
 
