@@ -20,6 +20,9 @@ import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.anushaporter.backend.model.Driver;
+import com.anushaporter.backend.repository.DriverRepository;
+
 @Service
 public class PushNotificationService {
     private static final Logger logger = LoggerFactory.getLogger(PushNotificationService.class);
@@ -27,6 +30,7 @@ public class PushNotificationService {
 
     @Autowired private AppUserRepository userRepository;
     @Autowired private NotificationRepository notificationRepository;
+    @Autowired(required = false) private DriverRepository driverRepository;
     @Autowired private ObjectMapper objectMapper;
 
     public void notifyUser(AppUser user, String bookingId, String type, String title, String message) {
@@ -37,8 +41,8 @@ public class PushNotificationService {
         notification.setNotificationType(type);
         notification.setTitle(title);
         notification.setMessage(message);
-        notification.setAudience(user.getRole());
-        notification.setTarget(user.getEmail());
+        notification.setAudience(user.getRole() != null ? user.getRole() : "driver");
+        notification.setTarget(user.getEmail() != null ? user.getEmail() : user.getPhone());
         notificationRepository.save(notification);
 
         String token = user.getFcmToken();
@@ -97,15 +101,93 @@ public class PushNotificationService {
         }
     }
 
+    public void notifyDriverOffer(Driver driver, String bookingId, String pickup, String drop, Double fare) {
+        if (driver == null) return;
+        AppUser driverUser = resolveDriverUser(driver);
+
+        String title = "New Delivery Offer! 🚚";
+        String message = String.format("Pickup: %s → Drop: %s (₹%.0f)",
+                safe(pickup, "Near you"),
+                safe(drop, "Destination"),
+                fare != null ? fare : 0.0);
+
+        if (driverUser != null) {
+            notifyUser(driverUser, bookingId, "DRIVER_OFFER", title, message);
+        } else {
+            Notification notification = new Notification();
+            notification.setUserId(driver.getId());
+            notification.setBookingId(bookingId);
+            notification.setNotificationType("DRIVER_OFFER");
+            notification.setTitle(title);
+            notification.setMessage(message);
+            notification.setAudience("driver");
+            notification.setTarget(driver.getEmail() != null ? driver.getEmail() : driver.getPhone());
+            notificationRepository.save(notification);
+        }
+    }
+
+    public void notifyOfferTaken(Driver driver, String bookingId) {
+        if (driver == null) return;
+        AppUser driverUser = resolveDriverUser(driver);
+        if (driverUser != null && driverUser.getFcmToken() != null && !driverUser.getFcmToken().isBlank()) {
+            String token = driverUser.getFcmToken();
+            String title = "Order Accepted";
+            String message = "Another driver partner has accepted this order.";
+            try {
+                if (token.startsWith("ExpoPushToken[")) {
+                    sendExpo(token, title, message, bookingId, "STOP_DRIVER_OFFER");
+                } else {
+                    Message push = Message.builder()
+                            .setToken(token)
+                            .putData("bookingId", bookingId == null ? "" : bookingId)
+                            .putData("notificationType", "STOP_DRIVER_OFFER")
+                            .putData("status", "ACCEPTED_BY_ANOTHER")
+                            .build();
+                    FirebaseMessaging.getInstance().send(push);
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to send stop offer push to driver {}: {}", driver.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private AppUser resolveDriverUser(Driver driver) {
+        if (driver == null) return null;
+        AppUser driverUser = null;
+        if (driver.getEmail() != null && !driver.getEmail().isBlank()) {
+            driverUser = userRepository.findFirstByEmailOrderByIdDesc(driver.getEmail()).orElse(null);
+        }
+        if (driverUser == null && driver.getPhone() != null && !driver.getPhone().isBlank()) {
+            driverUser = userRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone()).orElse(null);
+        }
+        if (driverUser == null && driver.getId() != null) {
+            driverUser = userRepository.findById(driver.getId()).orElse(null);
+        }
+        return driverUser;
+    }
+
     public void notifyDriverAssignment(String driverIdentifier, String bookingId, String pickup, String drop) {
         if (driverIdentifier == null || driverIdentifier.isBlank()) return;
-        userRepository.findFirstByEmailOrderByIdDesc(driverIdentifier)
+        AppUser driverUser = userRepository.findFirstByEmailOrderByIdDesc(driverIdentifier)
                 .or(() -> userRepository.findFirstByPhoneOrderByIdDesc(driverIdentifier))
-                .ifPresent(driverUser -> {
-                    String title = "New Delivery Offer! 📦";
-                    String message = "Pickup: " + safe(pickup, "Near you") + " → Drop: " + safe(drop, "Destination");
-                    notifyUser(driverUser, bookingId, "DRIVER_OFFER", title, message);
-                });
+                .orElse(null);
+
+        if (driverUser == null && driverRepository != null) {
+            try {
+                Long dId = Long.parseLong(driverIdentifier.replaceAll("[^0-9]", ""));
+                Driver d = driverRepository.findById(dId).orElse(null);
+                if (d != null) {
+                    driverUser = resolveDriverUser(d);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        String title = "New Delivery Offer! 📦";
+        String message = "Pickup: " + safe(pickup, "Near you") + " → Drop: " + safe(drop, "Destination");
+
+        if (driverUser != null) {
+            notifyUser(driverUser, bookingId, "DRIVER_OFFER", title, message);
+        }
     }
 
     private void sendExpo(String token, String title, String message, String bookingId, String type) throws Exception {

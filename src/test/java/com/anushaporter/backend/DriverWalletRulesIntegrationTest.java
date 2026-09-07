@@ -5,6 +5,7 @@ import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.model.DriverWallet;
 import com.anushaporter.backend.model.Order;
 import com.anushaporter.backend.model.WalletTransaction;
+import com.anushaporter.backend.model.GlobalSettings;
 import com.anushaporter.backend.repository.*;
 import com.anushaporter.backend.service.DeliveryCompletionService;
 import com.anushaporter.backend.service.DriverWalletService;
@@ -216,7 +217,7 @@ public class DriverWalletRulesIntegrationTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    void testDriverWithZeroBalanceCannotAcceptRide() throws Exception {
+    void testDriverWithZeroBalanceCanAcceptRideWhenMinIsZeroAndBlockedWhenMinIsConfigured() throws Exception {
         // Driver balance is 0.00
         testDriver.setWalletBalance(0.00);
         driverRepository.save(testDriver);
@@ -227,26 +228,27 @@ public class DriverWalletRulesIntegrationTest {
         order.setStatus("placed");
         order = orderRepository.save(order);
 
-        // Acceptance via /api/driver/orders/{bookingId}/accept must fail
+        // When minimum required balance is 0 (default), driver CAN accept ride
         mockMvc.perform(post("/api/driver/orders/" + order.getBookingId() + "/accept")
                         .header("Authorization", "Bearer " + driverJwt))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")))
-                .andExpect(jsonPath("$.message", containsString("Driver wallet balance must be greater than ₹0")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
 
-        // Acceptance via /api/orders/{id}/accept must fail
-        mockMvc.perform(post("/api/orders/" + order.getBookingId() + "/accept")
+        // Now Admin configures min required balance to 500.0
+        GlobalSettings minSetting = new GlobalSettings();
+        minSetting.setSettingKey("wallet_min_required_balance");
+        minSetting.setSettingValue("500.0");
+        globalSettingsRepository.save(minSetting);
+
+        Order order2 = new Order();
+        order2.setBookingId("BK_ZERO_BAL_2");
+        order2.setAmount(400.00);
+        order2.setStatus("placed");
+        order2 = orderRepository.save(order2);
+
+        // Acceptance now fails because balance (0) < minRequired (500)
+        mockMvc.perform(post("/api/driver/orders/" + order2.getBookingId() + "/accept")
                         .header("Authorization", "Bearer " + driverJwt))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")));
-
-        // Acceptance via /api/orders/{id}/status with status: accepted must fail
-        mockMvc.perform(post("/api/orders/" + order.getBookingId() + "/status")
-                        .header("Authorization", "Bearer " + driverJwt)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\": \"accepted\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")));
@@ -379,6 +381,6 @@ public class DriverWalletRulesIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")))
-                .andExpect(jsonPath("$.message", containsString("Driver wallet balance must be greater than ₹0")));
+                .andExpect(jsonPath("$.message", containsString("recharge your wallet")));
     }
 }

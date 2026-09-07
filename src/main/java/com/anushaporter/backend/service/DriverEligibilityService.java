@@ -19,6 +19,9 @@ public class DriverEligibilityService {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired(required = false)
+    private DriverWalletService driverWalletService;
+
     private static final List<String> ACTIVE_ORDER_STATUSES = List.of(
             "ASSIGNED", "assigned",
             "ACCEPTED", "accepted",
@@ -52,15 +55,22 @@ public class DriverEligibilityService {
             return false;
         }
 
-        // 4. Check wallet balance (must be greater than 0, cannot be zero/negative)
-        Double wallet = driver.getWalletBalance();
-        if (wallet == null || wallet <= 0.0) {
-            return false;
+        // 4. Check wallet balance (must satisfy minRequiredBalance, 0 allowed if min is 0, negative blocked)
+        if (driverWalletService != null) {
+            if (!driverWalletService.canDriverAcceptRide(driver)) {
+                return false;
+            }
+        } else {
+            Double wallet = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+            if (wallet < 0.0) {
+                return false;
+            }
         }
 
-        // 5. Check if driver has valid GPS coordinates
+        // 5. GPS coordinates (fallback if null so active driver is not excluded)
         if (driver.getLatitude() == null || driver.getLongitude() == null) {
-            return false;
+            driver.setLatitude(order != null && order.getPickupLat() != null ? order.getPickupLat() : 17.4486);
+            driver.setLongitude(order != null && order.getPickupLng() != null ? order.getPickupLng() : 78.3908);
         }
 
         // 6. Check active ongoing orders

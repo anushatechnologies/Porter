@@ -452,12 +452,13 @@ public class DriverController {
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
 
         if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
-            Double walletBalance = driver.getWalletBalance();
-            if (walletBalance == null || walletBalance <= 0.0) {
+            double minRequired = driverWalletService != null ? driverWalletService.getMinRequiredBalance() : 0.0;
+            double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+            if (minRequired > 0.0 && walletBalance < minRequired) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
                         "error", "WALLET_EMPTY",
-                        "message", "Your wallet balance is ₹0. Please recharge your wallet to go online."
+                        "message", String.format("Your wallet balance is ₹%.0f. Minimum required balance to go online is ₹%.0f. Please recharge your wallet.", walletBalance, minRequired)
                 ));
             }
         }
@@ -499,12 +500,13 @@ public class DriverController {
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
 
         if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
-            Double walletBalance = driver.getWalletBalance();
-            if (walletBalance == null || walletBalance <= 0.0) {
+            double minRequired = driverWalletService != null ? driverWalletService.getMinRequiredBalance() : 0.0;
+            double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+            if (minRequired > 0.0 && walletBalance < minRequired) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
                         "error", "WALLET_EMPTY",
-                        "message", "Your wallet balance is ₹0. Please recharge your wallet to go online."
+                        "message", String.format("Your wallet balance is ₹%.0f. Minimum required balance to go online is ₹%.0f. Please recharge your wallet.", walletBalance, minRequired)
                 ));
             }
         }

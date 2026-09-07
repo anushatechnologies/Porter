@@ -50,7 +50,7 @@ public class DriverWalletService {
     private AppUserRepository appUserRepository;
 
     private static final double DEFAULT_COMMISSION_PERCENTAGE = 5.0; // 5% Platform Commission
-    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 1000.0;
+    private static final double DEFAULT_MIN_REQUIRED_BALANCE = 0.0; // Admin set platform minimum balance to 0
     private static final double DEFAULT_MIN_RECHARGE_AMOUNT = 1000.0;
 
     public DriverWallet getWallet(String driverId) {
@@ -87,8 +87,6 @@ public class DriverWalletService {
             Optional<GlobalSettings> minRechOpt = globalSettingsRepository.findBySettingKey("wallet_min_recharge_amount");
             if (minRechOpt.isPresent() && minRechOpt.get().getSettingValue() != null) {
                 try { minRechargeAmount = Double.parseDouble(minRechOpt.get().getSettingValue()); } catch (Exception ignored) {}
-            } else {
-                minRechargeAmount = minRequiredBalance;
             }
 
             Optional<GlobalSettings> reqOpt = globalSettingsRepository.findBySettingKey("wallet_required_for_rides");
@@ -364,7 +362,8 @@ public class DriverWalletService {
                 balance = wallet.getAvailableBalance();
             }
         }
-        return balance > 0.0;
+        double minRequired = getMinRequiredBalance();
+        return minRequired <= 0.0 ? balance >= 0.0 : balance >= minRequired;
     }
 
     public boolean canDriverAcceptRide(String driverIdStr) {
@@ -376,10 +375,11 @@ public class DriverWalletService {
         Driver driver = findDriverEntity(driverId);
         double minRequired = getMinRequiredBalance();
         if (driver != null && driver.getWalletBalance() != null) {
-            return driver.getWalletBalance() >= minRequired && driver.getWalletBalance() > 0.0;
+            return minRequired <= 0.0 ? driver.getWalletBalance() >= 0.0 : driver.getWalletBalance() >= minRequired;
         }
         DriverWallet wallet = getWallet(driverId);
-        return wallet.getAvailableBalance() != null && wallet.getAvailableBalance() >= minRequired && wallet.getAvailableBalance() > 0.0;
+        double bal = (wallet != null && wallet.getAvailableBalance() != null) ? wallet.getAvailableBalance() : 0.0;
+        return minRequired <= 0.0 ? bal >= 0.0 : bal >= minRequired;
     }
 
     public String getEligibilityReason(String driverId) {
@@ -497,9 +497,10 @@ public class DriverWalletService {
                 ? driver.getWalletBalance()
                 : (wallet.getAvailableBalance() != null ? wallet.getAvailableBalance() : 0.0);
 
-        // Check if wallet_balance <= 0
-        if (walletBalance <= 0) {
-            throw new IllegalStateException("Driver wallet balance is ₹0 or negative. Driver must recharge before taking orders.");
+        // Check if wallet_balance is below minimum required
+        double minRequired = getMinRequiredBalance();
+        if (minRequired > 0.0 && walletBalance < minRequired) {
+            throw new IllegalStateException("Driver wallet balance is below the platform minimum required of ₹" + minRequired + ". Driver must recharge before taking orders.");
         }
 
         String orderIdStr = order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId());
@@ -569,7 +570,8 @@ public class DriverWalletService {
         double balanceAfter = Math.round((balanceBefore - commission) * 100.0) / 100.0;
 
         driver.setWalletBalance(balanceAfter);
-        if (balanceAfter <= 0.0) {
+        double minRequired = getMinRequiredBalance();
+        if (minRequired > 0.0 && balanceAfter < minRequired) {
             driver.setStatus("offline");
         }
         driverRepository.save(driver);
@@ -601,9 +603,8 @@ public class DriverWalletService {
         // Check if Driver Balance < Minimum Required and Auto-Offline Trigger
         Map<String, Object> settings = getAdminWalletSettings();
         boolean autoOffline = Boolean.TRUE.equals(settings.get("autoOfflineWhenBalanceInsufficient"));
-        double minRequired = getMinRequiredBalance();
 
-        if (autoOffline && balanceAfter < minRequired) {
+        if (autoOffline && (balanceAfter < 0.0 || (minRequired > 0.0 && balanceAfter < minRequired))) {
             try {
                 driver.setStatus("offline");
                 driverRepository.save(driver);

@@ -310,14 +310,15 @@ public class DriverAPIController {
             return ResponseEntity.ok(idempotentSuccess);
         }
 
-        // Check that driver's wallet balance is greater than 0
+        // Check that driver's wallet balance is sufficient
         Driver targetDriver = driver != null ? driver : (driverId != null ? driverWalletService.findDriverEntity(driverId) : null);
         if (targetDriver != null && !driverWalletService.canDriverAcceptRide(targetDriver)) {
+            double minRequired = driverWalletService.getMinRequiredBalance();
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("success", false);
             err.put("statusCode", 400);
             err.put("error", "INSUFFICIENT_WALLET_BALANCE");
-            err.put("message", "Driver wallet balance must be greater than ₹0 to accept rides. Please recharge your wallet.");
+            err.put("message", "Driver wallet balance must be at least ₹" + minRequired + " to accept rides. Please recharge your wallet.");
             return ResponseEntity.badRequest().body(err);
         }
 
@@ -388,6 +389,13 @@ public class DriverAPIController {
         Order saved = orderRepository.findById(order.getId()).orElse(order);
         if (pushNotificationService != null) {
             pushNotificationService.notifyOrderStatus(saved, saved.getStatus());
+        }
+        if (driverOfferService != null && saved.getBookingId() != null) {
+            Long acceptedDriverId = driver != null && driver.getId() != null ? driver.getId() : null;
+            if (acceptedDriverId == null && driverId != null) {
+                try { acceptedDriverId = Long.parseLong(driverId.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
+            }
+            driverOfferService.onOrderAcceptedByDriver(saved.getBookingId(), acceptedDriverId);
         }
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -968,12 +976,13 @@ public class DriverAPIController {
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
 
         if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
-            Double walletBalance = driver.getWalletBalance();
-            if (walletBalance == null || walletBalance <= 0.0) {
+            double minRequired = driverWalletService != null ? driverWalletService.getMinRequiredBalance() : 0.0;
+            double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
+            if (minRequired > 0.0 && walletBalance < minRequired) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
                         "error", "WALLET_EMPTY",
-                        "message", "Your wallet balance is ₹0. Please recharge your wallet to go online."
+                        "message", String.format("Your wallet balance is ₹%.0f. Minimum required balance to go online is ₹%.0f. Please recharge your wallet.", walletBalance, minRequired)
                 ));
             }
         }

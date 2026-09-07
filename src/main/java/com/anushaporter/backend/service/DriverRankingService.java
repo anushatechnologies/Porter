@@ -73,4 +73,15 @@ public class DriverRankingService {
 
         return distanceScore + ratingScore + experienceScore;
     }
+
+    public List<Driver> filterDriversWithinRadius(List<Driver> drivers, double pickupLat, double pickupLng, double maxRadiusKm) {
+        if (drivers == null || drivers.isEmpty()) return List.of();
+        return drivers.stream()
+                .filter(d -> {
+                    if (d.getLatitude() == null || d.getLongitude() == null) return true;
+                    double dist = calculateHaversineDistanceKm(pickupLat, pickupLng, d.getLatitude(), d.getLongitude());
+                    return dist <= maxRadiusKm;
+                })
+                .toList();
+    }
 }

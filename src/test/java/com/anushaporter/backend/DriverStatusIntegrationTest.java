@@ -49,6 +49,9 @@ public class DriverStatusIntegrationTest {
     private DriverRepository driverRepository;
 
     @Autowired
+    private com.anushaporter.backend.repository.GlobalSettingsRepository globalSettingsRepository;
+
+    @Autowired
     private JwtUtil jwtUtil;
 
     private Driver testDriver;
@@ -58,6 +61,9 @@ public class DriverStatusIntegrationTest {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         driverRepository.deleteAll();
+        if (globalSettingsRepository != null) {
+            globalSettingsRepository.deleteAll();
+        }
 
         testDriver = new Driver();
         testDriver.setName("Supriya Rao");
@@ -229,13 +235,39 @@ public class DriverStatusIntegrationTest {
     }
 
     @Test
-    void testZeroWalletBalanceCannotGoOnline() throws Exception {
+    void testZeroWalletBalanceCanGoOnlineWhenMinBalanceIsZero() throws Exception {
         // Set driver wallet balance to 0.0
         testDriver.setWalletBalance(0.0);
         testDriver.setStatus("offline");
         driverRepository.save(testDriver);
 
-        // Attempt to toggle online
+        // When minimum required balance is 0.0 (default), driver CAN go online
+        mockMvc.perform(put("/api/drivers/me/status")
+                .header("Authorization", "Bearer " + jwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\": \"online\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.status", is("online")));
+
+        Driver inDb = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals("online", inDb.getStatus());
+    }
+
+    @Test
+    void testZeroWalletBalanceBlockedWhenAdminSetsMinBalance() throws Exception {
+        // Admin configures minimum required balance to 500.0
+        com.anushaporter.backend.model.GlobalSettings minSetting = new com.anushaporter.backend.model.GlobalSettings();
+        minSetting.setSettingKey("wallet_min_required_balance");
+        minSetting.setSettingValue("500.0");
+        globalSettingsRepository.save(minSetting);
+
+        // Set driver wallet balance to 0.0
+        testDriver.setWalletBalance(0.0);
+        testDriver.setStatus("offline");
+        driverRepository.save(testDriver);
+
+        // Attempt to toggle online -> blocked because balance (0) < minRequired (500)
         mockMvc.perform(put("/api/drivers/me/status")
                 .header("Authorization", "Bearer " + jwtToken)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -243,9 +275,8 @@ public class DriverStatusIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.error", is("WALLET_EMPTY")))
-                .andExpect(jsonPath("$.message", containsString("Your wallet balance is ₹0")));
+                .andExpect(jsonPath("$.message", containsStringIgnoringCase("minimum required balance")));
 
-        // Status remains offline
         Driver inDb = driverRepository.findById(testDriver.getId()).orElseThrow();
         assertEquals("offline", inDb.getStatus());
     }

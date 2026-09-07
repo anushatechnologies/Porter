@@ -44,24 +44,28 @@ public class NotificationController {
      * GET /api/drivers/me/notifications
      */
     @GetMapping({"/drivers/me/notifications", "/drivers/notifications"})
-    public ResponseEntity<Map<String, Object>> getDriverNotifications() {
-        List<Map<String, Object>> notifs = new ArrayList<>();
+    public ResponseEntity<Map<String, Object>> getDriverNotifications(HttpServletRequest request) {
+        Optional<AppUser> user = currentUser(request);
+        List<Notification> notifications;
+        if (user.isPresent()) {
+            notifications = repository.findByUserIdOrderByCreatedAtDesc(user.get().getId());
+        } else {
+            notifications = List.of();
+        }
 
-        Map<String, Object> n1 = new LinkedHashMap<>();
-        n1.put("id", "notif_01");
-        n1.put("title", "Payout Processed");
-        n1.put("message", "₹1,250 has been transferred to your bank account.");
-        n1.put("createdAt", java.time.LocalDateTime.now().minusHours(2).toString());
-        n1.put("read", false);
-        notifs.add(n1);
-
-        Map<String, Object> n2 = new LinkedHashMap<>();
-        n2.put("id", "notif_02");
-        n2.put("title", "New Trip Bonus Available");
-        n2.put("message", "Complete 5 trips today to get an extra ₹200 bonus!");
-        n2.put("createdAt", java.time.LocalDateTime.now().minusHours(5).toString());
-        n2.put("read", true);
-        notifs.add(n2);
+        List<Map<String, Object>> notifs = notifications.stream().map(n -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", "NTF-" + (100 + n.getId()));
+            map.put("notificationId", n.getId());
+            map.put("title", n.getTitle() != null ? n.getTitle() : "Notification");
+            map.put("message", n.getMessage() != null ? n.getMessage() : "");
+            map.put("bookingId", n.getBookingId());
+            map.put("notificationType", n.getNotificationType());
+            map.put("createdAt", n.getCreatedAt() != null ? n.getCreatedAt().toString() : java.time.LocalDateTime.now().toString());
+            map.put("read", Boolean.TRUE.equals(n.getReadStatus()));
+            map.put("isRead", Boolean.TRUE.equals(n.getReadStatus()));
+            return map;
+        }).collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of(
                 "success", true,

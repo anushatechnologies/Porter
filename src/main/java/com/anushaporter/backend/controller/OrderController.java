@@ -38,6 +38,12 @@ public class OrderController {
     @Autowired
     private DeliveryCompletionService deliveryCompletionService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.AutoAssignmentService autoAssignmentService;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.DriverOfferService driverOfferService;
+
     /**
      * GET /api/orders
      * Returns formatted orders list for Admin Dashboard, Orders view, and Live Dispatch screen.
@@ -101,7 +107,18 @@ public class OrderController {
 
     @PostMapping
     public Order create(@RequestBody Order entity) {
-        return repository.save(entity);
+        if (entity.getBookingId() == null || entity.getBookingId().isBlank()) {
+            entity.setBookingId("ANP" + (100000 + new Random().nextInt(900000)));
+        }
+        if (entity.getStatus() == null || entity.getStatus().isBlank()) {
+            entity.setStatus("searching");
+        }
+        Order saved = repository.save(entity);
+        String st = saved.getStatus().toLowerCase();
+        if (autoAssignmentService != null && (st.equals("searching") || st.equals("pending") || st.equals("created"))) {
+            autoAssignmentService.startAutoAssignment(saved.getBookingId());
+        }
+        return saved;
     }
 
     @Autowired
@@ -465,11 +482,12 @@ public class OrderController {
 
         com.anushaporter.backend.model.Driver targetDriver = driver != null ? driver : (driverId != null ? driverWalletService.findDriverEntity(driverId) : null);
         if (targetDriver != null && !driverWalletService.canDriverAcceptRide(targetDriver)) {
+            double minRequired = driverWalletService.getMinRequiredBalance();
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("success", false);
             err.put("statusCode", 400);
             err.put("error", "INSUFFICIENT_WALLET_BALANCE");
-            err.put("message", "Driver wallet balance must be greater than ₹0 to accept rides. Please recharge your wallet.");
+            err.put("message", "Driver wallet balance must be at least ₹" + minRequired + " to accept rides. Please recharge your wallet.");
             return ResponseEntity.badRequest().body(err);
         }
 
@@ -528,6 +546,13 @@ public class OrderController {
         Order savedOrder = repository.findById(order.getId()).orElse(order);
         if (pushNotificationService != null) {
             pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
+        }
+        if (driverOfferService != null && savedOrder.getBookingId() != null) {
+            Long acceptedDriverId = driver != null && driver.getId() != null ? driver.getId() : null;
+            if (acceptedDriverId == null && driverId != null) {
+                try { acceptedDriverId = Long.parseLong(driverId.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
+            }
+            driverOfferService.onOrderAcceptedByDriver(savedOrder.getBookingId(), acceptedDriverId);
         }
 
         Map<String, Object> response = new LinkedHashMap<>();

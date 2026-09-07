@@ -37,6 +37,9 @@ public class BookingController {
     @Autowired
     private com.anushaporter.backend.service.AutoAssignmentService autoAssignmentService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.DriverOfferService driverOfferService;
+
     /**
      * Recommend optimal vehicle type based on weight, dimensions, and category.
      * POST /api/vehicles/recommend
@@ -476,6 +479,10 @@ public class BookingController {
 
             orderRepository.save(order);
 
+            if (driverOfferService != null) {
+                driverOfferService.onOrderCancelled(bookingId);
+            }
+
             response.put("success", true);
             response.put("message", "Booking cancelled successfully");
             return ResponseEntity.ok(response);
@@ -534,6 +541,10 @@ public class BookingController {
             order.setDriverPhone(null);
             order.setDriverVehicleNumber(null);
             orderRepository.save(order);
+
+            if (driverOfferService != null) {
+                driverOfferService.onOrderCancelled(bookingId);
+            }
 
             if (pushNotificationService != null) {
                 pushNotificationService.notifyOrderStatus(order, "cancelled");
@@ -761,15 +772,19 @@ public class BookingController {
             }
 
             double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
-            if (walletBalance <= 0.0) {
+            if (!driverWalletService.canDriverAcceptRide(driver)) {
+                double minRequired = driverWalletService.getMinRequiredBalance();
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
                         "error", "INSUFFICIENT_WALLET_BALANCE",
-                        "message", "Driver wallet balance is ₹0 or negative. Driver must recharge before taking orders."
+                        "message", String.format("Driver wallet balance (₹%.2f) is below minimum required balance (₹%.2f).", walletBalance, minRequired)
                 ));
             }
 
             Map<String, Object> result = driverWalletService.assignOrder(order, driver);
+            if (driverOfferService != null) {
+                driverOfferService.onOrderAcceptedByDriver(order.getBookingId(), driver.getId());
+            }
             if (pushNotificationService != null) {
                 pushNotificationService.notifyOrderStatus(order, order.getStatus());
             }
@@ -822,6 +837,7 @@ public class BookingController {
                     && !"delivered".equals(order.getStatus())) {
                 order.setStatus("searching");
                 orderRepository.save(order);
+                autoAssignmentService.startAutoAssignment(order.getBookingId());
             }
 
             if (pushNotificationService != null) {
@@ -1069,6 +1085,8 @@ public class BookingController {
         newOrder.setDeliveryOtp(String.format("%04d", new Random().nextInt(10000)));
         newOrder.setCreatedAt(LocalDateTime.now());
         orderRepository.save(newOrder);
+
+        autoAssignmentService.startAutoAssignment(newBookingId);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("bookingId", newBookingId);

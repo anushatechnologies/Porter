@@ -151,9 +151,13 @@ public class DeliveryAutoAssignmentIntegrationTest {
         // Driver C is offline -> ineligible
         assertFalse(driverEligibilityService.isEligible(driverC, order, Set.of()));
 
-        // Driver with empty wallet balance -> ineligible
+        // Driver with zero wallet balance IS eligible when minRequiredBalance is 0.0
         Driver zeroWalletDriver = createOrUpdateDriver("9876500004", "Driver Zero", "online", 17.4490, 78.3910, 4.8, 20, 0.0, "Tata Ace");
-        assertFalse(driverEligibilityService.isEligible(zeroWalletDriver, order, Set.of()));
+        assertTrue(driverEligibilityService.isEligible(zeroWalletDriver, order, Set.of()));
+
+        // Driver with negative wallet balance is ineligible
+        Driver negativeWalletDriver = createOrUpdateDriver("9876500005", "Driver Neg", "online", 17.4490, 78.3910, 4.8, 20, -50.0, "Tata Ace");
+        assertFalse(driverEligibilityService.isEligible(negativeWalletDriver, order, Set.of()));
 
         // Ranking
         List<DriverRankingService.RankedDriver> ranked = driverRankingService.rankDrivers(

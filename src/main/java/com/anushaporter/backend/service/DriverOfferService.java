@@ -4,6 +4,7 @@ import com.anushaporter.backend.dto.DriverOfferResponse;
 import com.anushaporter.backend.model.*;
 import com.anushaporter.backend.repository.DriverOfferRepository;
 import com.anushaporter.backend.repository.DriverRepository;
+import com.anushaporter.backend.repository.NotificationRepository;
 import com.anushaporter.backend.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,18 @@ public class DriverOfferService {
 
     @Autowired(required = false)
     private PushNotificationService pushNotificationService;
+
+    @Autowired(required = false)
+    private DriverWalletService driverWalletService;
+
+    @Autowired(required = false)
+    private NotificationRepository notificationRepository;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.config.handler.TelemetryWebSocketHandler telemetryWebSocketHandler;
+
+    @Autowired(required = false)
+    private DriverRankingService driverRankingService;
 
     public List<DriverOffer> createAndDispatchOffers(Order order, List<DriverRankingService.RankedDriver> rankedDrivers, double radiusTierKm, int timeoutSeconds) {
         if (order == null || rankedDrivers == null || rankedDrivers.isEmpty()) {
@@ -67,7 +80,7 @@ public class DriverOfferService {
             // Dispatch Push Notification to driver
             if (pushNotificationService != null) {
                 try {
-                    pushNotificationService.notifyDriverAssignment(driver.getId().toString(), order.getBookingId(), order.getPickupAddress(), order.getDropAddress());
+                    pushNotificationService.notifyDriverOffer(driver, order.getBookingId(), order.getPickupAddress(), order.getDropAddress(), order.getAmount());
                 } catch (Exception e) {
                     log.warn("Failed to send push notification to driver {}: {}", driver.getId(), e.getMessage());
                 }
@@ -76,6 +89,82 @@ public class DriverOfferService {
 
         order.setOfferCount(order.getOfferCount() + createdOffers.size());
         orderRepository.save(order);
+
+        return createdOffers;
+    }
+
+    public List<DriverOffer> broadcastOffersToActiveDrivers(Order order, List<Driver> activeDrivers, int timeoutSeconds) {
+        return broadcastOffersToActiveDrivers(order, activeDrivers, 5.0, timeoutSeconds);
+    }
+
+    /**
+     * Rapido / Swiggy Broadcast Dispatch: sends the ride request to active eligible drivers within the given radius tier.
+     */
+    public List<DriverOffer> broadcastOffersToActiveDrivers(Order order, List<Driver> activeDrivers, double radiusTierKm, int timeoutSeconds) {
+        if (order == null || activeDrivers == null || activeDrivers.isEmpty()) {
+            return List.of();
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiresAt = now.plusSeconds(timeoutSeconds > 0 ? timeoutSeconds : 60);
+        List<DriverOffer> createdOffers = new ArrayList<>();
+
+        double pickupLat = order.getPickupLat() != null ? order.getPickupLat() : 17.4486;
+        double pickupLng = order.getPickupLng() != null ? order.getPickupLng() : 78.3908;
+
+        for (Driver driver : activeDrivers) {
+            if (driver == null || driver.getId() == null) continue;
+
+            double pickupDist = 1.0;
+            if (driver.getLatitude() != null && driver.getLongitude() != null && driverRankingService != null) {
+                pickupDist = driverRankingService.calculateHaversineDistanceKm(pickupLat, pickupLng, driver.getLatitude(), driver.getLongitude());
+            }
+
+            DriverOffer offer = new DriverOffer();
+            offer.setBookingId(order.getBookingId());
+            offer.setOrderId(order.getId());
+            offer.setDriverId(driver.getId());
+            offer.setStatus(DriverOfferStatus.OFFERED);
+            offer.setRadiusTierKm(radiusTierKm > 0 ? radiusTierKm : pickupDist);
+            offer.setDistanceKm(order.getDistanceKm() != null ? order.getDistanceKm() : 5.0);
+            offer.setPickupDistanceKm(pickupDist);
+            offer.setOfferedFare(order.getAmount() != null ? order.getAmount() : 250.0);
+            offer.setOfferedAt(now);
+            offer.setExpiresAt(expiresAt);
+
+            DriverOffer saved = driverOfferRepository.save(offer);
+            createdOffers.add(saved);
+
+            log.info("Broadcast dispatched offer ID #{} to Driver ID #{} for Booking '{}' (Tier {} km, Pickup distance {} km)",
+                    saved.getId(), driver.getId(), order.getBookingId(), radiusTierKm, pickupDist);
+
+            // Dispatch Push Notification to driver
+            if (pushNotificationService != null) {
+                try {
+                    pushNotificationService.notifyDriverOffer(driver, order.getBookingId(), order.getPickupAddress(), order.getDropAddress(), order.getAmount());
+                } catch (Exception e) {
+                    log.warn("Failed to send push notification to driver {}: {}", driver.getId(), e.getMessage());
+                }
+            }
+        }
+
+        order.setOfferCount(order.getOfferCount() + createdOffers.size());
+        orderRepository.save(order);
+
+        // Real-time WebSocket broadcast
+        if (telemetryWebSocketHandler != null) {
+            try {
+                String payload = String.format("{\"bookingId\":\"%s\",\"pickupAddress\":\"%s\",\"dropAddress\":\"%s\",\"amount\":%.2f,\"distanceKm\":%.1f}",
+                        order.getBookingId(),
+                        order.getPickupAddress() != null ? order.getPickupAddress().replace("\"", "\\\"") : "",
+                        order.getDropAddress() != null ? order.getDropAddress().replace("\"", "\\\"") : "",
+                        order.getAmount() != null ? order.getAmount() : 0.0,
+                        order.getDistanceKm() != null ? order.getDistanceKm() : 0.0);
+                telemetryWebSocketHandler.broadcastOfferNew(order.getBookingId(), payload);
+            } catch (Exception e) {
+                log.warn("Failed to broadcast WebSocket offer: {}", e.getMessage());
+            }
+        }
 
         return createdOffers;
     }
@@ -143,6 +232,12 @@ public class DriverOfferService {
             offer.setRespondedAt(now);
             driverOfferRepository.save(offer);
 
+            if (notificationRepository != null) {
+                try {
+                    notificationRepository.dismissDriverNotificationForBooking(bookingId, driverId);
+                } catch (Exception ignored) {}
+            }
+
             response.put("success", true);
             response.put("status", DriverOfferStatus.REJECTED.name());
             response.put("message", "Offer rejected.");
@@ -169,13 +264,16 @@ public class DriverOfferService {
             return response;
         }
 
-        Double walletBalance = driver.getWalletBalance();
-        if (walletBalance == null || walletBalance <= 0.0) {
-            response.put("success", false);
-            response.put("status", "INSUFFICIENT_WALLET_BALANCE");
-            response.put("error", "INSUFFICIENT_WALLET_BALANCE");
-            response.put("message", "Driver wallet balance must be greater than ₹0 to accept rides. Please recharge your wallet.");
-            return response;
+        if (driverWalletService != null) {
+            double minRequired = driverWalletService.getMinRequiredBalance();
+            Double walletBalance = driver.getWalletBalance();
+            if (minRequired > 0.0 && (walletBalance == null || walletBalance < minRequired)) {
+                response.put("success", false);
+                response.put("status", "INSUFFICIENT_WALLET_BALANCE");
+                response.put("error", "INSUFFICIENT_WALLET_BALANCE");
+                response.put("message", "Driver wallet balance must be at least ₹" + minRequired + " to accept rides. Please recharge your wallet.");
+                return response;
+            }
         }
 
         String driverIdStr = driver.getId().toString();
@@ -202,8 +300,8 @@ public class DriverOfferService {
             offer.setRespondedAt(now);
             driverOfferRepository.save(offer);
 
-            // Mark all competing offers as TOO_LATE
-            driverOfferRepository.markCompetingOffersTooLate(bookingId, driverId, now);
+            // Notify all competing drivers to stop notification & mark TOO_LATE
+            onOrderAcceptedByDriver(bookingId, driverId);
 
             log.info("Driver ID #{} WON atomic assignment for Booking '{}'", driverId, bookingId);
 
@@ -232,6 +330,95 @@ public class DriverOfferService {
             response.put("bookingId", bookingId);
             response.put("message", "Another driver partner has already accepted this booking.");
             return response;
+        }
+    }
+
+    /**
+     * When any driver accepts the booking:
+     * 1. Marks all competing offers as TOO_LATE.
+     * 2. Dismisses all pending DRIVER_OFFER notifications for competing drivers in the DB.
+     * 3. Dispatches push notification (STOP_DRIVER_OFFER) to competing drivers.
+     * 4. Broadcasts WebSocket event to stop notification ringing across driver apps.
+     */
+    @Transactional
+    public void onOrderAcceptedByDriver(String bookingId, Long winningDriverId) {
+        if (bookingId == null || bookingId.isBlank()) return;
+        LocalDateTime now = LocalDateTime.now();
+
+        // 1. Mark competing offers TOO_LATE
+        driverOfferRepository.markCompetingOffersTooLate(bookingId, winningDriverId != null ? winningDriverId : -1L, now);
+
+        // 2. Dismiss competing notifications in NotificationRepository
+        if (notificationRepository != null) {
+            try {
+                notificationRepository.dismissNotificationsForBooking(bookingId, "DRIVER_OFFER", winningDriverId);
+            } catch (Exception e) {
+                log.warn("Failed to dismiss notifications for booking {}: {}", bookingId, e.getMessage());
+            }
+        }
+
+        // 3. Send silent push / stop notification to competing drivers
+        if (pushNotificationService != null) {
+            List<Long> competingDriverIds = driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId);
+            for (Long cId : competingDriverIds) {
+                if (winningDriverId != null && winningDriverId.equals(cId)) continue;
+                driverRepository.findById(cId).ifPresent(driver -> {
+                    try {
+                        pushNotificationService.notifyOfferTaken(driver, bookingId);
+                    } catch (Exception ignored) {}
+                });
+            }
+        }
+
+        // 4. Broadcast WebSocket event to stop notification on client apps
+        if (telemetryWebSocketHandler != null) {
+            try {
+                telemetryWebSocketHandler.broadcastOfferDismiss(bookingId, "ACCEPTED_BY_ANOTHER");
+            } catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * When an order/booking is cancelled:
+     * 1. Marks all pending offers as TOO_LATE/CANCELLED.
+     * 2. Dismisses all pending DRIVER_OFFER notifications in the DB.
+     * 3. Dispatches push notification (STOP_DRIVER_OFFER) to all offered drivers.
+     * 4. Broadcasts WebSocket event to stop notification ringing across driver apps.
+     */
+    @Transactional
+    public void onOrderCancelled(String bookingId) {
+        if (bookingId == null || bookingId.isBlank()) return;
+        LocalDateTime now = LocalDateTime.now();
+
+        // 1. Mark all competing offers TOO_LATE
+        driverOfferRepository.markCompetingOffersTooLate(bookingId, -1L, now);
+
+        // 2. Dismiss all notifications in NotificationRepository
+        if (notificationRepository != null) {
+            try {
+                notificationRepository.dismissNotificationsForBooking(bookingId, "DRIVER_OFFER", null);
+            } catch (Exception e) {
+                log.warn("Failed to dismiss notifications for cancelled booking {}: {}", bookingId, e.getMessage());
+            }
+        }
+
+        // 3. Send silent push / stop notification to all offered drivers
+        if (pushNotificationService != null) {
+            List<Long> competingDriverIds = driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId);
+            for (Long cId : competingDriverIds) {
+                driverRepository.findById(cId).ifPresent(driver -> {
+                    try {
+                        pushNotificationService.notifyOfferTaken(driver, bookingId);
+                    } catch (Exception ignored) {}
+                });
+            }
+        }
+
+        // 4. Broadcast WebSocket dismiss
+        if (telemetryWebSocketHandler != null) {
+            try {
+                telemetryWebSocketHandler.broadcastOfferDismiss(bookingId, "CANCELLED");
+            } catch (Exception ignored) {}
         }
     }
 }

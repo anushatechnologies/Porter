@@ -76,6 +76,27 @@ public class TelemetryWebSocketHandler extends TextWebSocketHandler {
         broadcastMessage(json);
     }
 
+    public void broadcastOfferNew(String bookingId, String jsonPayload) {
+        String json = "{"
+                + "\"event\":\"driver:offer:new\","
+                + "\"bookingId\":\"" + bookingId + "\","
+                + "\"data\":" + (jsonPayload != null ? jsonPayload : "{}") + ","
+                + "\"timestamp\":" + System.currentTimeMillis()
+                + "}";
+        broadcastMessage(json);
+    }
+
+    public void broadcastOfferDismiss(String bookingId, String reason) {
+        String json = "{"
+                + "\"event\":\"driver:offer:stop\","
+                + "\"bookingId\":\"" + (bookingId != null ? bookingId : "") + "\","
+                + "\"reason\":\"" + (reason != null ? reason : "ACCEPTED_BY_ANOTHER") + "\","
+                + "\"message\":\"Order offer has been closed.\","
+                + "\"timestamp\":" + System.currentTimeMillis()
+                + "}";
+        broadcastMessage(json);
+    }
+
     private void broadcastMessage(String json) {
         for (WebSocketSession session : sessions) {
             if (session.isOpen()) {
