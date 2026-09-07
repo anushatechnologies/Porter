@@ -71,6 +71,12 @@ public class DriverWalletController {
         boolean hasVerifiedAccount = driver.getAccountNumber() != null && !driver.getAccountNumber().isEmpty();
         walletData.put("hasVerifiedAccount", hasVerifiedAccount);
 
+        walletData.put("canGoOnline", true);
+        walletData.put("can_go_online", true);
+        walletData.put("isOnlineOptionAvailable", true);
+        walletData.put("is_online_option_available", true);
+        walletData.put("isOnlineEnabled", true);
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("availableBalance", wallet.getAvailableBalance());
@@ -79,6 +85,11 @@ public class DriverWalletController {
         response.put("totalWithdrawn", wallet.getTotalWithdrawn());
         response.put("platformCommission", wallet.getPlatformCommission());
         response.put("minRechargeAmount", minRechargeAmount);
+        response.put("canGoOnline", true);
+        response.put("can_go_online", true);
+        response.put("isOnlineOptionAvailable", true);
+        response.put("is_online_option_available", true);
+        response.put("isOnlineEnabled", true);
         response.put("wallet", walletData);
 
         return ResponseEntity.ok(response);

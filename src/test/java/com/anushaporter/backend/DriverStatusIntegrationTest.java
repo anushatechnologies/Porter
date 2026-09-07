@@ -255,8 +255,8 @@ public class DriverStatusIntegrationTest {
     }
 
     @Test
-    void testZeroWalletBalanceBlockedWhenAdminSetsMinBalance() throws Exception {
-        // Admin configures minimum required balance to 500.0
+    void testZeroWalletBalanceCanGoOnlineWithNoMinimumBalanceRequired() throws Exception {
+        // Even if admin configured a min required balance setting, driver with ₹0 CAN still go online freely
         com.anushaporter.backend.model.GlobalSettings minSetting = new com.anushaporter.backend.model.GlobalSettings();
         minSetting.setSettingKey("wallet_min_required_balance");
         minSetting.setSettingValue("500.0");
@@ -267,15 +267,33 @@ public class DriverStatusIntegrationTest {
         testDriver.setStatus("offline");
         driverRepository.save(testDriver);
 
-        // Attempt to toggle online -> blocked because balance (0) < minRequired (500)
+        // Attempt to toggle online -> SUCCEEDS because no minimum balance is required to go online!
+        mockMvc.perform(put("/api/drivers/me/status")
+                .header("Authorization", "Bearer " + jwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\": \"online\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.status", is("online")));
+
+        Driver inDb = driverRepository.findById(testDriver.getId()).orElseThrow();
+        assertEquals("online", inDb.getStatus());
+    }
+
+    @Test
+    void testNegativeWalletBalanceBlockedFromGoingOnline() throws Exception {
+        // Negative balance (-50.0) is blocked from going online
+        testDriver.setWalletBalance(-50.0);
+        testDriver.setStatus("offline");
+        driverRepository.save(testDriver);
+
         mockMvc.perform(put("/api/drivers/me/status")
                 .header("Authorization", "Bearer " + jwtToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\": \"online\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("WALLET_EMPTY")))
-                .andExpect(jsonPath("$.message", containsStringIgnoringCase("minimum required balance")));
+                .andExpect(jsonPath("$.error", is("NEGATIVE_WALLET_BALANCE")));
 
         Driver inDb = driverRepository.findById(testDriver.getId()).orElseThrow();
         assertEquals("offline", inDb.getStatus());

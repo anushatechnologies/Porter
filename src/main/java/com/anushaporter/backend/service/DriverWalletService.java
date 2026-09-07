@@ -383,7 +383,7 @@ public class DriverWalletService {
     }
 
     public String getEligibilityReason(String driverId) {
-        return isDriverEligibleForRides(driverId) ? "Sufficient balance" : "Insufficient balance. Recharge wallet to accept rides.";
+        return isDriverEligibleForRides(driverId) ? "No minimum balance required. Eligible to go online and accept rides." : "Negative wallet balance. Please recharge wallet to accept rides.";
     }
 
     /**
@@ -570,8 +570,7 @@ public class DriverWalletService {
         double balanceAfter = Math.round((balanceBefore - commission) * 100.0) / 100.0;
 
         driver.setWalletBalance(balanceAfter);
-        double minRequired = getMinRequiredBalance();
-        if (minRequired > 0.0 && balanceAfter < minRequired) {
+        if (balanceAfter < 0.0) {
             driver.setStatus("offline");
         }
         driverRepository.save(driver);
@@ -604,7 +603,7 @@ public class DriverWalletService {
         Map<String, Object> settings = getAdminWalletSettings();
         boolean autoOffline = Boolean.TRUE.equals(settings.get("autoOfflineWhenBalanceInsufficient"));
 
-        if (autoOffline && (balanceAfter < 0.0 || (minRequired > 0.0 && balanceAfter < minRequired))) {
+        if (autoOffline && balanceAfter < 0.0) {
             try {
                 driver.setStatus("offline");
                 driverRepository.save(driver);

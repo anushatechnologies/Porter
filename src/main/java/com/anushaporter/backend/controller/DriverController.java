@@ -215,6 +215,13 @@ public class DriverController {
             map.put("trips", d.getTrips() != null ? d.getTrips() : 0);
             map.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
             map.put("wallet_balance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
+            map.put("minRequiredBalance", 0.0);
+            map.put("minimumBalance", 0.0);
+            map.put("minBalance", 0.0);
+            map.put("canGoOnline", true);
+            map.put("can_go_online", true);
+            map.put("isEligible", true);
+            map.put("isOnlineOptionAvailable", true);
             map.put("licenseUri", storageService.getPresignedOrSanitizedUrl(d.getLicenseUri()));
             map.put("rcUri", storageService.getPresignedOrSanitizedUrl(d.getRcUri()));
             map.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(d.getAadhaarUri()));
@@ -417,6 +424,15 @@ public class DriverController {
             map.put("trips", d.getTrips() != null ? d.getTrips() : 0);
             map.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
             map.put("wallet_balance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
+            map.put("minRequiredBalance", 0.0);
+            map.put("minimumBalance", 0.0);
+            map.put("minBalance", 0.0);
+            map.put("canGoOnline", true);
+            map.put("can_go_online", true);
+            map.put("isEligible", true);
+            map.put("isOnlineOptionAvailable", true);
+            map.put("is_online_option_available", true);
+            map.put("eligibilityReason", "No minimum balance required. You can go online anytime.");
             map.put("profilePhotoUri", storageService.getPresignedOrSanitizedUrl(d.getProfilePhotoUri()));
             map.put("licenseUri", storageService.getPresignedOrSanitizedUrl(d.getLicenseUri()));
             map.put("rcUri", storageService.getPresignedOrSanitizedUrl(d.getRcUri()));
@@ -452,13 +468,14 @@ public class DriverController {
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
 
         if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
-            double minRequired = driverWalletService != null ? driverWalletService.getMinRequiredBalance() : 0.0;
+            // No minimum balance required to go online!
+            // Drivers with zero amount on wallet can go online freely.
             double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
-            if (minRequired > 0.0 && walletBalance < minRequired) {
+            if (walletBalance < 0.0) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
-                        "error", "WALLET_EMPTY",
-                        "message", String.format("Your wallet balance is ₹%.0f. Minimum required balance to go online is ₹%.0f. Please recharge your wallet.", walletBalance, minRequired)
+                        "error", "NEGATIVE_WALLET_BALANCE",
+                        "message", String.format("Your wallet balance is negative (₹%.0f). Please clear outstanding balance to go online.", walletBalance)
                 ));
             }
         }
@@ -500,13 +517,14 @@ public class DriverController {
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
 
         if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
-            double minRequired = driverWalletService != null ? driverWalletService.getMinRequiredBalance() : 0.0;
+            // No minimum balance required to go online!
+            // Drivers with zero amount on wallet can go online freely.
             double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
-            if (minRequired > 0.0 && walletBalance < minRequired) {
+            if (walletBalance < 0.0) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "success", false,
-                        "error", "WALLET_EMPTY",
-                        "message", String.format("Your wallet balance is ₹%.0f. Minimum required balance to go online is ₹%.0f. Please recharge your wallet.", walletBalance, minRequired)
+                        "error", "NEGATIVE_WALLET_BALANCE",
+                        "message", String.format("Your wallet balance is negative (₹%.0f). Please clear outstanding balance to go online.", walletBalance)
                 ));
             }
         }
