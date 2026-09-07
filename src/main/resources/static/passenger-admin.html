@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anusha Porter — Passenger Car & Dynamic Pricing Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-card: rgba(18, 24, 38, 0.85);
+            --bg-card-hover: rgba(28, 36, 56, 0.95);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-active: rgba(99, 102, 241, 0.5);
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.25);
+            --primary-hover: #4f46e5;
+            --accent: #06b6d4;
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.2);
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            --transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.06) 0%, transparent 40%);
+            background-attachment: fixed;
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        aside.sidebar {
+            width: 280px;
+            background: rgba(13, 17, 28, 0.95);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            z-index: 100;
+            padding: 24px 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 12px 24px 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 20px;
+        }
+
+        .brand-logo {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .brand-text h1 {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-text span {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .nav-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        }
+
+        .nav-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+            padding: 12px 12px 4px 12px;
+            font-weight: 700;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 13.5px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+        }
+
+        .nav-item.active {
+            background: var(--primary-glow);
+            color: #a5b4fc;
+            border-left: 3px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .nav-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .version-badge-container {
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            margin-top: auto;
+        }
+
+        .version-badge-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-dim);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .version-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        /* Main Content */
+        main.main-content {
+            flex: 1;
+            padding: 32px 40px;
+            max-width: 1550px;
+            margin: 0 auto;
+            width: calc(100% - 280px);
+        }
+
+        header.top-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+        }
+
+        .page-title h2 {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+        }
+
+        .page-title p {
+            font-size: 13.5px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 9px 18px;
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #064e3b;
+        }
+
+        /* Metric KPI Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 18px;
+            margin-bottom: 32px;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            transition: var(--transition);
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card:hover {
+            border-color: var(--border-active);
+            transform: translateY(-2px);
+        }
+
+        .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .metric-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .metric-icon {
+            font-size: 18px;
+            opacity: 0.7;
+        }
+
+        .metric-value {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--text-main);
+        }
+
+        .metric-change {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11.5px;
+            margin-top: 6px;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        /* Tabs Content Area */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Glassmorphism Card Container */
+        .content-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-card);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .card-header h3 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .card-header p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Data Tables */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13.5px;
+            text-align: left;
+        }
+
+        table.data-table th {
+            padding: 12px 16px;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.015);
+        }
+
+        table.data-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+            vertical-align: middle;
+        }
+
+        table.data-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .badge-active, .badge-completed {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-searching, .badge-requested {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .badge-assigned, .badge-transit {
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .badge-cancelled {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        /* Vehicle Category Grid */
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .category-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .category-card:hover {
+            border-color: var(--border-active);
+            transform: translateY(-2px);
+        }
+
+        .category-img {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            background: #1e293b;
+        }
+
+        .category-body {
+            padding: 18px;
+        }
+
+        .category-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .category-title h4 {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .category-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+        }
+
+        .category-pricing-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 13px;
+        }
+
+        .category-pricing-row span:first-child {
+            color: var(--text-muted);
+        }
+
+        .category-pricing-row span:last-child {
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        /* Simulator / Pricing Preview Tool */
+        .simulator-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 1fr;
+            gap: 28px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .form-control {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            color: var(--text-main);
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        /* Breakdown Receipt Box */
+        .receipt-card {
+            background: rgba(13, 18, 30, 0.9);
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .receipt-card::before {
+            content: "PRICING ENGINE FARE BREAKDOWN";
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: var(--bg-base);
+            padding: 2px 10px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            color: var(--accent);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+        }
+
+        .receipt-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 13.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .receipt-row.total {
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            border-bottom: none;
+            margin-top: 12px;
+            padding-top: 14px;
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .receipt-row.total span:last-child {
+            color: var(--accent);
+            font-size: 22px;
+        }
+
+        .split-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .split-item {
+            background: rgba(255, 255, 255, 0.02);
+            padding: 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .split-item span {
+            display: block;
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .split-item strong {
+            font-size: 15px;
+            color: var(--text-main);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-card {
+            background: #121826;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 550px;
+            padding: 28px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes modalPop {
+            from { transform: scale(0.94); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .close-modal:hover {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-logo">🚗</div>
+            <div class="brand-text">
+                <h1>Anusha Porter</h1>
+                <span>Passenger & Pricing</span>
+            </div>
+        </div>
+
+        <nav class="nav-group">
+            <span class="nav-label">Overview</span>
+            <div class="nav-item active" onclick="switchTab('dashboard')">
+                <span class="nav-icon">📊</span> Dashboard KPIs
+            </div>
+            
+            <span class="nav-label">Configurations</span>
+            <div class="nav-item" onclick="switchTab('services')">
+                <span class="nav-icon">🚖</span> Passenger Services
+            </div>
+            <div class="nav-item" onclick="switchTab('categories')">
+                <span class="nav-icon">🚘</span> Vehicle Categories
+            </div>
+            <div class="nav-item" onclick="switchTab('pricing')">
+                <span class="nav-icon">💎</span> Dynamic Pricing Rules
+            </div>
+            <div class="nav-item" onclick="switchTab('preview')">
+                <span class="nav-icon">⚡</span> Pricing Preview Tool
+            </div>
+            <div class="nav-item" onclick="switchTab('versions')">
+                <span class="nav-icon">📜</span> Version & Audit Logs
+            </div>
+
+            <span class="nav-label">Operations</span>
+            <div class="nav-item" onclick="switchTab('bookings')">
+                <span class="nav-icon">📋</span> Passenger Bookings
+            </div>
+            <div class="nav-item" onclick="switchTab('reports')">
+                <span class="nav-icon">📈</span> Revenue & Reports
+            </div>
+            <a href="/passenger-booking.html" target="_blank" class="nav-item" style="color: var(--accent); margin-top: 10px;">
+                <span class="nav-icon">🌐</span> Customer Booking UI ↗
+            </a>
+        </nav>
+
+        <div class="version-badge-container">
+            <div class="version-badge-header">
+                <span>ACTIVE PRICING VERSION</span>
+                <span style="color: var(--success); font-size: 9px;">● LIVE</span>
+            </div>
+            <div class="version-code" id="activeVersionCode">PV-2026-09-07-01</div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="top-header">
+            <div class="page-title">
+                <h2 id="pageTitle">Passenger Operations & Pricing Dashboard</h2>
+                <p id="pageSubtitle">Real-time control over passenger car services, formulas, driver assignment, and revenue analytics</p>
+            </div>
+            <div class="action-bar">
+                <button class="btn btn-outline" onclick="loadDashboard()">
+                    <span>🔄</span> Refresh
+                </button>
+                <button class="btn btn-primary" onclick="openPublishVersionModal()">
+                    <span>🚀</span> Publish New Version
+                </button>
+            </div>
+        </header>
+
+        <!-- KPI Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Total Bookings</span>
+                    <span class="metric-icon">📑</span>
+                </div>
+                <div class="metric-value" id="kpiTotalBookings">0</div>
+                <div class="metric-change">↑ Active transportation</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Completed Trips</span>
+                    <span class="metric-icon">✅</span>
+                </div>
+                <div class="metric-value" id="kpiCompletedTrips">0</div>
+                <div class="metric-change" style="color: var(--accent);">Successful journeys</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Active Rides</span>
+                    <span class="metric-icon">🚗</span>
+                </div>
+                <div class="metric-value" id="kpiActiveTrips">0</div>
+                <div class="metric-change" style="color: var(--warning);">On road right now</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Total Revenue</span>
+                    <span class="metric-icon">💰</span>
+                </div>
+                <div class="metric-value" id="kpiTotalRevenue">₹0.00</div>
+                <div class="metric-change">Gross Passenger Billing</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Company Commission</span>
+                    <span class="metric-icon">🏦</span>
+                </div>
+                <div class="metric-value" id="kpiCompanyCommission" style="color: #a5b4fc;">₹0.00</div>
+                <div class="metric-change">Retained platform margin</div>
+            </div>
+        </div>
+
+        <!-- TAB 1: DASHBOARD OVERVIEW -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Recent Passenger Bookings</h3>
+                        <p>Latest ride requests with driver status and dynamic fare snapshots</p>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="switchTab('bookings')">View All</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Customer</th>
+                                <th>Service</th>
+                                <th>Vehicle</th>
+                                <th>Distance</th>
+                                <th>Total Fare</th>
+                                <th>Driver</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentBookingsTbody">
+                            <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Loading bookings...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: PASSENGER SERVICES -->
+        <div id="tab-services" class="tab-content">
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Passenger Service Catalog</h3>
+                        <p>Configure passenger car service modes (One-Way, Round-Trip, Rental, Airport Transfer)</p>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Service Code</th>
+                                <th>Display Name</th>
+                                <th>Description</th>
+                                <th>Order</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="servicesTbody">
+                            <tr><td colspan="6" style="text-align: center;">Loading services...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: VEHICLE CATEGORIES -->
+        <div id="tab-categories" class="tab-content">
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Vehicle Categories & Capacity</h3>
+                        <p>Manage fleet tiers with passenger capacity constraints, luggage limits, and base rates</p>
+                    </div>
+                </div>
+                <div class="category-grid" id="categoryGrid">
+                    <!-- Dynamic vehicle cards injected here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: PRICING RULES -->
+        <div id="tab-pricing" class="tab-content">
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Active Pricing Formula Schema (<span id="pricingActiveVersionBadge">PV-2026-09-07-01</span>)</h3>
+                        <p>Modular formula components: Base Fare, Per-KM, Waiting, Night Charge, Surge Multipliers, and Commission</p>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Vehicle</th>
+                                <th>Base Fare</th>
+                                <th>Min KM</th>
+                                <th>Per KM</th>
+                                <th>Waiting/15m</th>
+                                <th>Night Fee</th>
+                                <th>Commission %</th>
+                                <th>Tax %</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pricingRulesTbody">
+                            <tr><td colspan="10" style="text-align: center;">Loading pricing rules...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: PRICING PREVIEW TOOL (MANDATORY REQUIREMENT) -->
+        <div id="tab-preview" class="tab-content">
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Mandatory Pricing Preview Simulator</h3>
+                        <p>Test fare calculation formulas and inspect the itemized financial breakdown before publishing live rates</p>
+                    </div>
+                </div>
+                <div class="simulator-grid">
+                    <div class="simulator-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Service Type</label>
+                                <select class="form-control" id="prevService">
+                                    <option value="ONE_WAY">One-Way Ride</option>
+                                    <option value="ROUND_TRIP">Round Trip</option>
+                                    <option value="RENTAL">Local Rental (8h/80km)</option>
+                                    <option value="AIRPORT_TRANSFER">Airport Transfer</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Vehicle Category</label>
+                                <select class="form-control" id="prevVehicle">
+                                    <option value="SEDAN">Sedan (4 Pax)</option>
+                                    <option value="HATCHBACK">Hatchback (4 Pax)</option>
+                                    <option value="SUV">SUV (6 Pax)</option>
+                                    <option value="PREMIUM_SUV">Premium SUV (7 Pax)</option>
+                                    <option value="LUXURY">Luxury (4 Pax)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Estimated Distance (KM)</label>
+                                <input type="number" class="form-control" id="prevDistance" value="25" min="1" step="0.5">
+                            </div>
+                            <div class="form-group">
+                                <label>Estimated Duration (Mins)</label>
+                                <input type="number" class="form-control" id="prevDuration" value="60" min="5">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Passenger Count</label>
+                                <input type="number" class="form-control" id="prevPassengers" value="3" min="1" max="10">
+                            </div>
+                            <div class="form-group">
+                                <label>Waiting Minutes</label>
+                                <input type="number" class="form-control" id="prevWaiting" value="20" min="0">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Time of Day</label>
+                                <select class="form-control" id="prevTime">
+                                    <option value="14:00">Daytime (02:00 PM - Normal)</option>
+                                    <option value="18:30">Evening Peak (06:30 PM - 1.20x Surge)</option>
+                                    <option value="23:30">Night Window (11:30 PM - Night Surcharge)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Coupon Code (Optional)</label>
+                                <input type="text" class="form-control" id="prevCoupon" placeholder="WELCOME100">
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="calculatePreview()">
+                            <span>⚡</span> Calculate Preview Breakdown
+                        </button>
+                    </div>
+
+                    <!-- Receipt Preview Output -->
+                    <div class="receipt-card" id="receiptOutput">
+                        <div style="text-align: center; color: var(--text-dim); padding: 40px 0;">
+                            Click <strong>Calculate Preview Breakdown</strong> to run dynamic pricing engine simulation.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 6: VERSION CONTROL & AUDIT LOGS -->
+        <div id="tab-versions" class="tab-content">
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Pricing Versions History</h3>
+                        <p>Audit trail of all published pricing versions ensuring historical booking immutability</p>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Version ID</th>
+                                <th>Status</th>
+                                <th>Effective From</th>
+                                <th>Created By</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="versionsTbody">
+                            <tr><td colspan="5" style="text-align: center;">Loading versions...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Pricing Audit Trail Log</h3>
+                        <p>Complete record of admin modifications, rate revisions, and publishing events</p>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Version</th>
+                                <th>Admin</th>
+                                <th>Entity</th>
+                                <th>Action</th>
+                                <th>Field</th>
+                                <th>Old Value</th>
+                                <th>New Value</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTbody">
+                            <tr><td colspan="9" style="text-align: center;">Loading audit log...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 7: BOOKINGS MANAGEMENT -->
+        <div id="tab-bookings" class="tab-content">
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>All Passenger Bookings</h3>
+                        <p>Dispatch, driver assignment, state machine tracking, and trip completion</p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <select class="form-control" id="filterStatus" onchange="loadBookings()" style="width: 180px;">
+                            <option value="">All Statuses</option>
+                            <option value="DRIVER_SEARCHING">Searching Driver</option>
+                            <option value="DRIVER_ASSIGNED">Driver Assigned</option>
+                            <option value="TRIP_STARTED">On Trip</option>
+                            <option value="TRIP_COMPLETED">Completed</option>
+                            <option value="CANCELLED_BY_CUSTOMER">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Created</th>
+                                <th>Customer</th>
+                                <th>Route</th>
+                                <th>Vehicle</th>
+                                <th>Fare</th>
+                                <th>Driver</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allBookingsTbody">
+                            <tr><td colspan="9" style="text-align: center;">Loading bookings...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 8: REPORTS & EXPORT -->
+        <div id="tab-reports" class="tab-content">
+            <div class="content-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Financial Reports & Analytics</h3>
+                        <p>Download audited passenger trip ledgers, driver earnings, and company commissions</p>
+                    </div>
+                    <a href="/api/admin/passenger/reports/export-csv" class="btn btn-primary">
+                        <span>📥</span> Export Bookings CSV
+                    </a>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; padding: 20px 0;">
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                        <h4 style="color: var(--text-muted); font-size: 13px;">Customer Gross Billing</h4>
+                        <div id="repGrossFare" style="font-size: 28px; font-weight: 800; color: var(--text-main); margin-top: 8px;">₹0.00</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                        <h4 style="color: var(--text-muted); font-size: 13px;">Driver Net Earnings</h4>
+                        <div id="repDriverEarnings" style="font-size: 28px; font-weight: 800; color: #34d399; margin-top: 8px;">₹0.00</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                        <h4 style="color: var(--text-muted); font-size: 13px;">Anusha Porter Commission</h4>
+                        <div id="repCommission" style="font-size: 28px; font-weight: 800; color: #a5b4fc; margin-top: 8px;">₹0.00</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: Assign Driver -->
+    <div class="modal-overlay" id="assignDriverModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Assign Driver to Booking</h3>
+                <button class="close-modal" onclick="closeModal('assignDriverModal')">✕</button>
+            </div>
+            <input type="hidden" id="assignBookingId">
+            <div class="form-group">
+                <label>Booking Reference</label>
+                <input type="text" class="form-control" id="assignBookingNum" readonly>
+            </div>
+            <div class="form-group">
+                <label>Select Driver</label>
+                <select class="form-control" id="assignDriverSelect">
+                    <!-- Dynamic drivers loaded here -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Assignment Notes</label>
+                <input type="text" class="form-control" id="assignNotes" placeholder="Auto/Manual priority dispatch">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-outline" onclick="closeModal('assignDriverModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitAssignDriver()">Confirm Assignment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Publish Version -->
+    <div class="modal-overlay" id="publishVersionModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Publish New Pricing Version</h3>
+                <button class="close-modal" onclick="closeModal('publishVersionModal')">✕</button>
+            </div>
+            <div class="form-group">
+                <label>Admin Name</label>
+                <input type="text" class="form-control" id="pubAdminName" value="Super Admin">
+            </div>
+            <div class="form-group">
+                <label>Release Notes / Revision Justification</label>
+                <textarea class="form-control" id="pubNotes" rows="3" placeholder="e.g. Revised Sedan base rates and weekend surge multipliers"></textarea>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-outline" onclick="closeModal('publishVersionModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitPublishVersion()">Publish & Lock Snapshot</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            const targetTab = document.getElementById('tab-' + tabId);
+            if (targetTab) targetTab.classList.add('active');
+
+            // Find clicked nav item
+            event.currentTarget.classList.add('active');
+
+            const titles = {
+                'dashboard': 'Passenger Operations & Pricing Dashboard',
+                'services': 'Passenger Service Catalog',
+                'categories': 'Vehicle Categories & Capacity Management',
+                'pricing': 'Dynamic Pricing Formula Engine',
+                'preview': 'Mandatory Pricing Preview Simulator',
+                'versions': 'Pricing Version Control & Audit Trail',
+                'bookings': 'Passenger Bookings & Dispatch Management',
+                'reports': 'Revenue, Driver Earnings & Ledgers'
+            };
+            document.getElementById('pageTitle').innerText = titles[tabId] || 'Passenger Dashboard';
+
+            if (tabId === 'dashboard') loadDashboard();
+            if (tabId === 'services') loadServices();
+            if (tabId === 'categories') loadCategories();
+            if (tabId === 'pricing') loadPricingRules();
+            if (tabId === 'versions') loadVersions();
+            if (tabId === 'bookings') loadBookings();
+            if (tabId === 'reports') loadReports();
+        }
+
+        async function loadDashboard() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/reports`);
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('kpiTotalBookings').innerText = data.totalBookings || 0;
+                    document.getElementById('kpiCompletedTrips').innerText = data.completedTrips || 0;
+                    document.getElementById('kpiActiveTrips').innerText = data.activeTrips || 0;
+                    document.getElementById('kpiTotalRevenue').innerText = '₹' + Number(data.totalRevenue || 0).toFixed(2);
+                    document.getElementById('kpiCompanyCommission').innerText = '₹' + Number(data.companyCommission || 0).toFixed(2);
+                    if (data.activePricingVersion) {
+                        document.getElementById('activeVersionCode').innerText = data.activePricingVersion;
+                        document.getElementById('pricingActiveVersionBadge').innerText = data.activePricingVersion;
+                    }
+                }
+                loadRecentBookings();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadRecentBookings() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/bookings`);
+                if (res.ok) {
+                    const bookings = await res.json();
+                    const tbody = document.getElementById('recentBookingsTbody');
+                    if (bookings.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-dim);">No bookings created yet. Test in customer UI!</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = bookings.slice(0, 5).map(b => renderBookingRow(b)).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadBookings() {
+            try {
+                const status = document.getElementById('filterStatus').value;
+                const url = status ? `${API_BASE}/admin/passenger/bookings?status=${status}` : `${API_BASE}/admin/passenger/bookings`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const bookings = await res.json();
+                    const tbody = document.getElementById('allBookingsTbody');
+                    if (bookings.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-dim);">No bookings match criteria.</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = bookings.map(b => renderBookingRow(b)).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function renderBookingRow(b) {
+            const fare = b.fareBreakdown ? '₹' + Number(b.fareBreakdown.totalFare).toFixed(2) : '₹0.00';
+            const driver = b.driverName ? `${b.driverName} (${b.vehicleNumber || 'Car'})` : '<span style="color:var(--text-dim);">Unassigned</span>';
+            const statusClass = 'badge-' + (b.status ? b.status.toLowerCase().split('_')[0] : 'requested');
+            
+            let actionBtn = '';
+            if (b.status === 'DRIVER_SEARCHING' || b.status === 'REQUESTED') {
+                actionBtn = `<button class="btn btn-sm btn-primary" onclick="openAssignModal(${b.id}, '${b.bookingNumber}')">Assign Driver</button>`;
+            } else if (b.status === 'DRIVER_ASSIGNED') {
+                actionBtn = `<button class="btn btn-sm btn-outline" onclick="updateTripStatus(${b.id}, 'DRIVER_ARRIVED')">Mark Arrived</button>`;
+            } else if (b.status === 'DRIVER_ARRIVED') {
+                actionBtn = `<button class="btn btn-sm btn-success" onclick="updateTripStatus(${b.id}, 'TRIP_STARTED')">Start Trip</button>`;
+            } else if (b.status === 'TRIP_STARTED') {
+                actionBtn = `<button class="btn btn-sm btn-primary" onclick="updateTripStatus(${b.id}, 'TRIP_COMPLETED')">Complete Trip</button>`;
+            } else {
+                actionBtn = `<span style="color:var(--text-dim); font-size:12px;">Archived</span>`;
+            }
+
+            return `
+                <tr>
+                    <td><strong>${b.bookingNumber}</strong></td>
+                    <td>${b.customerName || 'Customer'}<br><small style="color:var(--text-dim);">${b.customerPhone || ''}</small></td>
+                    <td>${b.serviceType}</td>
+                    <td>${b.vehicleCategoryCode}</td>
+                    <td>${b.distanceKm || 0} KM</td>
+                    <td><strong style="color:var(--accent);">${fare}</strong></td>
+                    <td>${driver}</td>
+                    <td><span class="badge ${statusClass}">${b.status}</span></td>
+                    <td>${actionBtn}</td>
+                </tr>
+            `;
+        }
+
+        async function updateTripStatus(id, nextStatus) {
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/bookings/${id}/status`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({status: nextStatus})
+                });
+                if (res.ok) {
+                    loadDashboard();
+                    loadBookings();
+                } else {
+                    const err = await res.json();
+                    alert('Error updating status: ' + (err.message || 'Invalid transition'));
+                }
+            } catch (e) {
+                alert('Network error updating status');
+            }
+        }
+
+        async function loadServices() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/services`);
+                if (res.ok) {
+                    const services = await res.json();
+                    document.getElementById('servicesTbody').innerHTML = services.map(s => `
+                        <tr>
+                            <td><strong>${s.serviceCode}</strong></td>
+                            <td>${s.iconUrl || '🚗'} ${s.displayName}</td>
+                            <td style="color:var(--text-muted);">${s.description || ''}</td>
+                            <td>${s.displayOrder}</td>
+                            <td><span class="badge ${s.active ? 'badge-active' : 'badge-cancelled'}">${s.active ? 'Active' : 'Disabled'}</span></td>
+                            <td><button class="btn btn-sm btn-outline" onclick="alert('Service configured')">Edit</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadCategories() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/vehicle-categories`);
+                if (res.ok) {
+                    const categories = await res.json();
+                    document.getElementById('categoryGrid').innerHTML = categories.map(c => `
+                        <div class="category-card">
+                            <img src="${c.imageUrl || 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400'}" class="category-img" alt="${c.displayName}">
+                            <div class="category-body">
+                                <div class="category-title">
+                                    <h4>${c.displayName}</h4>
+                                    <span class="badge badge-active">${c.categoryCode}</span>
+                                </div>
+                                <div class="category-meta">
+                                    <span>👤 Max ${c.passengerCapacity} Pax</span>
+                                    <span>🧳 ${c.luggageCapacity} Bags</span>
+                                </div>
+                                <div class="category-pricing-row">
+                                    <span>Base Minimum Fare</span>
+                                    <span>₹${Number(c.baseFare).toFixed(2)}</span>
+                                </div>
+                                <div class="category-pricing-row">
+                                    <span>Per KM Rate</span>
+                                    <span>₹${Number(c.perKmRate).toFixed(2)}/KM</span>
+                                </div>
+                                <div class="category-pricing-row">
+                                    <span>Driver Allowance</span>
+                                    <span>₹${Number(c.driverAllowance || 0).toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadPricingRules() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/pricing`);
+                if (res.ok) {
+                    const rules = await res.json();
+                    document.getElementById('pricingRulesTbody').innerHTML = rules.map(r => `
+                        <tr>
+                            <td><span class="badge badge-assigned">${r.serviceCode}</span></td>
+                            <td><strong>${r.vehicleCategoryCode}</strong></td>
+                            <td>₹${Number(r.baseFare).toFixed(2)}</td>
+                            <td>${r.minimumKm} KM</td>
+                            <td>₹${Number(r.perKmRate).toFixed(2)}</td>
+                            <td>₹${Number(r.waitingChargePer15Min || 50).toFixed(2)}</td>
+                            <td>₹${Number(r.nightChargeFixed || 150).toFixed(2)}</td>
+                            <td>${r.driverCommissionPercentage || 20}%</td>
+                            <td>${r.taxPercentage || 5}%</td>
+                            <td><button class="btn btn-sm btn-outline" onclick="alert('Rule ID: ' + ${r.id})">Config</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadVersions() {
+            try {
+                const vRes = await fetch(`${API_BASE}/admin/passenger/pricing/versions`);
+                if (vRes.ok) {
+                    const versions = await vRes.json();
+                    document.getElementById('versionsTbody').innerHTML = versions.map(v => `
+                        <tr>
+                            <td><strong style="color:var(--accent);">${v.versionNumber}</strong></td>
+                            <td><span class="badge ${v.status === 'ACTIVE' ? 'badge-active' : 'badge-cancelled'}">${v.status}</span></td>
+                            <td>${v.effectiveFrom || 'N/A'}</td>
+                            <td>${v.createdBy || 'System'}</td>
+                            <td>${v.notes || ''}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                const aRes = await fetch(`${API_BASE}/admin/passenger/pricing/history`);
+                if (aRes.ok) {
+                    const logs = await aRes.json();
+                    document.getElementById('auditTbody').innerHTML = logs.map(l => `
+                        <tr>
+                            <td><small>${l.timestamp || ''}</small></td>
+                            <td>${l.pricingVersionId || ''}</td>
+                            <td><strong>${l.adminName || 'Admin'}</strong></td>
+                            <td>${l.entityType}</td>
+                            <td><span class="badge badge-assigned">${l.changeType}</span></td>
+                            <td>${l.fieldName || ''}</td>
+                            <td style="color:var(--text-dim);">${l.oldValue || '-'}</td>
+                            <td style="color:var(--success); font-weight:600;">${l.newValue || '-'}</td>
+                            <td>${l.reason || ''}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadReports() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/reports`);
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('repGrossFare').innerText = '₹' + Number(data.totalRevenue || 0).toFixed(2);
+                    document.getElementById('repDriverEarnings').innerText = '₹' + Number(data.driverEarnings || 0).toFixed(2);
+                    document.getElementById('repCommission').innerText = '₹' + Number(data.companyCommission || 0).toFixed(2);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function calculatePreview() {
+            const req = {
+                serviceType: document.getElementById('prevService').value,
+                vehicleCategoryCode: document.getElementById('prevVehicle').value,
+                manualDistanceKm: parseFloat(document.getElementById('prevDistance').value) || 25,
+                manualDurationMinutes: parseInt(document.getElementById('prevDuration').value) || 60,
+                passengerCount: parseInt(document.getElementById('prevPassengers').value) || 1,
+                waitingMinutes: parseInt(document.getElementById('prevWaiting').value) || 0,
+                couponCode: document.getElementById('prevCoupon').value.trim()
+            };
+
+            const timeChoice = document.getElementById('prevTime').value;
+            const now = new Date();
+            const [hours, mins] = timeChoice.split(':');
+            now.setHours(parseInt(hours), parseInt(mins), 0);
+            req.scheduledPickupTime = now.toISOString();
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/pricing/preview`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(req)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const b = data.breakdown;
+                    document.getElementById('receiptOutput').innerHTML = `
+                        <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+                            Simulation: <strong>${data.vehicleDisplayName}</strong> (${data.serviceType}) — ${data.distanceKm} KM, ${data.durationMinutes} mins
+                        </div>
+                        <div class="receipt-row"><span>Base Fare</span><span>₹${Number(b.baseFare).toFixed(2)}</span></div>
+                        <div class="receipt-row"><span>Distance Fare</span><span>₹${Number(b.distanceFare).toFixed(2)}</span></div>
+                        <div class="receipt-row"><span>Driver Allowance</span><span>₹${Number(b.driverAllowance).toFixed(2)}</span></div>
+                        <div class="receipt-row"><span>Waiting Charges</span><span>₹${Number(b.waitingCharge).toFixed(2)}</span></div>
+                        <div class="receipt-row"><span>Toll & Parking</span><span>₹${(Number(b.toll) + Number(b.parking)).toFixed(2)}</span></div>
+                        <div class="receipt-row"><span>Night Charges</span><span>₹${Number(b.nightCharge).toFixed(2)}</span></div>
+                        <div class="receipt-row"><span>Surge Surcharge (${b.surgeMultiplier}x)</span><span>₹${Number(b.surgeCharge).toFixed(2)}</span></div>
+                        <div class="receipt-row" style="color:#34d399;"><span>Coupon Discount</span><span>-₹${Number(b.discount).toFixed(2)}</span></div>
+                        <div class="receipt-row"><span>Applicable Tax (GST)</span><span>₹${Number(b.tax).toFixed(2)}</span></div>
+                        <div class="receipt-row total"><span>Customer Total</span><span>₹${Number(b.totalFare).toFixed(2)}</span></div>
+                        
+                        <div class="split-box">
+                            <div class="split-item">
+                                <span>Driver Earnings</span>
+                                <strong>₹${Number(b.driverEarnings).toFixed(2)}</strong>
+                            </div>
+                            <div class="split-item">
+                                <span>Platform Commission</span>
+                                <strong>₹${Number(b.companyCommission).toFixed(2)}</strong>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const err = await res.json();
+                    document.getElementById('receiptOutput').innerHTML = `
+                        <div style="color:var(--danger); padding:20px; text-align:center;">
+                            <strong>Validation Error:</strong><br>${err.message || 'Capacity or route error'}
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                alert('Error running preview simulation');
+            }
+        }
+
+        async function openAssignModal(bookingId, bookingNum) {
+            document.getElementById('assignBookingId').value = bookingId;
+            document.getElementById('assignBookingNum').value = bookingNum;
+            
+            // Load live registered drivers
+            try {
+                const res = await fetch(`${API_BASE}/drivers`);
+                if (res.ok) {
+                    const drivers = await res.json();
+                    const sel = document.getElementById('assignDriverSelect');
+                    if (drivers.length > 0) {
+                        sel.innerHTML = drivers.map(d => `<option value="${d.id}">${d.name || 'Driver #' + d.id} (${d.phone || ''}) - ${d.vehicle || 'Car'}</option>`).join('');
+                    } else {
+                        sel.innerHTML = `<option value="1">Rajesh Kumar (+91 9876543210) - Honda Amaze</option>`;
+                    }
+                }
+            } catch (e) {
+                document.getElementById('assignDriverSelect').innerHTML = `<option value="1">Rajesh Kumar (+91 9876543210) - Honda Amaze</option>`;
+            }
+
+            document.getElementById('assignDriverModal').style.display = 'flex';
+        }
+
+        async function submitAssignDriver() {
+            const bookingId = document.getElementById('assignBookingId').value;
+            const driverId = document.getElementById('assignDriverSelect').value;
+            const notes = document.getElementById('assignNotes').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/bookings/${bookingId}/assign-driver`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({driverId: parseInt(driverId), adminNotes: notes})
+                });
+                if (res.ok) {
+                    closeModal('assignDriverModal');
+                    loadDashboard();
+                    loadBookings();
+                } else {
+                    const err = await res.json();
+                    alert('Assignment error: ' + (err.message || 'Check driver status'));
+                }
+            } catch (e) {
+                alert('Network error assigning driver');
+            }
+        }
+
+        function openPublishVersionModal() {
+            document.getElementById('publishVersionModal').style.display = 'flex';
+        }
+
+        async function submitPublishVersion() {
+            const adminName = document.getElementById('pubAdminName').value;
+            const notes = document.getElementById('pubNotes').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/passenger/pricing/versions/publish`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({adminName, notes})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert('Successfully published new version: ' + data.versionNumber);
+                    closeModal('publishVersionModal');
+                    loadDashboard();
+                    loadVersions();
+                }
+            } catch (e) {
+                alert('Failed to publish version');
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            loadDashboard();
+        };
+    </script>
+</body>
+</html>

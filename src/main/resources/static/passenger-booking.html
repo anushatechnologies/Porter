@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book a Ride — Anusha Porter Passenger Cars</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0a0e1a;
+            --bg-surface: #111827;
+            --bg-card: rgba(22, 30, 49, 0.85);
+            --bg-card-hover: rgba(30, 41, 66, 0.95);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-active: #6366f1;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.3);
+            --accent: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --text-dim: #6b7280;
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 22px;
+            --shadow-card: 0 12px 36px -12px rgba(0, 0, 0, 0.6);
+            --transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 45%),
+                radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
+            background-attachment: fixed;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Nav */
+        header.nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 40px;
+            background: rgba(10, 14, 26, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-subtle);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text-main);
+        }
+
+        .brand-logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .brand-title {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-badge {
+            font-size: 11px;
+            background: var(--primary-glow);
+            color: #a5b4fc;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 700;
+            border: 1px solid rgba(99, 102, 241, 0.4);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .nav-btn {
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+        }
+
+        .nav-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-admin {
+            border: 1px solid var(--border-subtle);
+            color: var(--accent);
+        }
+
+        /* Container */
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 32px auto;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: 1fr 1.35fr;
+            gap: 32px;
+            flex: 1;
+        }
+
+        /* Left Booking Control Card */
+        .booking-panel {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            box-shadow: var(--shadow-card);
+            height: fit-content;
+        }
+
+        .panel-header {
+            margin-bottom: 24px;
+        }
+
+        .panel-header h2 {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .panel-header p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Service Mode Selector */
+        .service-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 6px;
+            border-radius: var(--radius-md);
+            margin-bottom: 24px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .service-tab {
+            text-align: center;
+            padding: 10px 4px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .service-tab.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        .service-tab-icon {
+            font-size: 16px;
+        }
+
+        /* Inputs */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .input-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .input-field {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 11px 14px;
+            color: var(--text-main);
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .add-stop-btn {
+            background: transparent;
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            color: #a5b4fc;
+            padding: 8px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 16px;
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .add-stop-btn:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .btn-estimate {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white;
+            font-weight: 700;
+            font-size: 15px;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            box-shadow: 0 6px 20px var(--primary-glow);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .btn-estimate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--primary-glow);
+        }
+
+        /* Right Results Panel */
+        .results-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* Capacity Alert Banner */
+        .capacity-alert {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-md);
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #fca5a5;
+            font-size: 13.5px;
+            display: none;
+        }
+
+        /* Vehicle Cards */
+        .vehicle-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 20px 24px;
+            display: grid;
+            grid-template-columns: 80px 1fr auto;
+            align-items: center;
+            gap: 20px;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .vehicle-card:hover {
+            border-color: var(--primary);
+            background: var(--bg-card-hover);
+            transform: translateY(-2px);
+        }
+
+        .vehicle-card.selected {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.12);
+            box-shadow: 0 0 0 2px var(--primary);
+        }
+
+        .vehicle-card.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .vehicle-card-img {
+            width: 80px;
+            height: 55px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .vehicle-info h3 {
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .vehicle-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12.5px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .vehicle-price-box {
+            text-align: right;
+        }
+
+        .vehicle-price {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: -0.02em;
+        }
+
+        .vehicle-eta {
+            font-size: 11.5px;
+            color: #34d399;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* Locked Fare Timer */
+        .locked-fare-banner {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            border-radius: var(--radius-sm);
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12.5px;
+            color: #67e8f9;
+        }
+
+        .timer-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            background: rgba(6, 182, 212, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        /* Breakdown Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-box {
+            background: #111827;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 520px;
+            padding: 30px;
+            box-shadow: var(--shadow-card);
+        }
+
+        .receipt-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 13.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .receipt-total {
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            margin-top: 12px;
+            padding-top: 14px;
+            font-size: 19px;
+            font-weight: 800;
+            color: var(--text-main);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Live Tracker View */
+        .tracker-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            display: none;
+        }
+
+        .stepper {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin: 28px 0;
+        }
+
+        .stepper::before {
+            content: '';
+            position: absolute;
+            top: 14px;
+            left: 20px;
+            right: 20px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            z-index: 1;
+        }
+
+        .step-item {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-dim);
+        }
+
+        .step-bubble {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #1f2937;
+            border: 2px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 6px auto;
+            color: var(--text-muted);
+        }
+
+        .step-item.active .step-bubble {
+            background: var(--primary);
+            border-color: #a5b4fc;
+            color: white;
+            box-shadow: 0 0 12px var(--primary-glow);
+        }
+
+        .step-item.active {
+            color: var(--text-main);
+        }
+    </style>
+</head>
+<body>
+
+    <header class="nav-header">
+        <a href="#" class="brand-link">
+            <div class="brand-logo">🚗</div>
+            <div>
+                <span class="brand-title">Anusha Porter</span>
+                <span class="brand-badge">Passenger Travel</span>
+            </div>
+        </a>
+        <div class="nav-links">
+            <a href="/passenger-admin.html" class="nav-btn btn-admin">⚙️ Admin Control Panel</a>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Left Booking Panel -->
+        <div class="booking-panel" id="bookingPanel">
+            <div class="panel-header">
+                <h2>Book a Passenger Car</h2>
+                <p>Transparent dynamic pricing with guaranteed driver allocation</p>
+            </div>
+
+            <!-- Service Mode Selection -->
+            <div class="service-tabs">
+                <div class="service-tab active" onclick="selectService('ONE_WAY', this)">
+                    <span class="service-tab-icon">🚗</span>
+                    <span>One-Way</span>
+                </div>
+                <div class="service-tab" onclick="selectService('ROUND_TRIP', this)">
+                    <span class="service-tab-icon">🔁</span>
+                    <span>Round Trip</span>
+                </div>
+                <div class="service-tab" onclick="selectService('RENTAL', this)">
+                    <span class="service-tab-icon">⏱️</span>
+                    <span>Rental</span>
+                </div>
+                <div class="service-tab" onclick="selectService('AIRPORT_TRANSFER', this)">
+                    <span class="service-tab-icon">✈️</span>
+                    <span>Airport</span>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label class="input-label">Pickup Address</label>
+                <input type="text" class="input-field" id="pickupAddr" value="Banjara Hills Road No 1, Hyderabad">
+            </div>
+
+            <div class="input-group">
+                <label class="input-label">Drop Address</label>
+                <input type="text" class="input-field" id="dropAddr" value="Hitech City Phase 2, Hyderabad">
+            </div>
+
+            <div id="stopsContainer"></div>
+            <div class="add-stop-btn" onclick="addStop()">+ Add Intermediate Stop (₹50)</div>
+
+            <div class="row-2">
+                <div class="input-group">
+                    <label class="input-label">Passengers</label>
+                    <select class="input-field" id="paxCount" onchange="checkCapacity()">
+                        <option value="1">1 Passenger</option>
+                        <option value="2">2 Passengers</option>
+                        <option value="3" selected>3 Passengers</option>
+                        <option value="4">4 Passengers</option>
+                        <option value="5">5 Passengers (Requires SUV)</option>
+                        <option value="6">6 Passengers (Requires SUV)</option>
+                        <option value="7">7 Passengers (Premium SUV)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Luggage Bags</label>
+                    <select class="input-field" id="luggageCount">
+                        <option value="1">1 Bag</option>
+                        <option value="2" selected>2 Bags</option>
+                        <option value="3">3 Bags</option>
+                        <option value="4">4+ Bags</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row-2">
+                <div class="input-group">
+                    <label class="input-label">Pickup Time</label>
+                    <select class="input-field" id="timeWindow">
+                        <option value="NOW">Leave Right Now</option>
+                        <option value="EVENING">Evening Peak (06:00 PM)</option>
+                        <option value="NIGHT">Late Night (11:30 PM - Surcharge)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Apply Coupon</label>
+                    <input type="text" class="input-field" id="couponInput" placeholder="WELCOME100" value="WELCOME100">
+                </div>
+            </div>
+
+            <button class="btn-estimate" onclick="fetchLiveFares()">
+                <span>⚡</span> Get Live Dynamic Fares
+            </button>
+        </div>
+
+        <!-- Right Results Panel -->
+        <div class="results-panel" id="resultsPanel">
+            <!-- Capacity warning -->
+            <div class="capacity-alert" id="capacityAlert">
+                <span>⚠️</span>
+                <span><strong>Capacity Notice:</strong> Please select a larger vehicle for this number of passengers.</span>
+            </div>
+
+            <div class="locked-fare-banner" id="fareLockBanner" style="display: none;">
+                <span>🔒 Dynamic Pricing Guaranteed for this booking</span>
+                <span>Valid for: <span class="timer-badge" id="fareCountdown">04:59</span></span>
+            </div>
+
+            <div id="vehicleCardsList">
+                <div style="text-align: center; color: var(--text-dim); padding: 80px 20px;">
+                    <div style="font-size: 36px; margin-bottom: 12px;">🚗</div>
+                    <h3>Ready for your journey?</h3>
+                    <p>Enter your trip details on the left and click <strong>Get Live Dynamic Fares</strong></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Tracker Panel -->
+        <div class="tracker-card" id="trackerPanel" style="grid-column: 1 / -1;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 id="trackBookingNum">Booking #AP-CAR-100245</h2>
+                    <p style="color: var(--text-muted); font-size: 13px;">Live Passenger Trip Monitor</p>
+                </div>
+                <span class="brand-badge" id="trackStatusBadge">SEARCHING DRIVER</span>
+            </div>
+
+            <div class="stepper">
+                <div class="step-item active" id="step1">
+                    <div class="step-bubble">1</div>
+                    <span>Booking Confirmed</span>
+                </div>
+                <div class="step-item" id="step2">
+                    <div class="step-bubble">2</div>
+                    <span>Driver Assigned</span>
+                </div>
+                <div class="step-item" id="step3">
+                    <div class="step-bubble">3</div>
+                    <span>Driver Arrived</span>
+                </div>
+                <div class="step-item" id="step4">
+                    <div class="step-bubble">4</div>
+                    <span>On The Way</span>
+                </div>
+                <div class="step-item" id="step5">
+                    <div class="step-bubble">5</div>
+                    <span>Completed</span>
+                </div>
+            </div>
+
+            <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;" id="driverDetailBox">
+                <div>
+                    <h4 style="color: var(--text-muted); font-size: 12px; text-transform: uppercase;">Driver & Car Information</h4>
+                    <div style="font-size: 18px; font-weight: 700; margin-top: 6px;" id="trackDriverName">Searching nearest verified driver...</div>
+                    <div style="color: #a5b4fc; font-size: 13.5px; margin-top: 2px;" id="trackDriverVehicle">Waiting for dispatch allocation</div>
+                </div>
+                <div style="text-align: right;">
+                    <h4 style="color: var(--text-muted); font-size: 12px; text-transform: uppercase;">Estimated Fare</h4>
+                    <div style="font-size: 24px; font-weight: 800; color: var(--accent); margin-top: 4px;" id="trackFare">₹0.00</div>
+                    <div style="font-size: 12px; color: #34d399;" id="trackPaymentStatus">Cash / UPI on Completion</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="nav-btn btn-admin" onclick="cancelCustomerBooking()">Cancel Ride</button>
+                <button class="nav-btn" style="background: var(--primary); color: white;" onclick="simulateNextDriverStep()">Simulate Next Driver Action ⚡</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fare Breakdown Modal -->
+    <div class="modal-overlay" id="breakdownModal">
+        <div class="modal-box">
+            <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">Fare Breakdown & Confirm</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;" id="modalSubtitle">Sedan — One-Way Ride</p>
+            
+            <div id="modalReceiptLines"></div>
+
+            <div class="receipt-total">
+                <span>Total Amount</span>
+                <span id="modalTotalFare" style="color: var(--accent);">₹0.00</span>
+            </div>
+
+            <div style="margin-top: 24px; display: flex; gap: 12px;">
+                <button class="nav-btn" style="flex: 1; border: 1px solid var(--border-subtle); text-align: center;" onclick="closeModal()">Back</button>
+                <button class="btn-estimate" style="flex: 2; margin-top: 0;" onclick="confirmAndBookRide()">
+                    <span>🚗</span> Confirm Booking
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let currentService = 'ONE_WAY';
+        let currentStops = [];
+        let currentFares = [];
+        let selectedFare = null;
+        let activeBooking = null;
+        let lockTimerInterval = null;
+
+        function selectService(code, el) {
+            currentService = code;
+            document.querySelectorAll('.service-tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        function addStop() {
+            if (currentStops.length >= 3) {
+                alert('Maximum 3 intermediate stops allowed');
+                return;
+            }
+            const stopNum = currentStops.length + 1;
+            const container = document.getElementById('stopsContainer');
+            const div = document.createElement('div');
+            div.className = 'input-group';
+            div.innerHTML = `
+                <label class="input-label">Intermediate Stop #${stopNum}</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" class="input-field" style="flex:1;" id="stop_${stopNum}" value="Jubilee Hills Checkpost, Hyderabad">
+                    <button class="nav-btn" style="background:rgba(239,68,68,0.2); color:#f87171;" onclick="removeStop(this)">✕</button>
+                </div>
+            `;
+            container.appendChild(div);
+            currentStops.push("Stop " + stopNum);
+        }
+
+        function removeStop(btn) {
+            btn.parentElement.parentElement.remove();
+            currentStops.pop();
+        }
+
+        function checkCapacity() {
+            const count = parseInt(document.getElementById('paxCount').value);
+            const alertBox = document.getElementById('capacityAlert');
+            if (count > 4) {
+                alertBox.style.display = 'flex';
+            } else {
+                alertBox.style.display = 'none';
+            }
+        }
+
+        async function fetchLiveFares() {
+            const pax = parseInt(document.getElementById('paxCount').value);
+            const pickup = document.getElementById('pickupAddr').value;
+            const drop = document.getElementById('dropAddr').value;
+            const coupon = document.getElementById('couponInput').value.trim();
+            const timeChoice = document.getElementById('timeWindow').value;
+
+            const now = new Date();
+            if (timeChoice === 'EVENING') now.setHours(18, 30, 0);
+            if (timeChoice === 'NIGHT') now.setHours(23, 30, 0);
+
+            // Fetch list of vehicle categories
+            const catRes = await fetch(`${API_BASE}/passenger/vehicles`);
+            const categories = await catRes.json();
+
+            const cardsContainer = document.getElementById('vehicleCardsList');
+            cardsContainer.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">Calculating centralized dynamic pricing across fleet...</div>`;
+
+            currentFares = [];
+
+            for (const cat of categories) {
+                const req = {
+                    serviceType: currentService,
+                    vehicleCategoryCode: cat.categoryCode,
+                    pickupAddress: pickup,
+                    dropAddress: drop,
+                    passengerCount: pax,
+                    couponCode: coupon,
+                    scheduledPickupTime: now.toISOString(),
+                    additionalStops: currentStops
+                };
+
+                try {
+                    const res = await fetch(`${API_BASE}/passenger/fare-estimate`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(req)
+                    });
+
+                    if (res.ok) {
+                        const estimate = await res.json();
+                        currentFares.push({
+                            category: cat,
+                            estimate: estimate,
+                            disabled: false
+                        });
+                    } else {
+                        currentFares.push({
+                            category: cat,
+                            estimate: null,
+                            disabled: true,
+                            reason: "Please select a larger vehicle for this number of passengers."
+                        });
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            renderVehicleCards();
+            startFareLockCountdown();
+        }
+
+        function renderVehicleCards() {
+            const list = document.getElementById('vehicleCardsList');
+            list.innerHTML = currentFares.map((item, idx) => {
+                const cat = item.category;
+                const est = item.estimate;
+                if (item.disabled) {
+                    return `
+                        <div class="vehicle-card disabled">
+                            <img src="${cat.imageUrl || 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400'}" class="vehicle-card-img" alt="${cat.displayName}">
+                            <div class="vehicle-info">
+                                <h3>${cat.displayName}</h3>
+                                <div class="vehicle-meta">👤 Max ${cat.passengerCapacity} Pax • 🧳 ${cat.luggageCapacity} Bags</div>
+                                <div style="color:var(--danger); font-size:12px; margin-top:4px;">${item.reason}</div>
+                            </div>
+                            <div class="vehicle-price-box">
+                                <div style="color:var(--text-dim); font-size:13px;">Unavailable</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const fare = '₹' + Number(est.breakdown.totalFare).toFixed(2);
+                return `
+                    <div class="vehicle-card" onclick="openBreakdown(${idx})">
+                        <img src="${cat.imageUrl || 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400'}" class="vehicle-card-img" alt="${cat.displayName}">
+                        <div class="vehicle-info">
+                            <h3>${cat.displayName}</h3>
+                            <div class="vehicle-meta">👤 ${cat.passengerCapacity} Passengers • 🧳 ${cat.luggageCapacity} Bags</div>
+                            <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Distance: ${est.distanceKm} KM (${est.durationMinutes} mins)</div>
+                        </div>
+                        <div class="vehicle-price-box">
+                            <div class="vehicle-price">${fare}</div>
+                            <div class="vehicle-eta">⚡ 4-8 mins away</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openBreakdown(idx) {
+            selectedFare = currentFares[idx];
+            const est = selectedFare.estimate;
+            const b = est.breakdown;
+
+            document.getElementById('modalSubtitle').innerText = `${selectedFare.category.displayName} — ${est.serviceType} (${est.distanceKm} KM)`;
+
+            document.getElementById('modalReceiptLines').innerHTML = `
+                <div class="receipt-row"><span>Base Minimum Fare</span><span>₹${Number(b.baseFare).toFixed(2)}</span></div>
+                <div class="receipt-row"><span>Distance Fare</span><span>₹${Number(b.distanceFare).toFixed(2)}</span></div>
+                <div class="receipt-row"><span>Driver Allowance</span><span>₹${Number(b.driverAllowance).toFixed(2)}</span></div>
+                <div class="receipt-row"><span>Waiting Charges</span><span>₹${Number(b.waitingCharge).toFixed(2)}</span></div>
+                <div class="receipt-row"><span>Additional Stops</span><span>₹${Number(b.additionalStopCharge).toFixed(2)}</span></div>
+                <div class="receipt-row"><span>Toll & Parking Charges</span><span>₹${(Number(b.toll) + Number(b.parking)).toFixed(2)}</span></div>
+                <div class="receipt-row"><span>Night Charges</span><span>₹${Number(b.nightCharge).toFixed(2)}</span></div>
+                <div class="receipt-row"><span>Surge Charges (${b.surgeMultiplier}x)</span><span>₹${Number(b.surgeCharge).toFixed(2)}</span></div>
+                <div class="receipt-row" style="color:#34d399;"><span>Coupon Discount (${b.appliedCouponCode || 'None'})</span><span>-₹${Number(b.discount).toFixed(2)}</span></div>
+                <div class="receipt-row"><span>Taxes (GST)</span><span>₹${Number(b.tax).toFixed(2)}</span></div>
+            `;
+
+            document.getElementById('modalTotalFare').innerText = '₹' + Number(b.totalFare).toFixed(2);
+            document.getElementById('breakdownModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('breakdownModal').style.display = 'none';
+        }
+
+        function startFareLockCountdown() {
+            document.getElementById('fareLockBanner').style.display = 'flex';
+            let seconds = 300;
+            if (lockTimerInterval) clearInterval(lockTimerInterval);
+            lockTimerInterval = setInterval(() => {
+                seconds--;
+                if (seconds <= 0) {
+                    clearInterval(lockTimerInterval);
+                    document.getElementById('fareCountdown').innerText = 'EXPIRED';
+                    alert('Fare estimate expired. Recalculating live fares...');
+                    fetchLiveFares();
+                    return;
+                }
+                const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+                const s = String(seconds % 60).padStart(2, '0');
+                document.getElementById('fareCountdown').innerText = `${m}:${s}`;
+            }, 1000);
+        }
+
+        async function confirmAndBookRide() {
+            if (!selectedFare) return;
+            const est = selectedFare.estimate;
+
+            const bookingReq = {
+                fareLockToken: est.fareLockToken,
+                serviceType: est.serviceType,
+                vehicleCategoryCode: est.vehicleCategoryCode,
+                passengerCount: parseInt(document.getElementById('paxCount').value),
+                luggageCount: parseInt(document.getElementById('luggageCount').value),
+                customerName: "Rohan Sharma",
+                customerPhone: "+91 9876543210",
+                customerEmail: "rohan@example.com",
+                pickupAddress: document.getElementById('pickupAddr').value,
+                dropAddress: document.getElementById('dropAddr').value,
+                couponCode: document.getElementById('couponInput').value.trim(),
+                additionalStops: currentStops
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/passenger/bookings`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(bookingReq)
+                });
+
+                if (res.ok) {
+                    activeBooking = await res.json();
+                    closeModal();
+                    showTrackerView(activeBooking);
+                } else {
+                    const err = await res.json();
+                    alert('Booking failed: ' + (err.message || 'Capacity check'));
+                }
+            } catch (e) {
+                alert('Network error confirming booking');
+            }
+        }
+
+        function showTrackerView(b) {
+            document.getElementById('bookingPanel').style.display = 'none';
+            document.getElementById('resultsPanel').style.display = 'none';
+            document.getElementById('trackerPanel').style.display = 'block';
+
+            document.getElementById('trackBookingNum').innerText = `Booking #${b.bookingNumber}`;
+            document.getElementById('trackFare').innerText = '₹' + Number(b.fareBreakdown.totalFare).toFixed(2);
+            document.getElementById('trackStatusBadge').innerText = b.status;
+        }
+
+        async function simulateNextDriverStep() {
+            if (!activeBooking) return;
+            const statuses = ['DRIVER_ASSIGNED', 'DRIVER_ARRIVED', 'TRIP_STARTED', 'TRIP_COMPLETED'];
+            const curIdx = statuses.indexOf(activeBooking.status);
+            const nextIdx = curIdx + 1;
+
+            if (curIdx === -1) {
+                // Assign driver first
+                const res = await fetch(`${API_BASE}/admin/passenger/bookings/${activeBooking.id}/assign-driver`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({driverId: 1, adminNotes: "Auto-allocated nearest driver"})
+                });
+                if (res.ok) {
+                    activeBooking = await res.json();
+                    updateTrackerUI();
+                }
+            } else if (nextIdx < statuses.length) {
+                const res = await fetch(`${API_BASE}/admin/passenger/bookings/${activeBooking.id}/status`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({status: statuses[nextIdx]})
+                });
+                if (res.ok) {
+                    activeBooking = await res.json();
+                    updateTrackerUI();
+                }
+            } else {
+                alert('Trip is completed! Thank you for riding with Anusha Porter.');
+            }
+        }
+
+        function updateTrackerUI() {
+            const b = activeBooking;
+            document.getElementById('trackStatusBadge').innerText = b.status;
+
+            if (b.driverName) {
+                document.getElementById('trackDriverName').innerText = `${b.driverName} (${b.driverPhone || ''})`;
+                document.getElementById('trackDriverVehicle').innerText = `${b.vehicleModel || 'Car'} • Plate: ${b.vehicleNumber || 'TS09AB1234'}`;
+            }
+
+            // Update steps
+            ['step1', 'step2', 'step3', 'step4', 'step5'].forEach(id => document.getElementById(id).classList.remove('active'));
+            document.getElementById('step1').classList.add('active');
+
+            if (b.status === 'DRIVER_ASSIGNED') document.getElementById('step2').classList.add('active');
+            if (b.status === 'DRIVER_ARRIVED') {
+                document.getElementById('step2').classList.add('active');
+                document.getElementById('step3').classList.add('active');
+            }
+            if (b.status === 'TRIP_STARTED') {
+                document.getElementById('step2').classList.add('active');
+                document.getElementById('step3').classList.add('active');
+                document.getElementById('step4').classList.add('active');
+            }
+            if (b.status === 'TRIP_COMPLETED') {
+                document.getElementById('step2').classList.add('active');
+                document.getElementById('step3').classList.add('active');
+                document.getElementById('step4').classList.add('active');
+                document.getElementById('step5').classList.add('active');
+            }
+        }
+
+        async function cancelCustomerBooking() {
+            if (!activeBooking) return;
+            const res = await fetch(`${API_BASE}/passenger/bookings/${activeBooking.id}/cancel`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({cancelledBy: "CUSTOMER", reason: "Change of plans"})
+            });
+            if (res.ok) {
+                const b = await res.json();
+                alert(`Ride cancelled. Cancellation fee: ₹${b.cancellationFee || 0}`);
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
