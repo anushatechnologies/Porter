@@ -86,21 +86,53 @@ public class DriverEligibilityService {
             }
         }
 
-        // 7. Check vehicle compatibility
+        // 7. Check vehicle compatibility (strict category matching)
         if (order != null && order.getServiceName() != null && !order.getServiceName().isBlank()) {
-            String requiredService = order.getServiceName().toLowerCase().replaceAll("[^a-z0-9]", "");
-            String driverVehicle = (driver.getVehicleType() != null ? driver.getVehicleType() : (driver.getVehicle() != null ? driver.getVehicle() : "")).toLowerCase().replaceAll("[^a-z0-9]", "");
+            String requiredRaw = order.getServiceName();
+            String driverRaw = driver.getVehicleType() != null && !driver.getVehicleType().isBlank()
+                    ? driver.getVehicleType()
+                    : (driver.getVehicle() != null ? driver.getVehicle() : "");
 
-            if (!driverVehicle.isEmpty() && !requiredService.isEmpty()) {
-                // If specific truck is required, verify driver vehicle
-                if (requiredService.contains("truck") || requiredService.contains("14ft") || requiredService.contains("8ft")) {
-                    if (!driverVehicle.contains("truck") && !driverVehicle.contains("pickup") && !driverVehicle.contains("ace") && !driverVehicle.contains("8ft") && !driverVehicle.contains("14ft")) {
-                        return false;
-                    }
+            String requiredCategory = normalizeVehicleCategory(requiredRaw);
+            String driverCategory = normalizeVehicleCategory(driverRaw);
+
+            // If the order specifies a recognized vehicle category, driver must match that exact category
+            if (!"UNKNOWN".equals(requiredCategory)) {
+                if (!requiredCategory.equals(driverCategory)) {
+                    log.debug("Driver '{}' vehicle category '{}' does not match required order vehicle category '{}'",
+                            driver.getId(), driverCategory, requiredCategory);
+                    return false;
                 }
             }
         }
 
         return true;
+    }
+
+    /**
+     * Normalizes diverse vehicle labels and IDs to canonical categories:
+     * TWO_WHEELER, THREE_WHEELER, TATA_ACE, PICKUP_8FT, TATA_407
+     */
+    public String normalizeVehicleCategory(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return "UNKNOWN";
+        }
+        String s = raw.toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (s.contains("2wheel") || s.contains("twowheel") || s.contains("bike") || s.contains("scooter") || s.contains("motorcycle") || s.equals("1")) {
+            return "TWO_WHEELER";
+        }
+        if (s.contains("3wheel") || s.contains("threewheel") || s.contains("auto") || s.contains("rickshaw") || s.contains("cng") || s.equals("2")) {
+            return "THREE_WHEELER";
+        }
+        if (s.contains("tataace") || s.contains("ace") || s.contains("chotahathi") || s.equals("3")) {
+            return "TATA_ACE";
+        }
+        if (s.contains("8ft") || s.contains("pickup") || s.contains("bolero") || s.contains("dost") || s.equals("4")) {
+            return "PICKUP_8FT";
+        }
+        if (s.contains("407") || s.contains("tata407") || s.contains("14ft") || s.contains("truck") || s.contains("eicher") || s.contains("large") || s.equals("5")) {
+            return "TATA_407";
+        }
+        return s;
     }
 }
