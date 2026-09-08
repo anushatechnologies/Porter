@@ -142,11 +142,65 @@ public class PushNotificationService {
                             .putData("bookingId", bookingId == null ? "" : bookingId)
                             .putData("notificationType", "STOP_DRIVER_OFFER")
                             .putData("status", "ACCEPTED_BY_ANOTHER")
+                            .putData("stopSound", "true")
+                            .putData("action", "STOP_RINGTONE")
                             .build();
                     FirebaseMessaging.getInstance().send(push);
                 }
             } catch (Exception e) {
                 logger.debug("Failed to send stop offer push to driver {}: {}", driver.getId(), e.getMessage());
+            }
+        }
+    }
+
+    public void notifyOfferAcceptedBySelf(Driver driver, String bookingId) {
+        if (driver == null) return;
+        AppUser driverUser = resolveDriverUser(driver);
+        if (driverUser != null && driverUser.getFcmToken() != null && !driverUser.getFcmToken().isBlank()) {
+            String token = driverUser.getFcmToken();
+            String title = "Booking Confirmed! 🚚";
+            String message = "You have accepted booking #" + bookingId;
+            try {
+                if (token.startsWith("ExpoPushToken[")) {
+                    sendExpo(token, title, message, bookingId, "STOP_DRIVER_OFFER");
+                } else {
+                    Message push = Message.builder()
+                            .setToken(token)
+                            .putData("bookingId", bookingId == null ? "" : bookingId)
+                            .putData("notificationType", "STOP_DRIVER_OFFER")
+                            .putData("status", "ACCEPTED_BY_YOU")
+                            .putData("stopSound", "true")
+                            .putData("action", "STOP_RINGTONE")
+                            .build();
+                    FirebaseMessaging.getInstance().send(push);
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to send accept stop push to winning driver {}: {}", driver.getId(), e.getMessage());
+            }
+        }
+    }
+
+    public void notifyOfferDismissedForDriver(Driver driver, String bookingId) {
+        if (driver == null) return;
+        AppUser driverUser = resolveDriverUser(driver);
+        if (driverUser != null && driverUser.getFcmToken() != null && !driverUser.getFcmToken().isBlank()) {
+            String token = driverUser.getFcmToken();
+            try {
+                if (token.startsWith("ExpoPushToken[")) {
+                    sendExpo(token, "Offer Dismissed", "Offer dismissed", bookingId, "STOP_DRIVER_OFFER");
+                } else {
+                    Message push = Message.builder()
+                            .setToken(token)
+                            .putData("bookingId", bookingId == null ? "" : bookingId)
+                            .putData("notificationType", "STOP_DRIVER_OFFER")
+                            .putData("status", "REJECTED_BY_YOU")
+                            .putData("stopSound", "true")
+                            .putData("action", "STOP_RINGTONE")
+                            .build();
+                    FirebaseMessaging.getInstance().send(push);
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to send dismiss push to driver {}: {}", driver.getId(), e.getMessage());
             }
         }
     }

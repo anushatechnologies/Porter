@@ -32,6 +32,9 @@ public class Driver {
     private String rcNumber;
     private String aadhaarNumber;
 
+    @Column(name = "pan_number", length = 20)
+    private String panNumber;
+
     @Column(name = "license_number", length = 100)
     private String licenseNumber;
 
@@ -53,6 +56,9 @@ public class Driver {
     private String licenseUri;
     private String rcUri;
     private String bankPassbookUri;
+
+    @Column(name = "pan_uri", length = 500)
+    private String panUri;
 
     private String kyc;
     private String verificationStatus;
@@ -164,4 +170,9 @@ public class Driver {
     public void setRegistrationStep(Integer registrationStep) {
         this.registrationStep = registrationStep;
     }
+
+    public String getPanNumber() { return panNumber; }
+    public void setPanNumber(String panNumber) { this.panNumber = panNumber; }
+    public String getPanUri() { return panUri; }
+    public void setPanUri(String panUri) { this.panUri = panUri; }
 }

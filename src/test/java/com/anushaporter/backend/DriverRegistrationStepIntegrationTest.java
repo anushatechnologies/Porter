@@ -274,4 +274,61 @@ public class DriverRegistrationStepIntegrationTest {
 
         assertTrue(driverRepository.findById(saved2.getId()).isEmpty());
     }
+
+    @Test
+    public void testPanCard_RejectsInvalidFormat() throws Exception {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("name", "Test Driver");
+        payload.put("panNumber", "INVALID_PAN_123");
+
+        mockMvc.perform(post("/api/drivers/register")
+                        .header("Authorization", testToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.message", containsString("Invalid PAN card format")));
+    }
+
+    @Test
+    public void testPanCard_AcceptsValidFormat_PersistsAndReturnsInProfileAndProgress() throws Exception {
+        String validPan = "ABCDE1234F";
+        String panImageUrl = "https://poteranusha.s3.ap-south-2.amazonaws.com/pan/pan_test.jpg";
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("name", "Anusha Driver");
+        payload.put("panNumber", validPan);
+        payload.put("panUrl", panImageUrl);
+        payload.put("submit", true);
+
+        mockMvc.perform(post("/api/drivers/register")
+                        .header("Authorization", testToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.kycStatus", is("approved")));
+
+        // 1. Verify saved in database
+        Driver saved = driverRepository.findByPhone(testPhone).orElseThrow();
+        assertEquals(validPan, saved.getPanNumber());
+        assertNotNull(saved.getPanUri());
+
+        // 2. Verify GET /api/drivers/me returns panNumber and panUri
+        mockMvc.perform(get("/api/drivers/me")
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.panNumber", is(validPan)))
+                .andExpect(jsonPath("$.panUri", notNullValue()));
+
+        // 3. Verify GET /api/drivers/register/progress returns panNumber and hasDraft: false
+        mockMvc.perform(get("/api/drivers/register/progress")
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.hasDraft", is(false)))
+                .andExpect(jsonPath("$.kycStatus", is("approved")))
+                .andExpect(jsonPath("$.panNumber", is(validPan)));
+    }
 }

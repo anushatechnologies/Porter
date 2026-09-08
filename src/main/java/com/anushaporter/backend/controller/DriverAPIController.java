@@ -119,6 +119,7 @@ public class DriverAPIController {
         map.put("rcNumber", driver.getRcNumber() != null ? driver.getRcNumber() : "");
         map.put("licenseNumber", driver.getLicenseNumber() != null ? driver.getLicenseNumber() : "");
         map.put("aadhaarNumber", driver.getAadhaarNumber() != null ? driver.getAadhaarNumber() : "");
+        map.put("panNumber", driver.getPanNumber() != null ? driver.getPanNumber() : "");
         map.put("trips", driver.getTrips() != null ? driver.getTrips() : 0);
         map.put("latitude", driver.getLatitude());
         map.put("longitude", driver.getLongitude());
@@ -134,6 +135,10 @@ public class DriverAPIController {
         map.put("rcUri", storageService.getPresignedOrSanitizedUrl(driver.getRcUri()));
         map.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(driver.getAadhaarUri()));
         map.put("bankPassbookUri", storageService.getPresignedOrSanitizedUrl(driver.getBankPassbookUri()));
+        String panPhotoUrl = storageService.getPresignedOrSanitizedUrl(driver.getPanUri());
+        map.put("panUri", panPhotoUrl);
+        map.put("panUrl", panPhotoUrl);
+        map.put("panCardUrl", panPhotoUrl);
 
         double walletBal = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
         map.put("walletBalance", walletBal);
@@ -705,19 +710,25 @@ public class DriverAPIController {
                 || (uri != null && (uri.endsWith("/save-and-next") || uri.endsWith("/step")));
 
         // Check if KYC application already approved or verified (HTTP 409)
+        // Allow updating if save-and-next, explicit update flag, or updating missing PAN/documents
+        boolean isUpdate = isSaveAndNext
+                || Boolean.TRUE.equals(payload.get("update"))
+                || Boolean.TRUE.equals(payload.get("allowUpdate"))
+                || Boolean.TRUE.equals(payload.get("isUpdate"))
+                || "pending".equalsIgnoreCase(text(payload, "kyc"));
+
         if (driver.getId() != null && driver.getKyc() != null &&
                 ("verified".equalsIgnoreCase(driver.getKyc()) || "approved".equalsIgnoreCase(driver.getKyc()))) {
-            return ResponseEntity.status(409).body(
-                    Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists and is approved."));
+            if (!isUpdate && text(payload, "panNumber") == null && text(payload, "pan") == null && payload.get("documents") == null) {
+                return ResponseEntity.status(409).body(
+                        Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists and is approved."));
+            }
         }
 
         // If KYC is already pending review and this is a new submit attempt (not save-and-next / draft resume)
         if (!isSaveAndNext && driver.getId() != null && driver.getKyc() != null
                 && "pending".equalsIgnoreCase(driver.getKyc())) {
-            boolean isUpdate = Boolean.TRUE.equals(payload.get("update"))
-                    || Boolean.TRUE.equals(payload.get("allowUpdate"))
-                    || "pending".equalsIgnoreCase(text(payload, "kyc"));
-            if (!isUpdate) {
+            if (!isUpdate && text(payload, "panNumber") == null && text(payload, "pan") == null && payload.get("documents") == null) {
                 return ResponseEntity.status(409).body(
                         Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists."));
             }
@@ -725,6 +736,9 @@ public class DriverAPIController {
 
         String name = text(payload, "name");
         String aadhaar = text(payload, "aadhaarNumber");
+        String pan = text(payload, "panNumber");
+        if (pan == null) pan = text(payload, "pan");
+        if (pan == null) pan = text(payload, "panCardNumber");
         String pincode = text(payload, "pincode");
         String ifsc = text(payload, "ifscCode");
         String accountNumber = text(payload, "accountNumber");
@@ -756,6 +770,15 @@ public class DriverAPIController {
         if (licenseNumber != null && !licenseNumber.matches("^[a-zA-Z0-9]{1,100}$")) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message",
                     "Driving licence must contain only numbers and alphabets (up to 100 characters)."));
+        }
+        // PAN card validation (10 alphanumeric characters: 5 letters, 4 digits, 1 letter)
+        if (pan != null && !pan.trim().isEmpty()) {
+            String cleanPan = pan.trim().toUpperCase();
+            if (!cleanPan.matches("^[A-Z]{5}[0-9]{4}[A-Z]{1}$")) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message",
+                        "Invalid PAN card format (e.g. ABCDE1234F)."));
+            }
+            pan = cleanPan;
         }
 
         // ── Vehicle type validation ──────────────────────────────────────────
@@ -804,6 +827,7 @@ public class DriverAPIController {
         if (text(payload, "vehicleNumber") != null) driver.setVehicleNumber(text(payload, "vehicleNumber"));
         if (rcNumber != null) driver.setRcNumber(rcNumber);
         if (aadhaar != null) driver.setAadhaarNumber(aadhaar);
+        if (pan != null && !pan.trim().isEmpty()) driver.setPanNumber(pan.trim().toUpperCase());
         if (licenseNumber != null) driver.setLicenseNumber(licenseNumber);
         if (text(payload, "addressLine1") != null) driver.setAddressLine1(text(payload, "addressLine1"));
         if (text(payload, "city") != null) driver.setCity(text(payload, "city"));
@@ -832,6 +856,11 @@ public class DriverAPIController {
         String bankPassbookInput = docs != null ? docs.get("bankPassbookUrl") : text(payload, "bankPassbookUri");
         if (bankPassbookInput == null) bankPassbookInput = text(payload, "bankPassbookUrl");
 
+        String panInput = docs != null ? (docs.get("panUrl") != null ? docs.get("panUrl") : (docs.get("panUri") != null ? docs.get("panUri") : docs.get("panCardUrl"))) : text(payload, "panUri");
+        if (panInput == null) panInput = text(payload, "panUrl");
+        if (panInput == null) panInput = text(payload, "panCardUrl");
+        if (panInput == null) panInput = text(payload, "panPhotoUrl");
+
         if (profilePhotoInput != null && !profilePhotoInput.isBlank()) {
             driver.setProfilePhotoUri(s3ImageService.processAndUploadImageUri(profilePhotoInput, "profile-photo"));
         }
@@ -846,6 +875,9 @@ public class DriverAPIController {
         }
         if (bankPassbookInput != null && !bankPassbookInput.isBlank()) {
             driver.setBankPassbookUri(s3ImageService.processAndUploadImageUri(bankPassbookInput, "bank-passbook"));
+        }
+        if (panInput != null && !panInput.isBlank()) {
+            driver.setPanUri(s3ImageService.processAndUploadImageUri(panInput, "pan"));
         }
 
         // Registration step tracking
@@ -884,6 +916,12 @@ public class DriverAPIController {
 
         if (driver.getStatus() == null) {
             driver.setStatus("offline");
+        }
+
+        // Synchronize AppUser role to Driver upon driver registration
+        if (appUser != null && !"Driver".equalsIgnoreCase(appUser.getRole())) {
+            appUser.setRole("Driver");
+            appUserRepository.save(appUser);
         }
 
         Driver saved = driverRepository.save(driver);
@@ -925,9 +963,12 @@ public class DriverAPIController {
             ));
         }
 
+        boolean isFullyRegistered = driver != null &&
+                ("approved".equalsIgnoreCase(driver.getKyc()) || "verified".equalsIgnoreCase(driver.getKyc()));
+
         Map<String, Object> data = new java.util.LinkedHashMap<>();
         data.put("success", true);
-        data.put("hasDraft", true);
+        data.put("hasDraft", !isFullyRegistered);
         data.put("driverId", driver.getId());
         data.put("registrationStep", driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
         data.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "draft");
@@ -942,6 +983,7 @@ public class DriverAPIController {
         data.put("rcNumber", driver.getRcNumber());
         data.put("licenseNumber", driver.getLicenseNumber());
         data.put("aadhaarNumber", driver.getAadhaarNumber());
+        data.put("panNumber", driver.getPanNumber());
         data.put("addressLine1", driver.getAddressLine1());
         data.put("city", driver.getCity());
         data.put("state", driver.getState());
@@ -955,6 +997,9 @@ public class DriverAPIController {
         data.put("licenseUri", storageService.getPresignedOrSanitizedUrl(driver.getLicenseUri()));
         data.put("rcUri", storageService.getPresignedOrSanitizedUrl(driver.getRcUri()));
         data.put("bankPassbookUri", storageService.getPresignedOrSanitizedUrl(driver.getBankPassbookUri()));
+        String panDraftUrl = storageService.getPresignedOrSanitizedUrl(driver.getPanUri());
+        data.put("panUri", panDraftUrl);
+        data.put("panUrl", panDraftUrl);
 
         return ResponseEntity.ok(data);
     }
@@ -967,9 +1012,8 @@ public class DriverAPIController {
         return result.isEmpty() ? null : result;
     }
 
-    // Toggle Status
-    @RequestMapping(value = { "/drivers/me/status", "/driver/me/status", "/drivers/status",
-            "/driver/status" }, method = { RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH })
+    // Toggle Status (singular /driver/ endpoints, /drivers/ handled by DriverController)
+    @RequestMapping(value = { "/driver/me/status", "/driver/status" }, method = { RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH })
     public ResponseEntity<?> updateStatus(HttpServletRequest request,
             @RequestBody(required = false) Map<String, Object> payload) {
         Driver driver = getAuthenticatedDriver(request);

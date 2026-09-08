@@ -406,6 +406,7 @@ public class DriverController {
             map.put("rcNumber", d.getRcNumber() != null ? d.getRcNumber() : "");
             map.put("licenseNumber", d.getLicenseNumber() != null ? d.getLicenseNumber() : "");
             map.put("aadhaarNumber", d.getAadhaarNumber() != null ? d.getAadhaarNumber() : "");
+            map.put("panNumber", d.getPanNumber() != null ? d.getPanNumber() : "");
             map.put("dob", d.getDob() != null ? d.getDob() : "");
             map.put("gender", d.getGender() != null ? d.getGender() : "");
             map.put("addressLine1", d.getAddressLine1() != null ? d.getAddressLine1() : "");
@@ -438,6 +439,9 @@ public class DriverController {
             map.put("rcUri", storageService.getPresignedOrSanitizedUrl(d.getRcUri()));
             map.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(d.getAadhaarUri()));
             map.put("bankPassbookUri", storageService.getPresignedOrSanitizedUrl(d.getBankPassbookUri()));
+            String panPhoto = storageService.getPresignedOrSanitizedUrl(d.getPanUri());
+            map.put("panUri", panPhoto);
+            map.put("panUrl", panPhoto);
             return ResponseEntity.ok((Object) map);
         }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found with ID: " + id)));
     }

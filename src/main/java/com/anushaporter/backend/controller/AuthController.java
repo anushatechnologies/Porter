@@ -24,6 +24,9 @@ public class AuthController {
     @Autowired
     private AppUserRepository userRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.DriverRepository driverRepository;
+
     @Autowired
     private EmailService emailService;
 
@@ -275,6 +278,17 @@ public class AuthController {
                 user.setEmail(localPhone + "@anushaporter.com");
                 user.setRole("Customer");
                 user.setStatus("Active");
+                userRepository.save(user);
+            }
+        }
+
+        // If phone or email matches an existing Driver profile, ensure role is recognized as Driver
+        if (driverRepository != null) {
+            boolean isDriver = driverRepository.findByPhone(localPhone).isPresent()
+                    || (user.getEmail() != null && !user.getEmail().isBlank() && driverRepository.findByEmail(user.getEmail()).isPresent())
+                    || (verifiedPhone != null && driverRepository.findByPhone(verifiedPhone).isPresent());
+            if (isDriver && !"Driver".equalsIgnoreCase(user.getRole())) {
+                user.setRole("Driver");
                 userRepository.save(user);
             }
         }

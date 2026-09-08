@@ -77,9 +77,18 @@ public class TelemetryWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void broadcastOfferNew(String bookingId, String jsonPayload) {
+        broadcastOfferNew(bookingId, jsonPayload, null);
+    }
+
+    public void broadcastOfferNew(String bookingId, String jsonPayload, java.util.List<Long> targetDriverIds) {
+        String driverIdsJson = targetDriverIds != null && !targetDriverIds.isEmpty()
+                ? "[" + targetDriverIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "]"
+                : "[]";
+
         String json = "{"
                 + "\"event\":\"driver:offer:new\","
-                + "\"bookingId\":\"" + bookingId + "\","
+                + "\"bookingId\":\"" + (bookingId != null ? bookingId : "") + "\","
+                + "\"targetDriverIds\":" + driverIdsJson + ","
                 + "\"data\":" + (jsonPayload != null ? jsonPayload : "{}") + ","
                 + "\"timestamp\":" + System.currentTimeMillis()
                 + "}";
@@ -87,11 +96,33 @@ public class TelemetryWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void broadcastOfferDismiss(String bookingId, String reason) {
+        broadcastOfferDismiss(bookingId, reason, null);
+    }
+
+    public void broadcastOfferDismiss(String bookingId, String reason, Long winningDriverId) {
         String json = "{"
                 + "\"event\":\"driver:offer:stop\","
                 + "\"bookingId\":\"" + (bookingId != null ? bookingId : "") + "\","
-                + "\"reason\":\"" + (reason != null ? reason : "ACCEPTED_BY_ANOTHER") + "\","
-                + "\"message\":\"Order offer has been closed.\","
+                + "\"winningDriverId\":" + (winningDriverId != null ? winningDriverId : "null") + ","
+                + "\"stopSound\":true,"
+                + "\"action\":\"STOP_RINGTONE\","
+                + "\"reason\":\"" + (reason != null ? reason : "ACCEPTED") + "\","
+                + "\"message\":\"Order offer has been closed. Stop ringtone immediately.\","
+                + "\"timestamp\":" + System.currentTimeMillis()
+                + "}";
+        broadcastMessage(json);
+    }
+
+    public void broadcastOfferDismissForDriver(String bookingId, Long driverId, String reason) {
+        String json = "{"
+                + "\"event\":\"driver:offer:stop\","
+                + "\"bookingId\":\"" + (bookingId != null ? bookingId : "") + "\","
+                + "\"targetDriverId\":" + (driverId != null ? driverId : "null") + ","
+                + "\"driverId\":" + (driverId != null ? driverId : "null") + ","
+                + "\"stopSound\":true,"
+                + "\"action\":\"STOP_RINGTONE\","
+                + "\"reason\":\"" + (reason != null ? reason : "REJECTED_BY_DRIVER") + "\","
+                + "\"message\":\"Order offer rejected by driver. Stop ringtone immediately.\","
                 + "\"timestamp\":" + System.currentTimeMillis()
                 + "}";
         broadcastMessage(json);

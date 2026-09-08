@@ -151,16 +151,22 @@ public class DriverOfferService {
         order.setOfferCount(order.getOfferCount() + createdOffers.size());
         orderRepository.save(order);
 
-        // Real-time WebSocket broadcast
-        if (telemetryWebSocketHandler != null) {
+        // Real-time WebSocket broadcast targeted to offered drivers
+        if (telemetryWebSocketHandler != null && !createdOffers.isEmpty()) {
             try {
+                List<Long> targetDriverIds = createdOffers.stream()
+                        .map(DriverOffer::getDriverId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .collect(Collectors.toList());
+
                 String payload = String.format("{\"bookingId\":\"%s\",\"pickupAddress\":\"%s\",\"dropAddress\":\"%s\",\"amount\":%.2f,\"distanceKm\":%.1f}",
                         order.getBookingId(),
                         order.getPickupAddress() != null ? order.getPickupAddress().replace("\"", "\\\"") : "",
                         order.getDropAddress() != null ? order.getDropAddress().replace("\"", "\\\"") : "",
                         order.getAmount() != null ? order.getAmount() : 0.0,
                         order.getDistanceKm() != null ? order.getDistanceKm() : 0.0);
-                telemetryWebSocketHandler.broadcastOfferNew(order.getBookingId(), payload);
+                telemetryWebSocketHandler.broadcastOfferNew(order.getBookingId(), payload, targetDriverIds);
             } catch (Exception e) {
                 log.warn("Failed to broadcast WebSocket offer: {}", e.getMessage());
             }
@@ -238,8 +244,22 @@ public class DriverOfferService {
                 } catch (Exception ignored) {}
             }
 
+            // Immediately send stop signal for this rejecting driver to stop audio playback
+            if (telemetryWebSocketHandler != null) {
+                try {
+                    telemetryWebSocketHandler.broadcastOfferDismissForDriver(bookingId, driverId, "REJECTED_BY_DRIVER");
+                } catch (Exception ignored) {}
+            }
+
+            if (pushNotificationService != null) {
+                try {
+                    driverRepository.findById(driverId).ifPresent(d -> pushNotificationService.notifyOfferDismissedForDriver(d, bookingId));
+                } catch (Exception ignored) {}
+            }
+
             response.put("success", true);
             response.put("status", DriverOfferStatus.REJECTED.name());
+            response.put("stopSound", true);
             response.put("message", "Offer rejected.");
             return response;
         }
@@ -348,32 +368,41 @@ public class DriverOfferService {
         // 1. Mark competing offers TOO_LATE
         driverOfferRepository.markCompetingOffersTooLate(bookingId, winningDriverId != null ? winningDriverId : -1L, now);
 
-        // 2. Dismiss competing notifications in NotificationRepository
+        // 2. Dismiss notifications in NotificationRepository (for both winner and competing drivers)
         if (notificationRepository != null) {
             try {
-                notificationRepository.dismissNotificationsForBooking(bookingId, "DRIVER_OFFER", winningDriverId);
+                notificationRepository.dismissNotificationsForBooking(bookingId, "DRIVER_OFFER", null);
             } catch (Exception e) {
                 log.warn("Failed to dismiss notifications for booking {}: {}", bookingId, e.getMessage());
             }
         }
 
-        // 3. Send silent push / stop notification to competing drivers
+        // 3. Send silent push / stop notification to ALL offered drivers (including winner with confirmed status)
         if (pushNotificationService != null) {
             List<Long> competingDriverIds = driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId);
             for (Long cId : competingDriverIds) {
-                if (winningDriverId != null && winningDriverId.equals(cId)) continue;
-                driverRepository.findById(cId).ifPresent(driver -> {
-                    try {
-                        pushNotificationService.notifyOfferTaken(driver, bookingId);
-                    } catch (Exception ignored) {}
-                });
+                if (winningDriverId != null && winningDriverId.equals(cId)) {
+                    // Send stop push & confirmation to the winning driver
+                    driverRepository.findById(cId).ifPresent(driver -> {
+                        try {
+                            pushNotificationService.notifyOfferAcceptedBySelf(driver, bookingId);
+                        } catch (Exception ignored) {}
+                    });
+                } else {
+                    // Send stop push to competing drivers
+                    driverRepository.findById(cId).ifPresent(driver -> {
+                        try {
+                            pushNotificationService.notifyOfferTaken(driver, bookingId);
+                        } catch (Exception ignored) {}
+                    });
+                }
             }
         }
 
-        // 4. Broadcast WebSocket event to stop notification on client apps
+        // 4. Broadcast WebSocket event to stop notification & ringtone across all driver apps
         if (telemetryWebSocketHandler != null) {
             try {
-                telemetryWebSocketHandler.broadcastOfferDismiss(bookingId, "ACCEPTED_BY_ANOTHER");
+                telemetryWebSocketHandler.broadcastOfferDismiss(bookingId, "ACCEPTED", winningDriverId);
             } catch (Exception ignored) {}
         }
     }
