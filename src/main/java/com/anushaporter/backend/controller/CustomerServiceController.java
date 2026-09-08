@@ -40,9 +40,60 @@ public class CustomerServiceController {
     /**
      * GET /api/customer/services
      * Returns all active categories with their active, customer-visible services grouped together and sorted by displayOrder.
+     * When category=packers is provided, returns the 4 house shifting tiers (1 RK, 1 BHK, 2 BHK, 3 BHK).
      */
     @GetMapping
-    public ResponseEntity<?> getCustomerServices() {
+    public ResponseEntity<?> getCustomerServices(@RequestParam(required = false) String category) {
+        if (category != null && (category.equalsIgnoreCase("packers") || category.equalsIgnoreCase("packers-movers") || category.equalsIgnoreCase("shifting"))) {
+            List<Map<String, Object>> packersData = List.of(
+                    Map.of(
+                            "id", "pm-1rk",
+                            "code", "1_RK",
+                            "name", "1 RK / Studio",
+                            "description", "Suitable for bachelors or minimal household items",
+                            "recommendedVehicle", "Tata Ace (1 Ton)",
+                            "recommendedHelpers", 2,
+                            "basePrice", 2499,
+                            "pricePerKm", 45
+                    ),
+                    Map.of(
+                            "id", "pm-1bhk",
+                            "code", "1_BHK",
+                            "name", "1 BHK Complete Shifting",
+                            "description", "Ideal for single bedroom apartments",
+                            "recommendedVehicle", "Pickup 8ft (1.5 Ton)",
+                            "recommendedHelpers", 3,
+                            "basePrice", 3999,
+                            "pricePerKm", 55
+                    ),
+                    Map.of(
+                            "id", "pm-2bhk",
+                            "code", "2_BHK",
+                            "name", "2 BHK Complete Shifting",
+                            "description", "Standard 2 bedroom house shifting with furniture packing",
+                            "recommendedVehicle", "Canter 14ft (3.5 Ton)",
+                            "recommendedHelpers", 4,
+                            "basePrice", 5999,
+                            "pricePerKm", 65
+                    ),
+                    Map.of(
+                            "id", "pm-3bhk",
+                            "code", "3_BHK",
+                            "name", "3 BHK / Villa Shifting",
+                            "description", "Large multi-room apartment or independent house",
+                            "recommendedVehicle", "Canter 17ft / 19ft (5 Ton)",
+                            "recommendedHelpers", 5,
+                            "basePrice", 8999,
+                            "pricePerKm", 80
+                    )
+            );
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "data", packersData,
+                    "services", packersData
+            ));
+        }
+
         // 1. Fetch active categories
         List<ServiceCategory> categories = categoryRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
         if (categories.isEmpty()) {

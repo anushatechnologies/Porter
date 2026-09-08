@@ -32,4 +32,44 @@ public class PassengerFareEstimateRequest {
     private Integer waitingMinutes;
     private List<String> additionalStops;
     private String couponCode;
+
+    public void setPickupLatitude(Double pickupLatitude) {
+        this.pickupLat = pickupLatitude;
+    }
+
+    public Double getPickupLatitude() {
+        return this.pickupLat;
+    }
+
+    public void setPickupLongitude(Double pickupLongitude) {
+        this.pickupLng = pickupLongitude;
+    }
+
+    public Double getPickupLongitude() {
+        return this.pickupLng;
+    }
+
+    public void setDropLatitude(Double dropLatitude) {
+        this.dropLat = dropLatitude;
+    }
+
+    public Double getDropLatitude() {
+        return this.dropLat;
+    }
+
+    public void setDropLongitude(Double dropLongitude) {
+        this.dropLng = dropLongitude;
+    }
+
+    public Double getDropLongitude() {
+        return this.dropLng;
+    }
+
+    public void setStops(List<String> stops) {
+        this.additionalStops = stops;
+    }
+
+    public List<String> getStops() {
+        return this.additionalStops;
+    }
 }

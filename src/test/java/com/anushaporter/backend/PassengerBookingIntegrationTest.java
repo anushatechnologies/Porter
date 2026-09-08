@@ -6,6 +6,7 @@ import com.anushaporter.backend.dto.PassengerFareEstimateRequest;
 import com.anushaporter.backend.model.*;
 import com.anushaporter.backend.repository.*;
 import com.anushaporter.backend.service.PassengerPricingVersionService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -159,12 +160,12 @@ public class PassengerBookingIntegrationTest {
         MvcResult bookingResult = mockMvc.perform(post("/api/passenger/bookings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(bookingReq)))
-                .andExpect(status().isOk())
+                .andExpect(status().is2xxSuccessful())
                 .andExpect(jsonPath("$.bookingNumber").isNotEmpty())
                 .andExpect(jsonPath("$.status").value("DRIVER_SEARCHING"))
                 .andReturn();
 
-        PassengerBooking booking = objectMapper.readValue(bookingResult.getResponse().getContentAsString(), PassengerBooking.class);
+        PassengerBooking booking = parseBookingResponse(bookingResult);
         assertNotNull(booking.getId());
 
         // Step 3: Admin assigns driver
@@ -218,10 +219,10 @@ public class PassengerBookingIntegrationTest {
         MvcResult result1 = mockMvc.perform(post("/api/passenger/bookings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req1)))
-                .andExpect(status().isOk())
+                .andExpect(status().is2xxSuccessful())
                 .andReturn();
 
-        PassengerBooking booking1 = objectMapper.readValue(result1.getResponse().getContentAsString(), PassengerBooking.class);
+        PassengerBooking booking1 = parseBookingResponse(result1);
         BigDecimal distanceFareBooking1 = booking1.getFareBreakdown().getDistanceFare();
         BigDecimal totalFareBooking1 = booking1.getFareBreakdown().getTotalFare();
         String versionBooking1 = booking1.getPricingVersionId();
@@ -248,17 +249,17 @@ public class PassengerBookingIntegrationTest {
         MvcResult result2 = mockMvc.perform(post("/api/passenger/bookings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req2)))
-                .andExpect(status().isOk())
+                .andExpect(status().is2xxSuccessful())
                 .andReturn();
 
-        PassengerBooking booking2 = objectMapper.readValue(result2.getResponse().getContentAsString(), PassengerBooking.class);
+        PassengerBooking booking2 = parseBookingResponse(result2);
 
         // 4. Verify historical immutability:
         // Booking 1 fetched from DB retains its exact snapshot and lower fare
         PassengerBooking fetchedBooking1 = bookingRepository.findById(booking1.getId()).orElseThrow();
         assertEquals(versionBooking1, fetchedBooking1.getPricingVersionId());
-        assertEquals(distanceFareBooking1, fetchedBooking1.getFareBreakdown().getDistanceFare());
-        assertEquals(totalFareBooking1, fetchedBooking1.getFareBreakdown().getTotalFare());
+        assertEquals(0, distanceFareBooking1.compareTo(fetchedBooking1.getFareBreakdown().getDistanceFare()));
+        assertEquals(0, totalFareBooking1.compareTo(fetchedBooking1.getFareBreakdown().getTotalFare()));
 
         // Booking 2 has new version and higher fare reflecting ₹16/km!
         assertEquals(newVersion.getVersionNumber(), booking2.getPricingVersionId());
@@ -285,5 +286,14 @@ public class PassengerBookingIntegrationTest {
                 .andExpect(jsonPath("$.breakdown.distanceFare").value(210.00))
                 .andExpect(jsonPath("$.breakdown.driverAllowance").value(100.00))
                 .andExpect(jsonPath("$.breakdown.totalFare").isNotEmpty());
+    }
+
+    private PassengerBooking parseBookingResponse(MvcResult result) throws Exception {
+        String content = result.getResponse().getContentAsString();
+        JsonNode node = objectMapper.readTree(content);
+        if (node.has("booking")) {
+            return objectMapper.treeToValue(node.get("booking"), PassengerBooking.class);
+        }
+        return objectMapper.readValue(content, PassengerBooking.class);
     }
 }

@@ -24,7 +24,7 @@ public class SlotController {
     public ResponseEntity<Map<String, Object>> getSlotsByService(
             @PathVariable String serviceId,
             @RequestParam("date") String date) {
-        return ResponseEntity.ok(buildSlotsResponse(date));
+        return ResponseEntity.ok(buildSlotsResponse(serviceId, date));
     }
 
     /**
@@ -35,21 +35,24 @@ public class SlotController {
     public ResponseEntity<Map<String, Object>> getAvailabilitySlots(
             @RequestParam(value = "serviceId", required = false) String serviceId,
             @RequestParam("date") String date) {
-        return ResponseEntity.ok(buildSlotsResponse(date));
+        return ResponseEntity.ok(buildSlotsResponse(serviceId != null ? serviceId : "default", date));
     }
 
-    private Map<String, Object> buildSlotsResponse(String date) {
+    private Map<String, Object> buildSlotsResponse(String serviceId, String date) {
         List<Map<String, Object>> slots = List.of(
-            Map.of("id", "slot-1", "label", "07:00 AM - 09:00 AM", "available", true),
-            Map.of("id", "slot-2", "label", "09:00 AM – 11:00 AM", "available", true),
-            Map.of("id", "slot-3", "label", "11:00 AM – 01:00 PM", "available", true),
-            Map.of("id", "slot-4", "label", "02:00 PM – 04:00 PM", "available", true),
-            Map.of("id", "slot-5", "label", "04:00 PM – 06:00 PM", "available", true)
+            Map.of("id", "slot-1", "slot", "07:00 AM - 09:00 AM", "label", "07:00 AM - 09:00 AM", "isAvailable", true, "available", true, "surgeFee", 0),
+            Map.of("id", "slot-2", "slot", "09:00 AM - 11:00 AM", "label", "09:00 AM – 11:00 AM", "isAvailable", true, "available", true, "surgeFee", 200),
+            Map.of("id", "slot-3", "slot", "11:00 AM - 01:00 PM", "label", "11:00 AM – 01:00 PM", "isAvailable", false, "available", false, "surgeFee", 0),
+            Map.of("id", "slot-4", "slot", "02:00 PM - 04:00 PM", "label", "02:00 PM – 04:00 PM", "isAvailable", true, "available", true, "surgeFee", 0),
+            Map.of("id", "slot-5", "slot", "04:00 PM - 06:00 PM", "label", "04:00 PM – 06:00 PM", "isAvailable", true, "available", true, "surgeFee", 0)
         );
-        return Map.of(
-            "success", true,
-            "date", date,
-            "slots", slots
-        );
+        Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        resp.put("success", true);
+        if (serviceId != null) {
+            resp.put("serviceId", serviceId);
+        }
+        resp.put("date", date);
+        resp.put("slots", slots);
+        return resp;
     }
 }

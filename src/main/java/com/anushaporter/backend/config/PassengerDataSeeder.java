@@ -86,11 +86,30 @@ public class PassengerDataSeeder implements CommandLineRunner {
     }
 
     private void seedVehicleCategories() {
-        if (categoryRepository.count() == 0) {
+        if (categoryRepository.findByCategoryCode("AUTO").isEmpty()) {
+            categoryRepository.save(PassengerVehicleCategory.builder()
+                    .categoryCode("AUTO")
+                    .displayName("Auto")
+                    .description("Affordable 3-wheeler auto rickshaw")
+                    .passengerCapacity(3)
+                    .luggageCapacity(2)
+                    .baseFare(new BigDecimal("30.00"))
+                    .perKmRate(new BigDecimal("14.00"))
+                    .perHourRate(new BigDecimal("100.00"))
+                    .minimumFare(new BigDecimal("30.00"))
+                    .minimumKm(new BigDecimal("2.00"))
+                    .driverAllowance(BigDecimal.ZERO)
+                    .displayOrder(0)
+                    .active(true)
+                    .imageUrl("https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400&q=80")
+                    .build());
+        }
+
+        if (categoryRepository.count() == 0 || categoryRepository.findByCategoryCode("HATCHBACK").isEmpty()) {
             categoryRepository.saveAll(List.of(
                     PassengerVehicleCategory.builder()
                             .categoryCode("HATCHBACK")
-                            .displayName("Hatchback")
+                            .displayName("Mini / Hatchback")
                             .description("Compact & economical (Alto, WagonR, Swift)")
                             .passengerCapacity(4)
                             .luggageCapacity(2)

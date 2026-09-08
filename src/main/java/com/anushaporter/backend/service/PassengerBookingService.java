@@ -70,9 +70,11 @@ public class PassengerBookingService {
 
         String bookingNumber = generateBookingNumber();
         String activeVersionId = estimate.getPricingVersionId();
+        String startOtp = String.format("%04d", ThreadLocalRandom.current().nextInt(1000, 10000));
 
         PassengerBooking booking = PassengerBooking.builder()
                 .bookingNumber(bookingNumber)
+                .startOtp(startOtp)
                 .customerId(req.getCustomerId())
                 .customerName(req.getCustomerName() != null ? req.getCustomerName() : "Customer")
                 .customerPhone(req.getCustomerPhone() != null ? req.getCustomerPhone() : "N/A")

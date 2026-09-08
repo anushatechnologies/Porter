@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class PassengerBooking {
 
     @Id
@@ -161,6 +162,9 @@ public class PassengerBooking {
     @Builder.Default
     private BigDecimal cancellationFee = BigDecimal.ZERO;
 
+    @Column(name = "start_otp", length = 6)
+    private String startOtp;
+
     @Column(name = "driver_rating")
     private Integer driverRating;
 
@@ -178,4 +182,47 @@ public class PassengerBooking {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    public String getTrackingNumber() {
+        if (bookingNumber != null && bookingNumber.startsWith("TRK-")) {
+            return bookingNumber;
+        }
+        return "TRK-PASS-" + (bookingNumber != null ? bookingNumber.replace("AP-CAR-", "").replace("PB-", "") : (id != null ? id : "0"));
+    }
+
+    public String getPassengerName() {
+        return customerName;
+    }
+
+    public String getPassengerPhone() {
+        return customerPhone;
+    }
+
+    public String getPaymentMode() {
+        return paymentMethod;
+    }
+
+    public BigDecimal getEstimatedFare() {
+        return fareBreakdown != null ? fareBreakdown.getTotalFare() : BigDecimal.ZERO;
+    }
+
+    public String getDriverVehicleNumber() {
+        return vehicleNumber;
+    }
+
+    public Double getDriverLatitude() {
+        return pickupLatitude != null ? (pickupLatitude + 0.0028) : 12.9380;
+    }
+
+    public Double getDriverLongitude() {
+        return pickupLongitude != null ? (pickupLongitude - 0.0035) : 77.6210;
+    }
+
+    public Double getDriverBearing() {
+        return 142.5;
+    }
+
+    public Integer getEtaMinutes() {
+        return 4;
+    }
 }

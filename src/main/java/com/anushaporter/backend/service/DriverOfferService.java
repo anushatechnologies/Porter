@@ -361,6 +361,17 @@ public class DriverOfferService {
      * 4. Broadcasts WebSocket event to stop notification ringing across driver apps.
      */
     @Transactional
+    public void onOrderAccepted(String bookingId, String winningDriverIdStr) {
+        Long winningDriverId = null;
+        if (winningDriverIdStr != null && !winningDriverIdStr.isBlank()) {
+            try {
+                winningDriverId = Long.parseLong(winningDriverIdStr);
+            } catch (Exception ignored) {}
+        }
+        onOrderAcceptedByDriver(bookingId, winningDriverId);
+    }
+
+    @Transactional
     public void onOrderAcceptedByDriver(String bookingId, Long winningDriverId) {
         if (bookingId == null || bookingId.isBlank()) return;
         LocalDateTime now = LocalDateTime.now();

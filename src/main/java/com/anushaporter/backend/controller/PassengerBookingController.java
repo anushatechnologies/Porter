@@ -18,8 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/passenger")
@@ -41,23 +40,42 @@ public class PassengerBookingController {
     }
 
     @PostMapping("/bookings")
-    public ResponseEntity<PassengerBooking> createBooking(@RequestBody PassengerBookingCreateRequest request) {
+    public ResponseEntity<Map<String, Object>> createBooking(@RequestBody PassengerBookingCreateRequest request) {
         PassengerBooking booking = bookingService.createBooking(request);
-        return ResponseEntity.ok(booking);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("booking", booking);
+        // Include direct booking fields for backward compatibility
+        response.put("id", booking.getBookingNumber());
+        response.put("bookingNumber", booking.getBookingNumber());
+        response.put("trackingNumber", booking.getTrackingNumber());
+        response.put("status", booking.getStatus().name());
+        response.put("startOtp", booking.getStartOtp());
+        return ResponseEntity.status(201).body(response);
     }
 
     @GetMapping("/bookings/{id}")
-    public ResponseEntity<PassengerBooking> getBookingById(@PathVariable Long id) {
-        return bookingRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Map<String, Object>> getBookingById(@PathVariable String id) {
+        Optional<PassengerBooking> bookingOpt = findBookingByIdOrNumber(id);
+        if (bookingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "booking", bookingOpt.get()
+        ));
     }
 
     @GetMapping("/bookings/by-number/{bookingNumber}")
-    public ResponseEntity<PassengerBooking> getBookingByNumber(@PathVariable String bookingNumber) {
-        return bookingRepository.findByBookingNumber(bookingNumber)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Map<String, Object>> getBookingByNumber(@PathVariable String bookingNumber) {
+        Optional<PassengerBooking> bookingOpt = bookingRepository.findByBookingNumber(bookingNumber);
+        if (bookingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "booking", bookingOpt.get()
+        ));
     }
 
     @GetMapping("/bookings/customer/{phone}")
@@ -66,46 +84,90 @@ public class PassengerBookingController {
     }
 
     @PostMapping("/bookings/{id}/cancel")
-    public ResponseEntity<PassengerBooking> cancelBooking(
-            @PathVariable Long id,
+    public ResponseEntity<Map<String, Object>> cancelBooking(
+            @PathVariable String id,
             @RequestBody(required = false) Map<String, String> payload
     ) {
+        Optional<PassengerBooking> bookingOpt = findBookingByIdOrNumber(id);
+        if (bookingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
         String cancelledBy = (payload != null && payload.containsKey("cancelledBy")) ? payload.get("cancelledBy") : "CUSTOMER";
-        String reason = (payload != null && payload.containsKey("reason")) ? payload.get("reason") : "Customer requested cancellation";
-        PassengerBooking cancelled = bookingService.cancelBooking(id, cancelledBy, reason);
-        return ResponseEntity.ok(cancelled);
+        String reason = (payload != null && payload.containsKey("reason")) ? payload.get("reason") : "Ride cancelled by user";
+        PassengerBooking cancelled = bookingService.cancelBooking(bookingOpt.get().getId(), cancelledBy, reason);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("message", "Ride cancelled successfully");
+        response.put("cancellationFee", cancelled.getCancellationFee() != null ? cancelled.getCancellationFee() : 0);
+        response.put("booking", cancelled);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/bookings/{id}/payment")
     public ResponseEntity<PassengerBooking> processPayment(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestBody(required = false) Map<String, String> payload
     ) {
+        Optional<PassengerBooking> bookingOpt = findBookingByIdOrNumber(id);
+        if (bookingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
         String paymentMethod = (payload != null && payload.containsKey("paymentMethod")) ? payload.get("paymentMethod") : "ONLINE";
         String txRef = (payload != null && payload.containsKey("transactionRef")) ? payload.get("transactionRef") : "TX-" + System.currentTimeMillis();
-        PassengerBooking paid = bookingService.completePayment(id, paymentMethod, txRef);
+        PassengerBooking paid = bookingService.completePayment(bookingOpt.get().getId(), paymentMethod, txRef);
         return ResponseEntity.ok(paid);
     }
 
-    @PostMapping("/bookings/{id}/rate")
-    public ResponseEntity<PassengerBooking> rateTrip(
-            @PathVariable Long id,
-            @RequestBody Map<String, Object> payload
+    @PostMapping({"/bookings/{id}/review", "/bookings/{id}/rate"})
+    public ResponseEntity<Map<String, Object>> rateTrip(
+            @PathVariable String id,
+            @RequestBody(required = false) Map<String, Object> payload
     ) {
-        Integer rating = payload.containsKey("rating") ? Integer.valueOf(payload.get("rating").toString()) : 5;
-        String notes = payload.containsKey("notes") ? payload.get("notes").toString() : "";
-        PassengerBooking rated = bookingService.rateTrip(id, rating, notes);
-        return ResponseEntity.ok(rated);
+        Optional<PassengerBooking> bookingOpt = findBookingByIdOrNumber(id);
+        if (bookingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        Integer rating = (payload != null && payload.containsKey("rating")) ? Integer.valueOf(payload.get("rating").toString()) : 5;
+        String notes = (payload != null && payload.containsKey("feedback")) ? payload.get("feedback").toString()
+                : (payload != null && payload.containsKey("notes") ? payload.get("notes").toString() : "");
+        PassengerBooking rated = bookingService.rateTrip(bookingOpt.get().getId(), rating, notes);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Review submitted successfully",
+                "booking", rated
+        ));
+    }
+
+    @GetMapping({"/categories", "/vehicles"})
+    public ResponseEntity<Map<String, Object>> getVehicleCategories() {
+        List<PassengerVehicleCategory> categories = vehicleCategoryRepository.findByActiveTrueOrderByDisplayOrderAsc();
+        List<Map<String, Object>> data = categories.stream().map(c -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", String.valueOf(c.getId()));
+            m.put("code", c.getCategoryCode());
+            m.put("name", c.getDisplayName());
+            m.put("description", c.getDescription());
+            m.put("imageUrl", c.getImageUrl() != null ? c.getImageUrl() : "");
+            m.put("passengerCapacity", c.getPassengerCapacity());
+            m.put("luggageCapacity", c.getLuggageCapacity());
+            m.put("basePrice", c.getBaseFare());
+            m.put("perKmRate", c.getPerKmRate());
+            m.put("isActive", Boolean.TRUE.equals(c.getActive()));
+            m.put("displayOrder", c.getDisplayOrder());
+            return m;
+        }).toList();
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", data
+        ));
     }
 
     @GetMapping("/services")
     public ResponseEntity<List<PassengerServiceEntity>> getServices() {
         return ResponseEntity.ok(serviceRepository.findByActiveTrueOrderByDisplayOrderAsc());
-    }
-
-    @GetMapping("/vehicles")
-    public ResponseEntity<List<PassengerVehicleCategory>> getVehicles() {
-        return ResponseEntity.ok(vehicleCategoryRepository.findByActiveTrueOrderByDisplayOrderAsc());
     }
 
     @GetMapping("/vehicles/available")
@@ -128,5 +190,26 @@ public class PassengerBookingController {
                     .findByVehicleCategoryCodeAndActiveTrue(vehicleCategoryCode.toUpperCase()));
         }
         return ResponseEntity.ok(rentalPackageRepository.findByActiveTrue());
+    }
+
+    private Optional<PassengerBooking> findBookingByIdOrNumber(String id) {
+        try {
+            Long num = Long.parseLong(id);
+            Optional<PassengerBooking> byId = bookingRepository.findById(num);
+            if (byId.isPresent()) return byId;
+        } catch (NumberFormatException ignored) {}
+
+        Optional<PassengerBooking> byNum = bookingRepository.findByBookingNumber(id);
+        if (byNum.isPresent()) return byNum;
+
+        // Strip prefixes like TRK-PASS-
+        String sanitized = id.replace("TRK-PASS-", "").replace("TRK-", "").replace("PB-", "");
+        try {
+            Long num = Long.parseLong(sanitized);
+            Optional<PassengerBooking> bySanitized = bookingRepository.findById(num);
+            if (bySanitized.isPresent()) return bySanitized;
+        } catch (NumberFormatException ignored) {}
+
+        return bookingRepository.findByBookingNumber("AP-CAR-" + sanitized);
     }
 }

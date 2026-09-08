@@ -1,5 +1,6 @@
 package com.anushaporter.backend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import lombok.AllArgsConstructor;
@@ -14,6 +15,7 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class BookingFareBreakdown {
 
     @Column(name = "base_fare", precision = 10, scale = 2)
@@ -86,4 +88,20 @@ public class BookingFareBreakdown {
     @Column(name = "surge_multiplier", precision = 5, scale = 2)
     @Builder.Default
     private BigDecimal surgeMultiplier = BigDecimal.ONE;
+
+    public BigDecimal getTaxes() {
+        return tax;
+    }
+
+    public void setTaxes(BigDecimal taxes) {
+        this.tax = taxes;
+    }
+
+    public BigDecimal getTollFee() {
+        return toll;
+    }
+
+    public void setTollFee(BigDecimal tollFee) {
+        this.toll = tollFee;
+    }
 }

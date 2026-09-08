@@ -26,4 +26,20 @@ public class PassengerFareEstimateResponse {
     private Integer durationMinutes;
     private BookingFareBreakdown breakdown;
     private String message;
+
+    public String getFareToken() {
+        return fareLockToken;
+    }
+
+    public LocalDateTime getTokenExpiresAt() {
+        return fareLockExpiresAt;
+    }
+
+    public BigDecimal getEstimatedFare() {
+        return breakdown != null ? breakdown.getTotalFare() : null;
+    }
+
+    public String getPricingVersion() {
+        return pricingVersionId;
+    }
 }

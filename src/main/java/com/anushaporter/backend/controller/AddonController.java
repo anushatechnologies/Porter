@@ -138,6 +138,80 @@ public class AddonController {
 
             addonServiceRepository.saveAll(defaults);
         }
+
+        // Ensure canonical Packers & Movers addons from spec are always present
+        seedCanonicalPackersAddons();
+    }
+
+    private void seedCanonicalPackersAddons() {
+        if (addonServiceRepository.findByAddonId("addon-bubble-wrap").isEmpty()) {
+            AddonService bw = new AddonService();
+            bw.setAddonId("addon-bubble-wrap");
+            bw.setName("Multi-layer Bubble Wrap");
+            bw.setCategory("packers");
+            bw.setServiceType("packing");
+            bw.setDescription("Extra protection for TVs, monitors, glass tables & delicate crockery");
+            bw.setSubtitle("₹49 per fragile item");
+            bw.setIcon("shield-check");
+            bw.setBasePrice(0.0);
+            bw.setPerItemRate(49.0);
+            bw.setPrice(49.0);
+            bw.setPricingUnit("per_item");
+            bw.setDisplayOrder(1);
+            bw.setIsActive(true);
+            addonServiceRepository.save(bw);
+        }
+        if (addonServiceRepository.findByAddonId("addon-dismantle-bed").isEmpty()) {
+            AddonService db = new AddonService();
+            db.setAddonId("addon-dismantle-bed");
+            db.setName("Bed Dismantling & Assembly");
+            db.setCategory("packers");
+            db.setServiceType("carpentry");
+            db.setDescription("Expert carpenters dismantle cot and reassemble at destination");
+            db.setSubtitle("Flat ₹399 per cot");
+            db.setIcon("tools");
+            db.setBasePrice(399.0);
+            db.setPerItemRate(399.0);
+            db.setPrice(399.0);
+            db.setPricingUnit("per_item");
+            db.setDisplayOrder(2);
+            db.setIsActive(true);
+            addonServiceRepository.save(db);
+        }
+        if (addonServiceRepository.findByAddonId("addon-ac-uninstall").isEmpty()) {
+            AddonService ac = new AddonService();
+            ac.setAddonId("addon-ac-uninstall");
+            ac.setName("AC Uninstallation");
+            ac.setCategory("packers");
+            ac.setServiceType("electrician");
+            ac.setDescription("Safe electrical disconnection and unmounting of Split/Window AC");
+            ac.setSubtitle("Flat ₹699 per unit");
+            ac.setIcon("snowflake");
+            ac.setBasePrice(699.0);
+            ac.setPerItemRate(699.0);
+            ac.setPrice(699.0);
+            ac.setPricingUnit("per_item");
+            ac.setDisplayOrder(3);
+            ac.setIsActive(true);
+            addonServiceRepository.save(ac);
+        }
+        if (addonServiceRepository.findByAddonId("addon-unpacking").isEmpty()) {
+            AddonService up = new AddonService();
+            up.setAddonId("addon-unpacking");
+            up.setName("Complete Unpacking & Placement");
+            up.setCategory("packers");
+            up.setServiceType("unpacking");
+            up.setDescription("Movers will unpack carton boxes and arrange items in designated rooms");
+            up.setSubtitle("Flat ₹999");
+            up.setIcon("box-open");
+            up.setBasePrice(999.0);
+            up.setPerItemRate(0.0);
+            up.setPrice(999.0);
+            up.setPricingUnit("flat");
+            up.setDisplayOrder(4);
+            up.setIsActive(true);
+            addonServiceRepository.save(up);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
