@@ -67,7 +67,13 @@ public class DriverAPIController {
 
     private AppUser getAuthenticatedAppUser(HttpServletRequest request) {
         String userId = (String) request.getAttribute("userId");
-        if (userId == null)
+        if (userId == null || userId.isBlank()) {
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                userId = jwtUtil.extractIdentifierFromFirebaseOrJwt(authHeader.substring(7).trim());
+            }
+        }
+        if (userId == null || userId.isBlank())
             return null;
         Optional<AppUser> userOpt = appUserRepository.findFirstByEmailOrderByIdDesc(userId);
         if (userOpt.isPresent())
@@ -325,6 +331,8 @@ public class DriverAPIController {
             idempotentSuccess.put("message", "You have already accepted this order.");
             idempotentSuccess.put("bookingId", order.getBookingId() != null ? order.getBookingId() : bookingId);
             idempotentSuccess.put("status", "accepted");
+            idempotentSuccess.put("stopSound", true);
+            idempotentSuccess.put("action", "STOP_RINGTONE");
             idempotentSuccess.put("order", order);
             return ResponseEntity.ok(idempotentSuccess);
         }
@@ -380,6 +388,8 @@ public class DriverAPIController {
                 idempotentSuccess.put("message", "You have already accepted this order.");
                 idempotentSuccess.put("bookingId", fresh.getBookingId() != null ? fresh.getBookingId() : bookingId);
                 idempotentSuccess.put("status", "accepted");
+                idempotentSuccess.put("stopSound", true);
+                idempotentSuccess.put("action", "STOP_RINGTONE");
                 idempotentSuccess.put("order", fresh);
                 return ResponseEntity.ok(idempotentSuccess);
             }
@@ -387,6 +397,8 @@ public class DriverAPIController {
             Map<String, Object> conflict = new LinkedHashMap<>();
             conflict.put("success", false);
             conflict.put("statusCode", 409);
+            conflict.put("stopSound", true);
+            conflict.put("action", "STOP_RINGTONE");
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();
             orderSummary.put("id", fresh.getId());
@@ -423,6 +435,8 @@ public class DriverAPIController {
         response.put("message", "Order accepted successfully");
         response.put("bookingId", saved.getBookingId() != null ? saved.getBookingId() : bookingId);
         response.put("status", "accepted");
+        response.put("stopSound", true);
+        response.put("action", "STOP_RINGTONE");
         response.put("order", saved);
         return ResponseEntity.ok(response);
     }
@@ -488,6 +502,45 @@ public class DriverAPIController {
         int status = success ? 200 : ("TOO_LATE".equals(result.get("status")) ? 409 : 400);
 
         return ResponseEntity.status(status).body(result);
+    }
+
+    /**
+     * Driver explicitly rejects or dismisses an incoming booking offer.
+     * Maps all common rejection URLs called by mobile app frameworks.
+     */
+    @RequestMapping(value = {
+            "/driver/orders/{bookingId}/reject",
+            "/drivers/orders/{bookingId}/reject",
+            "/driver/offers/{bookingId}/reject",
+            "/drivers/offers/{bookingId}/reject",
+            "/driver/orders/{bookingId}/dismiss",
+            "/drivers/orders/{bookingId}/dismiss",
+            "/driver/offers/{bookingId}/dismiss",
+            "/drivers/offers/{bookingId}/dismiss"
+    }, method = { RequestMethod.POST, RequestMethod.PUT, RequestMethod.GET })
+    public ResponseEntity<?> rejectOrderByBookingId(
+            HttpServletRequest request,
+            @PathVariable String bookingId,
+            @RequestBody(required = false) Map<String, Object> payload) {
+        Driver driver = getAuthenticatedDriver(request);
+        Long driverId = driver != null && driver.getId() != null ? driver.getId() : null;
+        if (driverId == null && payload != null && payload.get("driverId") != null) {
+            try {
+                driverId = Long.parseLong(String.valueOf(payload.get("driverId")).replaceAll("[^0-9]", ""));
+            } catch (Exception ignored) {}
+        }
+        if (driverId == null) {
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "stopSound", true,
+                    "action", "STOP_RINGTONE",
+                    "status", "REJECTED",
+                    "message", "Offer dismissed."
+            ));
+        }
+
+        Map<String, Object> result = driverOfferService.respondToOffer(bookingId, driverId, false);
+        return ResponseEntity.ok(result);
     }
 
     /**

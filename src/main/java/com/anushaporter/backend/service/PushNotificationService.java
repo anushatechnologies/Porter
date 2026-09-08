@@ -1,11 +1,14 @@
 package com.anushaporter.backend.service;
 
 import com.anushaporter.backend.model.AppUser;
+import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.model.Notification;
 import com.anushaporter.backend.model.Order;
 import com.anushaporter.backend.repository.AppUserRepository;
+import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.repository.NotificationRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import org.slf4j.Logger;
@@ -20,9 +23,6 @@ import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.anushaporter.backend.model.Driver;
-import com.anushaporter.backend.repository.DriverRepository;
-
 @Service
 public class PushNotificationService {
     private static final Logger logger = LoggerFactory.getLogger(PushNotificationService.class);
@@ -32,6 +32,26 @@ public class PushNotificationService {
     @Autowired private NotificationRepository notificationRepository;
     @Autowired(required = false) private DriverRepository driverRepository;
     @Autowired private ObjectMapper objectMapper;
+
+    private boolean isFirebaseReady() {
+        try {
+            return !FirebaseApp.getApps().isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void safeSendFirebase(Message push) {
+        if (!isFirebaseReady()) {
+            logger.debug("Firebase is not initialized; skipping FCM message send.");
+            return;
+        }
+        try {
+            FirebaseMessaging.getInstance().send(push);
+        } catch (Exception e) {
+            logger.warn("FCM push delivery failed: {}", e.getMessage());
+        }
+    }
 
     public void notifyUser(AppUser user, String bookingId, String type, String title, String message) {
         if (user == null) return;
@@ -58,7 +78,7 @@ public class PushNotificationService {
                         .putData("bookingId", bookingId == null ? "" : bookingId)
                         .putData("notificationType", type)
                         .build();
-                FirebaseMessaging.getInstance().send(push);
+                safeSendFirebase(push);
             }
         } catch (Exception e) {
             logger.warn("Push delivery failed for user {}: {}", user.getId(), e.getMessage());
@@ -135,7 +155,7 @@ public class PushNotificationService {
             String message = "Another driver partner has accepted this order.";
             try {
                 if (token.startsWith("ExpoPushToken[")) {
-                    sendExpo(token, title, message, bookingId, "STOP_DRIVER_OFFER");
+                    sendExpoStopOffer(token, title, message, bookingId, "ACCEPTED_BY_ANOTHER");
                 } else {
                     Message push = Message.builder()
                             .setToken(token)
@@ -145,7 +165,7 @@ public class PushNotificationService {
                             .putData("stopSound", "true")
                             .putData("action", "STOP_RINGTONE")
                             .build();
-                    FirebaseMessaging.getInstance().send(push);
+                    safeSendFirebase(push);
                 }
             } catch (Exception e) {
                 logger.debug("Failed to send stop offer push to driver {}: {}", driver.getId(), e.getMessage());
@@ -162,7 +182,7 @@ public class PushNotificationService {
             String message = "You have accepted booking #" + bookingId;
             try {
                 if (token.startsWith("ExpoPushToken[")) {
-                    sendExpo(token, title, message, bookingId, "STOP_DRIVER_OFFER");
+                    sendExpoStopOffer(token, title, message, bookingId, "ACCEPTED_BY_YOU");
                 } else {
                     Message push = Message.builder()
                             .setToken(token)
@@ -172,7 +192,7 @@ public class PushNotificationService {
                             .putData("stopSound", "true")
                             .putData("action", "STOP_RINGTONE")
                             .build();
-                    FirebaseMessaging.getInstance().send(push);
+                    safeSendFirebase(push);
                 }
             } catch (Exception e) {
                 logger.debug("Failed to send accept stop push to winning driver {}: {}", driver.getId(), e.getMessage());
@@ -187,7 +207,7 @@ public class PushNotificationService {
             String token = driverUser.getFcmToken();
             try {
                 if (token.startsWith("ExpoPushToken[")) {
-                    sendExpo(token, "Offer Dismissed", "Offer dismissed", bookingId, "STOP_DRIVER_OFFER");
+                    sendExpoStopOffer(token, "Offer Dismissed", "Offer dismissed", bookingId, "REJECTED_BY_YOU");
                 } else {
                     Message push = Message.builder()
                             .setToken(token)
@@ -197,7 +217,7 @@ public class PushNotificationService {
                             .putData("stopSound", "true")
                             .putData("action", "STOP_RINGTONE")
                             .build();
-                    FirebaseMessaging.getInstance().send(push);
+                    safeSendFirebase(push);
                 }
             } catch (Exception e) {
                 logger.debug("Failed to send dismiss push to driver {}: {}", driver.getId(), e.getMessage());
@@ -251,7 +271,37 @@ public class PushNotificationService {
         payload.put("body", message);
         payload.put("sound", "default");
         payload.put("priority", "high");
-        payload.put("data", Map.of("bookingId", bookingId == null ? "" : bookingId, "notificationType", type));
+        payload.put("data", Map.of(
+                "bookingId", bookingId == null ? "" : bookingId,
+                "notificationType", type
+        ));
+        HttpRequest request = HttpRequest.newBuilder(EXPO_URI)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                .build();
+        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /**
+     * Sends a silent Expo push notification without sound playback to instruct
+     * the mobile app to stop the offer audio/ringtone.
+     */
+    private void sendExpoStopOffer(String token, String title, String message, String bookingId, String status) throws Exception {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("to", token);
+        payload.put("title", title);
+        payload.put("body", message);
+        payload.put("sound", null); // Explicitly null so device DOES NOT play alert audio
+        payload.put("priority", "high");
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("bookingId", bookingId == null ? "" : bookingId);
+        data.put("notificationType", "STOP_DRIVER_OFFER");
+        data.put("status", status);
+        data.put("stopSound", "true");
+        data.put("action", "STOP_RINGTONE");
+        payload.put("data", data);
+
         HttpRequest request = HttpRequest.newBuilder(EXPO_URI)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))

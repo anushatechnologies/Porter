@@ -211,4 +211,23 @@ public class Order {
     public void setAssignmentDeadline(LocalDateTime assignmentDeadline) { this.assignmentDeadline = assignmentDeadline; }
     public Integer getOfferCount() { return offerCount != null ? offerCount : 0; }
     public void setOfferCount(Integer offerCount) { this.offerCount = offerCount; }
+
+    // ── Field Aliases for Frontend Compatibility ──────────────────────────────
+    public void setTotalFare(Double fare) { if (fare != null) this.amount = fare; }
+    public void setEstimatedFare(Double fare) { if (this.amount == null && fare != null) this.amount = fare; }
+    public void setPrice(Double fare) { if (this.amount == null && fare != null) this.amount = fare; }
+    public void setFare(Double fare) { if (this.amount == null && fare != null) this.amount = fare; }
+    public void setUserPhone(String phone) { if (this.receiverPhone == null && phone != null) this.receiverPhone = phone; }
+    public void setCustomerPhone(String phone) { if (this.receiverPhone == null && phone != null) this.receiverPhone = phone; }
+    public void setPhone(String phone) { if (this.receiverPhone == null && phone != null) this.receiverPhone = phone; }
+    public void setMobile(String phone) { if (this.receiverPhone == null && phone != null) this.receiverPhone = phone; }
+    public void setCustomerName(String name) { if (this.receiverName == null && name != null) this.receiverName = name; }
+    public void setUserName(String name) { if (this.receiverName == null && name != null) this.receiverName = name; }
+    public void setPickupLatitude(Double lat) { if (lat != null) this.pickupLat = lat; }
+    public void setPickupLongitude(Double lng) { if (lng != null) this.pickupLng = lng; }
+    public void setDropLatitude(Double lat) { if (lat != null) this.dropLat = lat; }
+    public void setDropLongitude(Double lng) { if (lng != null) this.dropLng = lng; }
+    public void setVehicleType(String type) { if ((this.serviceName == null || this.serviceName.isBlank()) && type != null) this.serviceName = type; }
+    public void setVehicleName(String name) { if ((this.serviceName == null || this.serviceName.isBlank()) && name != null) this.serviceName = name; }
+    public void setVehicle(String name) { if ((this.serviceName == null || this.serviceName.isBlank()) && name != null) this.serviceName = name; }
 }

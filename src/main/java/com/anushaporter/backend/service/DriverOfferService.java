@@ -225,8 +225,38 @@ public class DriverOfferService {
 
         Optional<DriverOffer> offerOpt = driverOfferRepository.findFirstByBookingIdAndDriverIdOrderByIdDesc(bookingId, driverId);
         if (offerOpt.isEmpty()) {
+            if (!accept) {
+                // Synthesize rejected offer record so the driver is permanently marked as rejected for this booking
+                DriverOffer rejectedOffer = new DriverOffer();
+                rejectedOffer.setBookingId(bookingId);
+                rejectedOffer.setDriverId(driverId);
+                rejectedOffer.setStatus(DriverOfferStatus.REJECTED);
+                rejectedOffer.setOfferedAt(now);
+                rejectedOffer.setRespondedAt(now);
+                driverOfferRepository.save(rejectedOffer);
+
+                if (notificationRepository != null) {
+                    try { notificationRepository.dismissDriverNotificationForBooking(bookingId, driverId); } catch (Exception ignored) {}
+                }
+                if (telemetryWebSocketHandler != null) {
+                    try { telemetryWebSocketHandler.broadcastOfferDismissForDriver(bookingId, driverId, "REJECTED_BY_DRIVER"); } catch (Exception ignored) {}
+                }
+                if (pushNotificationService != null) {
+                    try { driverRepository.findById(driverId).ifPresent(d -> pushNotificationService.notifyOfferDismissedForDriver(d, bookingId)); } catch (Exception ignored) {}
+                }
+
+                response.put("success", true);
+                response.put("status", DriverOfferStatus.REJECTED.name());
+                response.put("stopSound", true);
+                response.put("action", "STOP_RINGTONE");
+                response.put("message", "Offer rejected.");
+                return response;
+            }
+
             response.put("success", false);
             response.put("status", "NOT_FOUND");
+            response.put("stopSound", true);
+            response.put("action", "STOP_RINGTONE");
             response.put("message", "No offer found for this driver and booking.");
             return response;
         }
@@ -260,6 +290,7 @@ public class DriverOfferService {
             response.put("success", true);
             response.put("status", DriverOfferStatus.REJECTED.name());
             response.put("stopSound", true);
+            response.put("action", "STOP_RINGTONE");
             response.put("message", "Offer rejected.");
             return response;
         }
@@ -272,6 +303,8 @@ public class DriverOfferService {
 
             response.put("success", false);
             response.put("status", DriverOfferStatus.EXPIRED.name());
+            response.put("stopSound", true);
+            response.put("action", "STOP_RINGTONE");
             response.put("message", "Offer has expired.");
             return response;
         }
@@ -280,6 +313,8 @@ public class DriverOfferService {
         if (driver == null) {
             response.put("success", false);
             response.put("status", "DRIVER_NOT_FOUND");
+            response.put("stopSound", true);
+            response.put("action", "STOP_RINGTONE");
             response.put("message", "Driver record not found.");
             return response;
         }
@@ -291,6 +326,8 @@ public class DriverOfferService {
                 response.put("success", false);
                 response.put("status", "INSUFFICIENT_WALLET_BALANCE");
                 response.put("error", "INSUFFICIENT_WALLET_BALANCE");
+                response.put("stopSound", true);
+                response.put("action", "STOP_RINGTONE");
                 response.put("message", "Driver wallet balance must be at least ₹" + minRequired + " to accept rides. Please recharge your wallet.");
                 return response;
             }
@@ -334,6 +371,8 @@ public class DriverOfferService {
             response.put("status", BookingStatus.ASSIGNED.name());
             response.put("bookingId", bookingId);
             response.put("driverId", driverId);
+            response.put("stopSound", true);
+            response.put("action", "STOP_RINGTONE");
             response.put("order", assignedOrder);
             response.put("message", "Booking assigned successfully!");
             return response;
@@ -348,6 +387,8 @@ public class DriverOfferService {
             response.put("success", false);
             response.put("status", DriverOfferStatus.TOO_LATE.name());
             response.put("bookingId", bookingId);
+            response.put("stopSound", true);
+            response.put("action", "STOP_RINGTONE");
             response.put("message", "Another driver partner has already accepted this booking.");
             return response;
         }

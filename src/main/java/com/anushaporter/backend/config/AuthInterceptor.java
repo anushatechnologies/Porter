@@ -19,12 +19,19 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
+        String path = request.getRequestURI();
+        // Allow customer order and booking creation without hard blocking on token expiration
+        if ("POST".equalsIgnoreCase(request.getMethod()) &&
+                (path.equals("/api/orders") || path.equals("/api/orders/") || path.startsWith("/api/bookings"))) {
+            return true;
+        }
+
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            if (jwtUtil.validateToken(token)) {
-                String subject = jwtUtil.getUsernameFromToken(token);
+            String token = authHeader.substring(7).trim();
+            String subject = jwtUtil.extractIdentifierFromFirebaseOrJwt(token);
+            if (subject != null && !subject.isBlank()) {
                 request.setAttribute("userId", subject);
                 return true;
             }

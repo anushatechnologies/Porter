@@ -25,6 +25,10 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/drivers/**", "/api/driver/**", "/api/orders/**", "/api/admin/**", "/api/upload")
                 .excludePathPatterns(
                         "/api/auth/**",
+                        "/api/orders",
+                        "/api/orders/",
+                        "/api/bookings/**",
+                        "/bookings/**",
                         "/api/addons/**",
                         "/api/customer/addons/**",
                         "/api/services/**",

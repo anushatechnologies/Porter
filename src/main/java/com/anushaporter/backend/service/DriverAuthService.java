@@ -36,7 +36,8 @@ public class DriverAuthService {
             String authHeader = request.getHeader("Authorization");
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7).trim();
-                if (jwtUtil.validateToken(token)) {
+                subject = jwtUtil.extractIdentifierFromFirebaseOrJwt(token);
+                if (subject == null && jwtUtil.validateToken(token)) {
                     subject = jwtUtil.getUsernameFromToken(token);
                 }
             }

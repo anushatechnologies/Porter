@@ -157,6 +157,9 @@ public class OrderController {
 
             Map<String, Object> result = driverWalletService.assignOrder(order, driver);
             pushNotificationService.notifyOrderStatus(order, order.getStatus());
+            if (driverOfferService != null && order.getBookingId() != null) {
+                driverOfferService.onOrderAcceptedByDriver(order.getBookingId(), driver.getId());
+            }
             return ResponseEntity.ok(result);
         } else {
             // Legacy / direct name assign fallback
@@ -166,6 +169,9 @@ public class OrderController {
             order.setStatus("assigned");
             Order savedOrder = repository.save(order);
             pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
+            if (driverOfferService != null && savedOrder.getBookingId() != null) {
+                driverOfferService.onOrderAcceptedByDriver(savedOrder.getBookingId(), null);
+            }
             return ResponseEntity.ok(Map.of("success", true, "order", savedOrder));
         }
     }
@@ -206,6 +212,8 @@ public class OrderController {
                 resp.put("success", true);
                 resp.put("statusCode", 200);
                 resp.put("message", "You have already accepted this order.");
+                resp.put("stopSound", true);
+                resp.put("action", "STOP_RINGTONE");
                 resp.put("order", order);
                 return ResponseEntity.ok(resp);
             }
@@ -224,6 +232,8 @@ public class OrderController {
                 Map<String, Object> conflict = new LinkedHashMap<>();
                 conflict.put("success", false);
                 conflict.put("statusCode", 409);
+                conflict.put("stopSound", true);
+                conflict.put("action", "STOP_RINGTONE");
                 conflict.put("message", "This order has already been accepted by another driver partner.");
                 Map<String, Object> orderSummary = new LinkedHashMap<>();
                 orderSummary.put("id", order.getId());
@@ -246,6 +256,8 @@ public class OrderController {
                     resp.put("success", true);
                     resp.put("statusCode", 200);
                     resp.put("message", "You have already accepted this order.");
+                    resp.put("stopSound", true);
+                    resp.put("action", "STOP_RINGTONE");
                     resp.put("order", fresh);
                     return ResponseEntity.ok(resp);
                 }
@@ -253,6 +265,8 @@ public class OrderController {
                 Map<String, Object> conflict = new LinkedHashMap<>();
                 conflict.put("success", false);
                 conflict.put("statusCode", 409);
+                conflict.put("stopSound", true);
+                conflict.put("action", "STOP_RINGTONE");
                 conflict.put("message", "This order has already been accepted by another driver partner.");
                 Map<String, Object> orderSummary = new LinkedHashMap<>();
                 orderSummary.put("id", fresh.getId());
@@ -274,11 +288,20 @@ public class OrderController {
             if (pushNotificationService != null) {
                 pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
             }
+            if (driverOfferService != null && savedOrder.getBookingId() != null) {
+                Long winningDriverId = driver != null && driver.getId() != null ? driver.getId() : null;
+                if (winningDriverId == null && driverId != null) {
+                    try { winningDriverId = Long.parseLong(driverId.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
+                }
+                driverOfferService.onOrderAcceptedByDriver(savedOrder.getBookingId(), winningDriverId);
+            }
 
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("success", true);
             resp.put("statusCode", 200);
             resp.put("message", "Order accepted successfully");
+            resp.put("stopSound", true);
+            resp.put("action", "STOP_RINGTONE");
             resp.put("order", savedOrder);
             return ResponseEntity.ok(resp);
         }
@@ -329,6 +352,29 @@ public class OrderController {
                 : "Status updated successfully";
 
         return ResponseEntity.ok(Map.of("success", true, "message", msg, "order", savedOrder));
+    }
+
+    @RequestMapping(value = { "/{id}/reject", "/{id}/dismiss" }, method = { RequestMethod.POST, RequestMethod.PUT, RequestMethod.GET })
+    public ResponseEntity<?> rejectOrderEndpoint(
+            @PathVariable String id,
+            @RequestBody(required = false) Map<String, Object> payload,
+            HttpServletRequest request) {
+        Driver driver = driverAuthService.resolveAuthenticatedDriver(request);
+        Long driverId = driver != null && driver.getId() != null ? driver.getId() : null;
+        if (driverId == null && payload != null && payload.get("driverId") != null) {
+            try { driverId = Long.parseLong(String.valueOf(payload.get("driverId")).replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
+        }
+        if (driverOfferService != null && driverId != null) {
+            Map<String, Object> res = driverOfferService.respondToOffer(id, driverId, false);
+            return ResponseEntity.ok(res);
+        }
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "stopSound", true,
+                "action", "STOP_RINGTONE",
+                "status", "REJECTED",
+                "message", "Offer rejected."
+        ));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -411,7 +457,7 @@ public class OrderController {
                 || s.equals("available");
     }
 
-    @RequestMapping(value = {"/{id}/accept", "/{id}/accept-order"}, method = {RequestMethod.PUT, RequestMethod.POST})
+    @RequestMapping(value = {"/{id}/accept", "/{id}/accept-order", "/{id}/claim"}, method = {RequestMethod.PUT, RequestMethod.POST})
     public ResponseEntity<?> acceptOrder(
             @PathVariable String id,
             @RequestBody(required = false) Map<String, Object> payload,
@@ -428,6 +474,8 @@ public class OrderController {
             Map<String, Object> notFound = new LinkedHashMap<>();
             notFound.put("success", false);
             notFound.put("statusCode", 404);
+            notFound.put("stopSound", true);
+            notFound.put("action", "STOP_RINGTONE");
             notFound.put("message", "Order not found or has expired.");
             return ResponseEntity.status(404).body(notFound);
         }
@@ -462,6 +510,8 @@ public class OrderController {
             Map<String, Object> unauth = new LinkedHashMap<>();
             unauth.put("success", false);
             unauth.put("statusCode", 401);
+            unauth.put("stopSound", true);
+            unauth.put("action", "STOP_RINGTONE");
             unauth.put("message", "Driver profile not found or unauthorized");
             return ResponseEntity.status(401).body(unauth);
         }
@@ -476,6 +526,8 @@ public class OrderController {
             idempotentSuccess.put("success", true);
             idempotentSuccess.put("statusCode", 200);
             idempotentSuccess.put("message", "You have already accepted this order.");
+            idempotentSuccess.put("stopSound", true);
+            idempotentSuccess.put("action", "STOP_RINGTONE");
             idempotentSuccess.put("order", order);
             return ResponseEntity.ok(idempotentSuccess);
         }
@@ -486,6 +538,8 @@ public class OrderController {
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("success", false);
             err.put("statusCode", 400);
+            err.put("stopSound", true);
+            err.put("action", "STOP_RINGTONE");
             err.put("error", "INSUFFICIENT_WALLET_BALANCE");
             err.put("message", "Driver wallet balance must be at least ₹" + minRequired + " to accept rides. Please recharge your wallet.");
             return ResponseEntity.badRequest().body(err);
@@ -496,6 +550,8 @@ public class OrderController {
             Map<String, Object> conflict = new LinkedHashMap<>();
             conflict.put("success", false);
             conflict.put("statusCode", 409);
+            conflict.put("stopSound", true);
+            conflict.put("action", "STOP_RINGTONE");
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();
             orderSummary.put("id", order.getId());
@@ -519,6 +575,8 @@ public class OrderController {
                 idempotentSuccess.put("success", true);
                 idempotentSuccess.put("statusCode", 200);
                 idempotentSuccess.put("message", "You have already accepted this order.");
+                idempotentSuccess.put("stopSound", true);
+                idempotentSuccess.put("action", "STOP_RINGTONE");
                 idempotentSuccess.put("order", fresh);
                 return ResponseEntity.ok(idempotentSuccess);
             }
@@ -526,6 +584,8 @@ public class OrderController {
             Map<String, Object> conflict = new LinkedHashMap<>();
             conflict.put("success", false);
             conflict.put("statusCode", 409);
+            conflict.put("stopSound", true);
+            conflict.put("action", "STOP_RINGTONE");
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();
             orderSummary.put("id", fresh.getId());
@@ -559,6 +619,8 @@ public class OrderController {
         response.put("success", true);
         response.put("statusCode", 200);
         response.put("message", "Order accepted successfully");
+        response.put("stopSound", true);
+        response.put("action", "STOP_RINGTONE");
         response.put("order", savedOrder);
         return ResponseEntity.ok(response);
     }

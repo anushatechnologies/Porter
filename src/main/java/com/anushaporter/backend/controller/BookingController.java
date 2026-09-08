@@ -69,7 +69,7 @@ public class BookingController {
      * Create a new booking.
      * POST /api/bookings
      */
-    @PostMapping("/api/bookings")
+    @PostMapping({"/api/bookings", "/bookings"})
     public ResponseEntity<Map<String, Object>> createBooking(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestBody Map<String, Object> body) {
@@ -78,8 +78,22 @@ public class BookingController {
 
         try {
             String email = extractEmail(authHeader);
-            String senderPhone = body.get("senderPhone") != null ? String.valueOf(body.get("senderPhone")) : "";
-            String senderName = body.get("senderName") != null ? String.valueOf(body.get("senderName")) : "";
+
+            String senderPhone = "";
+            for (String key : List.of("senderPhone", "userPhone", "customerPhone", "phone", "mobile", "contactPhone")) {
+                if (body.get(key) != null && !String.valueOf(body.get(key)).isBlank()) {
+                    senderPhone = String.valueOf(body.get(key));
+                    break;
+                }
+            }
+
+            String senderName = "";
+            for (String key : List.of("senderName", "userName", "customerName", "name", "contactName")) {
+                if (body.get(key) != null && !String.valueOf(body.get(key)).isBlank()) {
+                    senderName = String.valueOf(body.get(key));
+                    break;
+                }
+            }
 
             // Check if nested pickup/drop provided (Packers spec)
             if (body.get("pickup") instanceof Map<?, ?> pMap) {
@@ -109,8 +123,17 @@ public class BookingController {
             order.setBookingId(generatedBookingId);
             order.setUserEmail(email);
 
-            // Service name
+            // Service name / Vehicle Type resolution
             String serviceName = (String) body.getOrDefault("serviceTitle", body.getOrDefault("serviceName", ""));
+            if ((serviceName == null || serviceName.isBlank()) && body.get("vehicleType") != null) {
+                serviceName = String.valueOf(body.get("vehicleType"));
+            }
+            if ((serviceName == null || serviceName.isBlank()) && body.get("vehicleName") != null) {
+                serviceName = String.valueOf(body.get("vehicleName"));
+            }
+            if ((serviceName == null || serviceName.isBlank()) && body.get("vehicle") != null) {
+                serviceName = String.valueOf(body.get("vehicle"));
+            }
             if ((serviceName == null || serviceName.isBlank()) && body.get("serviceType") != null) {
                 serviceName = String.valueOf(body.get("serviceType"));
             }
@@ -125,20 +148,31 @@ public class BookingController {
             // Address and coordinates (support flat and nested)
             String pickupAddress = (String) body.getOrDefault("pickupAddress", "");
             String dropAddress = (String) body.getOrDefault("dropAddress", "");
-            Double pLat = body.get("pickupLat") instanceof Number n ? n.doubleValue() : null;
-            Double pLng = body.get("pickupLng") instanceof Number n ? n.doubleValue() : null;
-            Double dLat = body.get("dropLat") instanceof Number n ? n.doubleValue() : null;
-            Double dLng = body.get("dropLng") instanceof Number n ? n.doubleValue() : null;
+            Double pLat = parseDoubleValue(body.get("pickupLat"));
+            if (pLat == null) pLat = parseDoubleValue(body.get("pickupLatitude"));
+            if (pLat == null) pLat = parseDoubleValue(body.get("pickup_lat"));
+
+            Double pLng = parseDoubleValue(body.get("pickupLng"));
+            if (pLng == null) pLng = parseDoubleValue(body.get("pickupLongitude"));
+            if (pLng == null) pLng = parseDoubleValue(body.get("pickup_lng"));
+
+            Double dLat = parseDoubleValue(body.get("dropLat"));
+            if (dLat == null) dLat = parseDoubleValue(body.get("dropLatitude"));
+            if (dLat == null) dLat = parseDoubleValue(body.get("drop_lat"));
+
+            Double dLng = parseDoubleValue(body.get("dropLng"));
+            if (dLng == null) dLng = parseDoubleValue(body.get("dropLongitude"));
+            if (dLng == null) dLng = parseDoubleValue(body.get("drop_lng"));
 
             if (body.get("pickup") instanceof Map<?, ?> pMap) {
                 if (pMap.get("address") != null) pickupAddress = String.valueOf(pMap.get("address"));
-                if (pMap.get("latitude") instanceof Number n) pLat = n.doubleValue();
-                if (pMap.get("longitude") instanceof Number n) pLng = n.doubleValue();
+                if (pMap.get("latitude") != null) pLat = parseDoubleValue(pMap.get("latitude"));
+                if (pMap.get("longitude") != null) pLng = parseDoubleValue(pMap.get("longitude"));
             }
             if (body.get("drop") instanceof Map<?, ?> dMap) {
                 if (dMap.get("address") != null) dropAddress = String.valueOf(dMap.get("address"));
-                if (dMap.get("latitude") instanceof Number n) dLat = n.doubleValue();
-                if (dMap.get("longitude") instanceof Number n) dLng = n.doubleValue();
+                if (dMap.get("latitude") != null) dLat = parseDoubleValue(dMap.get("latitude"));
+                if (dMap.get("longitude") != null) dLng = parseDoubleValue(dMap.get("longitude"));
             }
 
             order.setPickupAddress(pickupAddress);
@@ -177,32 +211,38 @@ public class BookingController {
             }
 
             // Pricing & financial breakdown (support flat and nested pricing)
-            double totalAmount = 0.0;
-            double advancePaid = 0.0;
+            Double totalAmount = parseDoubleValue(body.get("amount"));
+            if (totalAmount == null) totalAmount = parseDoubleValue(body.get("totalFare"));
+            if (totalAmount == null) totalAmount = parseDoubleValue(body.get("estimatedFare"));
+            if (totalAmount == null) totalAmount = parseDoubleValue(body.get("price"));
+            if (totalAmount == null) totalAmount = parseDoubleValue(body.get("fare"));
 
-            if (body.get("amount") instanceof Number n) {
-                totalAmount = n.doubleValue();
-            }
             if (body.get("pricing") instanceof Map<?, ?> prMap) {
-                if (prMap.get("totalFare") instanceof Number n) totalAmount = n.doubleValue();
-                if (prMap.get("baseFare") instanceof Number n) order.setBaseFare(n.doubleValue());
-                if (prMap.get("distanceFare") instanceof Number n) order.setDistanceFare(n.doubleValue());
-                if (prMap.get("laborCharge") instanceof Number n) order.setHelperCharges(n.doubleValue());
-                if (prMap.get("gst") instanceof Number n) order.setGstAmount(n.doubleValue());
+                if (prMap.get("totalFare") != null) totalAmount = parseDoubleValue(prMap.get("totalFare"));
+                if (prMap.get("baseFare") != null) order.setBaseFare(parseDoubleValue(prMap.get("baseFare")));
+                if (prMap.get("distanceFare") != null) order.setDistanceFare(parseDoubleValue(prMap.get("distanceFare")));
+                if (prMap.get("laborCharge") != null) order.setHelperCharges(parseDoubleValue(prMap.get("laborCharge")));
+                if (prMap.get("gst") != null) order.setGstAmount(parseDoubleValue(prMap.get("gst")));
             }
-            order.setAmount(totalAmount);
+            order.setAmount(totalAmount != null ? totalAmount : 0.0);
 
-            if (body.get("advancePaid") instanceof Number n) {
-                advancePaid = n.doubleValue();
+            double advancePaid = 0.0;
+            if (body.get("advancePaid") != null) {
+                Double adv = parseDoubleValue(body.get("advancePaid"));
+                if (adv != null) advancePaid = adv;
             } else if (body.get("payment") instanceof Map<?, ?> payMap) {
-                if (payMap.get("advancePaid") instanceof Number n) advancePaid = n.doubleValue();
+                if (payMap.get("advancePaid") != null) {
+                    Double adv = parseDoubleValue(payMap.get("advancePaid"));
+                    if (adv != null) advancePaid = adv;
+                }
                 if (payMap.get("method") != null) order.setPaymentMethod(String.valueOf(payMap.get("method")));
-            } else if (totalAmount > 0) {
-                advancePaid = Math.min(1000.0, totalAmount);
+            } else if (order.getAmount() != null && order.getAmount() > 0) {
+                advancePaid = Math.min(1000.0, order.getAmount());
             }
 
-            if (body.get("distanceKm") instanceof Number n) {
-                order.setDistanceKm(n.doubleValue());
+            if (body.get("distanceKm") != null) {
+                Double dist = parseDoubleValue(body.get("distanceKm"));
+                if (dist != null) order.setDistanceKm(dist);
             }
 
             // Update or create Customer details dynamically
@@ -1177,12 +1217,27 @@ public class BookingController {
         return ResponseEntity.ok(response);
     }
 
+    private Double parseDoubleValue(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof Number n) return n.doubleValue();
+        try {
+            String s = String.valueOf(obj).replaceAll("[^0-9.]", "").trim();
+            return s.isEmpty() ? null : Double.parseDouble(s);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private String extractEmail(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return null;
         }
         try {
-            String token = authHeader.substring(7);
+            String token = authHeader.substring(7).trim();
+            String id = jwtUtil.extractIdentifierFromFirebaseOrJwt(token);
+            if (id != null && !id.isBlank()) {
+                return id.contains("@") ? id : (id + "@customer.porter.in");
+            }
             return jwtUtil.getUsernameFromToken(token);
         } catch (Exception e) {
             return null;
