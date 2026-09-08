@@ -61,6 +61,9 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.DriverWalletService driverWalletService;
 
+    @Autowired
+    private com.anushaporter.backend.util.JwtUtil jwtUtil;
+
     public Driver getAuthenticatedDriver(HttpServletRequest request) {
         return driverAuthService.resolveAuthenticatedDriver(request);
     }
