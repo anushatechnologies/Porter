@@ -35,7 +35,7 @@ public class PassengerBookingService {
     @Transactional
     public PassengerBooking createBooking(PassengerBookingCreateRequest req) {
         String serviceCode = req.getServiceType() != null ? req.getServiceType().toUpperCase() : "ONE_WAY";
-        String categoryCode = req.getVehicleCategoryCode() != null ? req.getVehicleCategoryCode().toUpperCase() : "SEDAN";
+        String categoryCode = PassengerPricingEngine.normalizeCategoryCode(req.getVehicleCategoryCode());
 
         PassengerVehicleCategory category = vehicleCategoryRepository.findByCategoryCode(categoryCode)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle category not found: " + categoryCode));

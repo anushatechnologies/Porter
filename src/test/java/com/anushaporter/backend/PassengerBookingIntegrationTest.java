@@ -288,6 +288,34 @@ public class PassengerBookingIntegrationTest {
                 .andExpect(jsonPath("$.breakdown.totalFare").isNotEmpty());
     }
 
+    @Test
+    void testGetVehicles_IncludesBikeAsFirstOption() throws Exception {
+        if (categoryRepository.findByCategoryCode("BIKE").isEmpty()) {
+            categoryRepository.save(PassengerVehicleCategory.builder()
+                    .categoryCode("BIKE")
+                    .displayName("Bike")
+                    .passengerCapacity(1)
+                    .luggageCapacity(1)
+                    .baseFare(new BigDecimal("20.00"))
+                    .minimumKm(new BigDecimal("1.50"))
+                    .perKmRate(new BigDecimal("8.00"))
+                    .minimumFare(new BigDecimal("20.00"))
+                    .driverAllowance(BigDecimal.ZERO)
+                    .displayOrder(0)
+                    .active(true)
+                    .build());
+        }
+
+        mockMvc.perform(get("/api/passenger/vehicles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].code").value("BIKE"))
+                .andExpect(jsonPath("$.data[0].categoryCode").value("BIKE"))
+                .andExpect(jsonPath("$.data[0].passengerCapacity").value(1))
+                .andExpect(jsonPath("$.data[0].basePrice").value(20.00));
+    }
+
     private PassengerBooking parseBookingResponse(MvcResult result) throws Exception {
         String content = result.getResponse().getContentAsString();
         JsonNode node = objectMapper.readTree(content);

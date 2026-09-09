@@ -762,7 +762,8 @@
 
             // Fetch list of vehicle categories
             const catRes = await fetch(`${API_BASE}/passenger/vehicles`);
-            const categories = await catRes.json();
+            const rawCat = await catRes.json();
+            const categories = Array.isArray(rawCat) ? rawCat : (rawCat.data || []);
 
             const cardsContainer = document.getElementById('vehicleCardsList');
             cardsContainer.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">Calculating centralized dynamic pricing across fleet...</div>`;
@@ -770,9 +771,10 @@
             currentFares = [];
 
             for (const cat of categories) {
+                const catCode = cat.categoryCode || cat.code;
                 const req = {
                     serviceType: currentService,
-                    vehicleCategoryCode: cat.categoryCode,
+                    vehicleCategoryCode: catCode,
                     pickupAddress: pickup,
                     dropAddress: drop,
                     passengerCount: pax,
@@ -817,13 +819,18 @@
             list.innerHTML = currentFares.map((item, idx) => {
                 const cat = item.category;
                 const est = item.estimate;
+                const displayName = cat.displayName || cat.name || 'Vehicle';
+                const capacity = cat.passengerCapacity || 1;
+                const luggage = cat.luggageCapacity != null ? cat.luggageCapacity : 1;
+                const imageUrl = cat.imageUrl || 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400';
+
                 if (item.disabled) {
                     return `
                         <div class="vehicle-card disabled">
-                            <img src="${cat.imageUrl || 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400'}" class="vehicle-card-img" alt="${cat.displayName}">
+                            <img src="${imageUrl}" class="vehicle-card-img" alt="${displayName}">
                             <div class="vehicle-info">
-                                <h3>${cat.displayName}</h3>
-                                <div class="vehicle-meta">👤 Max ${cat.passengerCapacity} Pax • 🧳 ${cat.luggageCapacity} Bags</div>
+                                <h3>${displayName}</h3>
+                                <div class="vehicle-meta">👤 Max ${capacity} Pax • 🧳 ${luggage} Bags</div>
                                 <div style="color:var(--danger); font-size:12px; margin-top:4px;">${item.reason}</div>
                             </div>
                             <div class="vehicle-price-box">
@@ -836,10 +843,10 @@
                 const fare = '₹' + Number(est.breakdown.totalFare).toFixed(2);
                 return `
                     <div class="vehicle-card" onclick="openBreakdown(${idx})">
-                        <img src="${cat.imageUrl || 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400'}" class="vehicle-card-img" alt="${cat.displayName}">
+                        <img src="${imageUrl}" class="vehicle-card-img" alt="${displayName}">
                         <div class="vehicle-info">
-                            <h3>${cat.displayName}</h3>
-                            <div class="vehicle-meta">👤 ${cat.passengerCapacity} Passengers • 🧳 ${cat.luggageCapacity} Bags</div>
+                            <h3>${displayName}</h3>
+                            <div class="vehicle-meta">👤 ${capacity} Passengers • 🧳 ${luggage} Bags</div>
                             <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Distance: ${est.distanceKm} KM (${est.durationMinutes} mins)</div>
                         </div>
                         <div class="vehicle-price-box">

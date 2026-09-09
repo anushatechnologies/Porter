@@ -147,14 +147,22 @@ public class PassengerBookingController {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", String.valueOf(c.getId()));
             m.put("code", c.getCategoryCode());
+            m.put("categoryCode", c.getCategoryCode());
             m.put("name", c.getDisplayName());
+            m.put("displayName", c.getDisplayName());
             m.put("description", c.getDescription());
             m.put("imageUrl", c.getImageUrl() != null ? c.getImageUrl() : "");
             m.put("passengerCapacity", c.getPassengerCapacity());
             m.put("luggageCapacity", c.getLuggageCapacity());
             m.put("basePrice", c.getBaseFare());
+            m.put("baseFare", c.getBaseFare());
             m.put("perKmRate", c.getPerKmRate());
+            m.put("perHourRate", c.getPerHourRate());
+            m.put("minimumFare", c.getMinimumFare());
+            m.put("minimumKm", c.getMinimumKm());
+            m.put("driverAllowance", c.getDriverAllowance());
             m.put("isActive", Boolean.TRUE.equals(c.getActive()));
+            m.put("active", Boolean.TRUE.equals(c.getActive()));
             m.put("displayOrder", c.getDisplayOrder());
             return m;
         }).toList();
@@ -187,7 +195,7 @@ public class PassengerBookingController {
     ) {
         if (vehicleCategoryCode != null && !vehicleCategoryCode.isBlank()) {
             return ResponseEntity.ok(rentalPackageRepository
-                    .findByVehicleCategoryCodeAndActiveTrue(vehicleCategoryCode.toUpperCase()));
+                    .findByVehicleCategoryCodeAndActiveTrue(PassengerPricingEngine.normalizeCategoryCode(vehicleCategoryCode)));
         }
         return ResponseEntity.ok(rentalPackageRepository.findByActiveTrue());
     }

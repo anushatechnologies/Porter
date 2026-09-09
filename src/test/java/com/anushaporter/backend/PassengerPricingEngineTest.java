@@ -228,4 +228,48 @@ public class PassengerPricingEngineTest {
         assertNotNull(res);
         assertEquals(new BigDecimal("150.00"), res.getBreakdown().getNightCharge());
     }
+
+    @Test
+    void testBikePricingFormula_AliasAndCapacity() {
+        if (categoryRepository.findByCategoryCode("BIKE").isEmpty()) {
+            categoryRepository.save(PassengerVehicleCategory.builder()
+                    .categoryCode("BIKE")
+                    .displayName("Bike")
+                    .passengerCapacity(1)
+                    .luggageCapacity(1)
+                    .baseFare(new BigDecimal("20.00"))
+                    .minimumKm(new BigDecimal("1.50"))
+                    .perKmRate(new BigDecimal("8.00"))
+                    .minimumFare(new BigDecimal("20.00"))
+                    .driverAllowance(BigDecimal.ZERO)
+                    .displayOrder(0)
+                    .active(true)
+                    .build());
+        }
+
+        // 1. Valid Bike ride using alias "2_WHEELER"
+        PassengerFareEstimateRequest req = PassengerFareEstimateRequest.builder()
+                .serviceType("ONE_WAY")
+                .vehicleCategoryCode("2_WHEELER")
+                .passengerCount(1)
+                .manualDistanceKm(new BigDecimal("10.00"))
+                .scheduledPickupTime(LocalDateTime.of(2026, 9, 7, 14, 0))
+                .build();
+
+        PassengerFareEstimateResponse res = pricingEngine.calculateFare(req);
+        assertNotNull(res);
+        assertEquals("BIKE", res.getVehicleCategoryCode());
+        assertEquals(1, res.getPassengerCapacity());
+
+        // 2. Reject if passenger count > 1
+        PassengerFareEstimateRequest invalidReq = PassengerFareEstimateRequest.builder()
+                .serviceType("ONE_WAY")
+                .vehicleCategoryCode("BIKE")
+                .passengerCount(2)
+                .manualDistanceKm(new BigDecimal("10.00"))
+                .scheduledPickupTime(LocalDateTime.of(2026, 9, 7, 14, 0))
+                .build();
+
+        assertThrows(PassengerCapacityExceededException.class, () -> pricingEngine.calculateFare(invalidReq));
+    }
 }

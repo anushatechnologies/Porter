@@ -31,12 +31,24 @@ public class PassengerPricingEngine {
     private final PassengerPricingVersionService versionService;
     private final MapsDirectionsProvider mapsDirectionsProvider;
 
+    public static String normalizeCategoryCode(String code) {
+        if (code == null || code.isBlank()) return "SEDAN";
+        String normalized = code.trim().toUpperCase();
+        if (normalized.equals("2_WHEELER") || normalized.equals("2WHEELER") ||
+                normalized.equals("TWO_WHEELER") || normalized.equals("MOTO") ||
+                normalized.equals("SCOOTER") || normalized.equals("BIKE") ||
+                normalized.equals("MOTORCYCLE")) {
+            return "BIKE";
+        }
+        return normalized;
+    }
+
     /**
      * Central Dynamic Pricing Pipeline.
      */
     public PassengerFareEstimateResponse calculateFare(PassengerFareEstimateRequest req) {
         String serviceCode = req.getServiceType() != null ? req.getServiceType().toUpperCase() : "ONE_WAY";
-        String categoryCode = req.getVehicleCategoryCode() != null ? req.getVehicleCategoryCode().toUpperCase() : "SEDAN";
+        String categoryCode = normalizeCategoryCode(req.getVehicleCategoryCode());
 
         // 1. Validate Vehicle Category & Passenger Capacity
         PassengerVehicleCategory category = vehicleCategoryRepository.findByCategoryCode(categoryCode)
