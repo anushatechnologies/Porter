@@ -331,4 +331,53 @@ public class DriverRegistrationStepIntegrationTest {
                 .andExpect(jsonPath("$.kycStatus", is("approved")))
                 .andExpect(jsonPath("$.panNumber", is(validPan)));
     }
+
+    @Test
+    public void testNoDefaultValuesForEmailDobGenderProfilePhoto_RequiresUserEntry() throws Exception {
+        // Clear driver repository so fresh registration starts
+        driverRepository.deleteAll();
+
+        // 1. Newly created / un-registered driver checking progress
+        mockMvc.perform(get("/api/drivers/register/progress")
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.dob", is("")))
+                .andExpect(jsonPath("$.gender", is("")))
+                .andExpect(jsonPath("$.profilePhotoUri", is("")));
+
+        // 2. Newly auto-provisioned profile check via /api/drivers/me
+        mockMvc.perform(get("/api/drivers/me")
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.dob", is("")))
+                .andExpect(jsonPath("$.gender", is("")));
+
+        // 3. Registered person inputs their own real DOB, gender, and email
+        Map<String, Object> step1 = new HashMap<>();
+        step1.put("name", "Ananya Verma");
+        step1.put("dob", "1998-11-20");
+        step1.put("gender", "Female");
+        step1.put("email", "ananya.verma@example.com");
+        step1.put("step", 1);
+        step1.put("saveAndNext", true);
+
+        mockMvc.perform(post("/api/drivers/register/save-and-next")
+                        .header("Authorization", testToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(step1)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.registrationStep", is(2)));
+
+        // 4. Progress now accurately reflects user-entered data
+        mockMvc.perform(get("/api/drivers/register/progress")
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name", is("Ananya Verma")))
+                .andExpect(jsonPath("$.dob", is("1998-11-20")))
+                .andExpect(jsonPath("$.gender", is("Female")))
+                .andExpect(jsonPath("$.email", is("ananya.verma@example.com")));
+    }
 }

@@ -115,11 +115,11 @@ public class DriverAPIController {
                 }
                 if (driver == null) {
                     driver = new Driver();
-                    driver.setName(appUser.getName() != null && !appUser.getName().isBlank() ? appUser.getName() : "Driver");
-                    driver.setPhone(phone != null ? phone : "9876543210");
-                    driver.setEmail(appUser.getEmail() != null ? appUser.getEmail() : (phone != null ? phone + "@anushaporter.com" : null));
-                    driver.setDob("1995-01-01");
-                    driver.setGender("Male");
+                    driver.setName(appUser.getName() != null && !appUser.getName().isBlank() ? appUser.getName() : "");
+                    driver.setPhone(phone != null ? phone : "");
+                    if (appUser.getEmail() != null && !appUser.getEmail().isBlank() && !appUser.getEmail().contains("@anushaporter.com")) {
+                        driver.setEmail(appUser.getEmail());
+                    }
                     driver.setStatus("offline");
                     driver.setKyc("draft");
                     driver.setRegistrationStep(1);
@@ -136,9 +136,18 @@ public class DriverAPIController {
         map.put("success", true);
         map.put("id", driver.getId());
         map.put("driverId", driver.getId() != null ? driver.getId().toString() : "");
-        map.put("name", driver.getName() != null ? driver.getName() : "Driver");
+        map.put("name", driver.getName() != null ? driver.getName() : "");
         map.put("phone", driver.getPhone() != null ? driver.getPhone() : "");
-        map.put("email", driver.getEmail() != null ? driver.getEmail() : "");
+        String rawEmail = driver.getEmail() != null ? driver.getEmail() : "";
+        if (rawEmail.contains("@anushaporter.com")) rawEmail = "";
+        map.put("email", rawEmail);
+        String rawDob = driver.getDob() != null ? driver.getDob() : "";
+        if ("1995-01-01".equals(rawDob) && ("draft".equalsIgnoreCase(driver.getKyc()) || driver.getRegistrationStep() == null || driver.getRegistrationStep() <= 1)) {
+            rawDob = "";
+        }
+        map.put("dob", rawDob);
+        String rawGender = driver.getGender() != null ? driver.getGender() : "";
+        map.put("gender", rawGender);
         map.put("status", driver.getStatus() != null ? driver.getStatus().toLowerCase() : "offline");
         map.put("kyc", driver.getKyc() != null ? driver.getKyc() : "pending");
         map.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "pending");
@@ -163,7 +172,11 @@ public class DriverAPIController {
         map.put("longitude", driver.getLongitude());
         map.put("heading", driver.getHeading());
         map.put("speed", driver.getSpeed());
-        String photoUrl = storageService.getPresignedOrSanitizedUrl(driver.getProfilePhotoUri());
+        String rawPhoto = driver.getProfilePhotoUri();
+        if (rawPhoto != null && (rawPhoto.contains("dicebear.com") || rawPhoto.contains("ui-avatars.com"))) {
+            rawPhoto = null;
+        }
+        String photoUrl = rawPhoto != null ? storageService.getPresignedOrSanitizedUrl(rawPhoto) : "";
         map.put("profilePhotoUri", photoUrl);
         map.put("photoUrl", photoUrl);
         map.put("profilePhoto", photoUrl);
@@ -902,20 +915,18 @@ public class DriverAPIController {
         if (text(payload, "email") != null) {
             driver.setEmail(text(payload, "email"));
         } else if (driver.getEmail() == null || driver.getEmail().isBlank()) {
-            driver.setEmail(appUser.getEmail() != null && !appUser.getEmail().isBlank() ? appUser.getEmail() : (phone != null ? phone + "@anushaporter.com" : "driver@anushaporter.com"));
+            if (appUser.getEmail() != null && !appUser.getEmail().isBlank() && !appUser.getEmail().contains("@anushaporter.com")) {
+                driver.setEmail(appUser.getEmail());
+            }
         }
 
         if (name != null) driver.setName(name);
         if (text(payload, "dob") != null) {
             driver.setDob(text(payload, "dob"));
-        } else if (driver.getDob() == null || driver.getDob().isBlank()) {
-            driver.setDob("1995-01-01");
         }
 
         if (text(payload, "gender") != null) {
             driver.setGender(text(payload, "gender"));
-        } else if (driver.getGender() == null || driver.getGender().isBlank()) {
-            driver.setGender("Male");
         }
 
         if (resolvedVehicle != null) {
@@ -966,10 +977,8 @@ public class DriverAPIController {
         if (profilePhotoInput != null && !profilePhotoInput.isBlank()) {
             driver.setProfilePhotoUri(s3ImageService.processAndUploadImageUri(profilePhotoInput, "profile-photo"));
         } else if (driver.getProfilePhotoUri() == null || driver.getProfilePhotoUri().isBlank()) {
-            if (appUser.getProfilePhotoUri() != null && !appUser.getProfilePhotoUri().isBlank()) {
+            if (appUser.getProfilePhotoUri() != null && !appUser.getProfilePhotoUri().isBlank() && !appUser.getProfilePhotoUri().contains("dicebear.com")) {
                 driver.setProfilePhotoUri(appUser.getProfilePhotoUri());
-            } else {
-                driver.setProfilePhotoUri("https://api.dicebear.com/7.x/initials/svg?seed=" + (driver.getName() != null ? driver.getName().replace(" ", "") : "Driver"));
             }
         }
         if (aadhaarInput != null && !aadhaarInput.isBlank()) {
@@ -1068,8 +1077,8 @@ public class DriverAPIController {
             driver = driverRepository.findByEmail(appUser.getEmail()).orElse(null);
         }
         if (driver == null) {
-            String defaultAvatar = "https://api.dicebear.com/7.x/initials/svg?seed=" + (appUser.getName() != null ? appUser.getName().replace(" ", "") : "Driver");
-            String defaultEmail = appUser.getEmail() != null && !appUser.getEmail().contains("@anushaporter.com") ? appUser.getEmail() : (phone != null ? phone + "@anushaporter.com" : "");
+            String realEmail = appUser.getEmail() != null && !appUser.getEmail().contains("@anushaporter.com") ? appUser.getEmail() : "";
+            String realPhoto = appUser.getProfilePhotoUri() != null && !appUser.getProfilePhotoUri().contains("dicebear.com") ? appUser.getProfilePhotoUri() : "";
             Map<String, Object> fallback = new java.util.LinkedHashMap<>();
             fallback.put("success", true);
             fallback.put("hasDraft", false);
@@ -1077,20 +1086,33 @@ public class DriverAPIController {
             fallback.put("kycStatus", "draft");
             fallback.put("name", appUser.getName() != null ? appUser.getName() : "");
             fallback.put("phone", appUser.getPhone() != null ? appUser.getPhone() : "");
-            fallback.put("email", defaultEmail);
-            fallback.put("dob", "1995-01-01");
-            fallback.put("gender", "Male");
-            fallback.put("profilePhotoUri", appUser.getProfilePhotoUri() != null ? appUser.getProfilePhotoUri() : defaultAvatar);
-            fallback.put("profilePhotoUrl", appUser.getProfilePhotoUri() != null ? appUser.getProfilePhotoUri() : defaultAvatar);
+            fallback.put("email", realEmail);
+            fallback.put("dob", "");
+            fallback.put("gender", "");
+            fallback.put("profilePhotoUri", realPhoto);
+            fallback.put("profilePhotoUrl", realPhoto);
+            fallback.put("profilePhoto", realPhoto);
             return ResponseEntity.ok(fallback);
         }
 
         boolean isFullyRegistered = driver != null &&
                 ("approved".equalsIgnoreCase(driver.getKyc()) || "verified".equalsIgnoreCase(driver.getKyc()));
 
-        String defaultAvatar = "https://api.dicebear.com/7.x/initials/svg?seed=" + (driver.getName() != null ? driver.getName().replace(" ", "") : "Driver");
-        String photoUrl = storageService.getPresignedOrSanitizedUrl(driver.getProfilePhotoUri());
-        if (photoUrl == null || photoUrl.isBlank()) photoUrl = defaultAvatar;
+        String rawPhoto = driver.getProfilePhotoUri();
+        if (rawPhoto != null && (rawPhoto.contains("dicebear.com") || rawPhoto.contains("ui-avatars.com"))) {
+            rawPhoto = null;
+        }
+        String photoUrl = rawPhoto != null ? storageService.getPresignedOrSanitizedUrl(rawPhoto) : "";
+
+        String rawEmail = driver.getEmail() != null ? driver.getEmail() : (appUser.getEmail() != null ? appUser.getEmail() : "");
+        if (rawEmail.contains("@anushaporter.com")) rawEmail = "";
+
+        String dobVal = driver.getDob() != null ? driver.getDob() : "";
+        if ("1995-01-01".equals(dobVal) && ("draft".equalsIgnoreCase(driver.getKyc()) || driver.getRegistrationStep() == null || driver.getRegistrationStep() <= 1)) {
+            dobVal = "";
+        }
+
+        String genderVal = driver.getGender() != null ? driver.getGender() : "";
 
         Map<String, Object> data = new java.util.LinkedHashMap<>();
         data.put("success", true);
@@ -1100,9 +1122,9 @@ public class DriverAPIController {
         data.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "draft");
         data.put("name", driver.getName() != null ? driver.getName() : (appUser.getName() != null ? appUser.getName() : ""));
         data.put("phone", driver.getPhone() != null ? driver.getPhone() : (appUser.getPhone() != null ? appUser.getPhone() : ""));
-        data.put("email", driver.getEmail() != null ? driver.getEmail() : (appUser.getEmail() != null ? appUser.getEmail() : ""));
-        data.put("dob", driver.getDob() != null && !driver.getDob().isBlank() ? driver.getDob() : "1995-01-01");
-        data.put("gender", driver.getGender() != null && !driver.getGender().isBlank() ? driver.getGender() : "Male");
+        data.put("email", rawEmail);
+        data.put("dob", dobVal);
+        data.put("gender", genderVal);
         data.put("vehicle", driver.getVehicle());
         data.put("vehicleType", driver.getVehicleType());
         data.put("vehicleNumber", driver.getVehicleNumber());

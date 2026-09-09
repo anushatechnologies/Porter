@@ -281,27 +281,31 @@ messaging().onMessage(async remoteMessage => {
   * If a driver record does not exist yet for this account, the backend **auto-provisions a draft profile** with `registrationStep: 1`, `kycStatus: "draft"`.
   * The app will **never** receive `"Account not found"` or get thrown into an infinite login loop.
 
-### Step 2: Step 1 Profile Information
-In Step 1 of Driver Registration, the UI must prompt for:
-1. **Full Name** (`name`)
-2. **Phone Number** (`phone`)
-3. **Email Address** (`email`)
-4. **Profile Photo** (`profilePhoto` or `profilePhotoUri`)
-5. **Date of Birth** (`dob`, formatted `YYYY-MM-DD`)
-6. **Gender** (`gender`, e.g. `"Male"` / `"Female"`)
+### Step 2: Step 1 Profile Information (Must Be Filled by Registering Person)
+In Step 1 of Driver Registration, the UI must display input fields and prompt the driver to fill:
+1. **Profile Photo** (`profilePhoto` or `profilePhotoUri`) — Capture from camera or select from gallery.
+2. **Full Name** (`name`) — Driver's legal name.
+3. **Phone Number** (`phone`) — 10-digit mobile number.
+4. **Email Address** (`email`) — Driver's actual personal email address.
+5. **Date of Birth** (`dob`, formatted `YYYY-MM-DD`) — Driver's actual date of birth via datepicker.
+6. **Gender** (`gender`, e.g. `"Male"`, `"Female"`, `"Other"`) — Driver's actual gender selection.
+
+> ⚠️ **NO DEFAULT VALUES**:  
+> The backend does **NOT** auto-fill placeholder values (such as `"1995-01-01"`, `"Male"`, fake `@anushaporter.com` emails, or placeholder DiceBear avatars). The fields are returned empty (`""`), and the frontend **must require the registering driver to enter their real information**.
 
 * **Submit Step 1**:
-* **URL**: `POST https://api.anushaporter.com/api/drivers/register`
+* **URL**: `POST https://api.anushaporter.com/api/drivers/register` (or `/api/drivers/register/save-and-next`)
 * **Payload**:
 ```json
 {
   "name": "Suresh Kumar",
   "phone": "+919876543210",
-  "email": "suresh@example.com",
+  "email": "suresh.kumar94@gmail.com",
   "dob": "1994-06-15",
   "gender": "Male",
   "profilePhotoUri": "https://anushaporter-driver-documents.s3.ap-south-1.amazonaws.com/drivers/101/avatar.jpg",
-  "registrationStep": 1
+  "registrationStep": 1,
+  "saveAndNext": true
 }
 ```
-*(If any optional field is blank, the backend automatically assigns defaults so the final submission succeeds without error.)*
+*(When submitted, the backend persists the driver's actual inputs into the database and returns `registrationStep: 2` to proceed to vehicle and document upload.)*
