@@ -261,12 +261,12 @@ public class AdminWalletModificationIntegrationTest {
 
     @Test
     void testAdminGetAndModifyMinimumWalletBalance() throws Exception {
-        // 1. GET current minimum balance (default 1000.0)
+        // 1. GET current minimum balance (default 0.0)
         mockMvc.perform(get("/api/admin/wallet/minimum-balance")
                         .header("Authorization", "Bearer " + adminJwt))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.minRequiredBalance", is(1000.0)));
+                .andExpect(jsonPath("$.minRequiredBalance", is(0.0)));
 
         // 2. Modify minimum balance to 1500.0 without applying to existing drivers
         String updatePayload = """

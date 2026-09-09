@@ -231,7 +231,7 @@ public class DriverWalletService {
         wallet.setAvailableBalance(newBal);
         driverWalletRepository.save(wallet);
 
-        String txId = "TXN_ADJ_" + System.currentTimeMillis();
+        String txId = "TXN_ADJ_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString().substring(0, 8);
         WalletTransaction tx = new WalletTransaction();
         tx.setId(txId);
         tx.setDriverId(String.valueOf(driver.getId()));
@@ -383,7 +383,16 @@ public class DriverWalletService {
     }
 
     public String getEligibilityReason(String driverId) {
-        return isDriverEligibleForRides(driverId) ? "No minimum balance required. Eligible to go online and accept rides." : "Negative wallet balance. Please recharge wallet to accept rides.";
+        double minRequired = getMinRequiredBalance();
+        boolean eligible = isDriverEligibleForRides(driverId);
+        if (minRequired <= 0.0) {
+            return eligible
+                    ? "No minimum balance required. Eligible to go online and accept rides."
+                    : "Negative wallet balance. Please recharge wallet to accept rides.";
+        }
+        return eligible
+                ? "Sufficient balance"
+                : "Insufficient balance. Recharge wallet to accept rides.";
     }
 
     /**
@@ -414,7 +423,7 @@ public class DriverWalletService {
         }
 
         // Record Transaction: RECHARGE
-        String txId = "TXN_W_" + System.currentTimeMillis();
+        String txId = "TXN_RECH_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString().substring(0, 8);
         WalletTransaction rechargeTx = new WalletTransaction();
         rechargeTx.setId(txId);
         rechargeTx.setDriverId(driver != null ? String.valueOf(driver.getId()) : driverId);
@@ -581,7 +590,7 @@ public class DriverWalletService {
         wallet.setTotalEarned((wallet.getTotalEarned() != null ? wallet.getTotalEarned() : 0.0) + totalAmount);
         driverWalletRepository.save(wallet);
 
-        String txId = "TXN_W_" + System.currentTimeMillis();
+        String txId = "TXN_COMM_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
         // Log in wallet_transactions with type = 'COMMISSION_DEDUCTION'
         WalletTransaction commTx = new WalletTransaction();

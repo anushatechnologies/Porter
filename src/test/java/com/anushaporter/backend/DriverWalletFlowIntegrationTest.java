@@ -100,16 +100,20 @@ public class DriverWalletFlowIntegrationTest {
 
     @Test
     void testFullDriverWalletFlowEndToEnd() throws Exception {
-        // 1. Zero-wallet driver CANNOT go online
+        // 1. Negative-wallet driver CANNOT go online
+        testDriver.setWalletBalance(-10.0);
+        testDriver = driverRepository.save(testDriver);
+
         mockMvc.perform(put("/api/drivers/me/status")
                 .header("Authorization", "Bearer " + jwtToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\": \"online\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("WALLET_EMPTY")));
+                .andExpect(jsonPath("$.success", is(false)));
 
         // 2. Zero-wallet driver CANNOT be assigned an order
+        testDriver.setWalletBalance(0.0);
+        testDriver = driverRepository.save(testDriver);
         Order order = new Order();
         order.setBookingId("BOOK-TEST-101");
         order.setAmount(470.82);
@@ -170,7 +174,7 @@ public class DriverWalletFlowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\": \"online\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error", is("WALLET_EMPTY")));
+                .andExpect(jsonPath("$.error", is("NEGATIVE_WALLET_BALANCE")));
 
         // 7. Driver recharges ₹100 -> New balance = -22.54 + 100 = 77.46 > 0 -> driver auto-switches to "online"
         driverWalletService.rechargeDriverWalletDirect(

@@ -74,13 +74,19 @@ public class DriverAuthService {
             if (driverOpt.isPresent()) return driverOpt.get();
         }
 
-        // 2. Direct Phone lookup (both raw and 10-digit clean phone)
+        // 2. Direct Phone lookup (both raw, 10-digit clean phone, and with +91)
         String cleanPhone = normalizePhone(identifier);
         if (!cleanPhone.isEmpty()) {
             Optional<Driver> driverOpt = driverRepository.findByPhone(identifier);
             if (driverOpt.isPresent()) return driverOpt.get();
 
             driverOpt = driverRepository.findByPhone(cleanPhone);
+            if (driverOpt.isPresent()) return driverOpt.get();
+
+            driverOpt = driverRepository.findByPhone("+91" + cleanPhone);
+            if (driverOpt.isPresent()) return driverOpt.get();
+
+            driverOpt = driverRepository.findByPhone("91" + cleanPhone);
             if (driverOpt.isPresent()) return driverOpt.get();
 
             driverOpt = driverRepository.findFirstByPhoneOrderByIdDesc(cleanPhone);

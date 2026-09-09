@@ -233,6 +233,13 @@ public class PushNotificationService {
         }
         if (driverUser == null && driver.getPhone() != null && !driver.getPhone().isBlank()) {
             driverUser = userRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone()).orElse(null);
+            if (driverUser == null) {
+                String cleanPhone = driver.getPhone().replaceAll("\\D+", "");
+                if (cleanPhone.length() > 10) cleanPhone = cleanPhone.substring(cleanPhone.length() - 10);
+                if (!cleanPhone.isEmpty()) {
+                    driverUser = userRepository.findFirstByPhoneOrderByIdDesc(cleanPhone).orElse(null);
+                }
+            }
         }
         if (driverUser == null && driver.getId() != null) {
             driverUser = userRepository.findById(driver.getId()).orElse(null);

@@ -20,9 +20,10 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         String path = request.getRequestURI();
-        // Allow customer order and booking creation without hard blocking on token expiration
-        if ("POST".equalsIgnoreCase(request.getMethod()) &&
-                (path.equals("/api/orders") || path.equals("/api/orders/") || path.startsWith("/api/bookings"))) {
+        // Allow tracking, delivery OTP, order/booking creation, and cancellation endpoints without hard blocking on token expiration
+        if (path.endsWith("/delivery-otp") || path.endsWith("/otp") || path.endsWith("/tracking") || path.endsWith("/cancel") ||
+                ("POST".equalsIgnoreCase(request.getMethod()) &&
+                        (path.equals("/api/orders") || path.equals("/api/orders/") || path.startsWith("/api/bookings")))) {
             return true;
         }
 

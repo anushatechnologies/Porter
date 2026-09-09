@@ -431,7 +431,15 @@ public class DriverOfferService {
 
         // 3. Send silent push / stop notification to ALL offered drivers (including winner with confirmed status)
         if (pushNotificationService != null) {
-            List<Long> competingDriverIds = driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId);
+            Set<Long> competingDriverIds = new LinkedHashSet<>(driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId));
+            if (notificationRepository != null) {
+                try {
+                    List<Notification> notifs = notificationRepository.findByBookingIdAndNotificationType(bookingId, "DRIVER_OFFER");
+                    for (Notification n : notifs) {
+                        if (n.getUserId() != null) competingDriverIds.add(n.getUserId());
+                    }
+                } catch (Exception ignored) {}
+            }
             for (Long cId : competingDriverIds) {
                 if (winningDriverId != null && winningDriverId.equals(cId)) {
                     // Send stop push & confirmation to the winning driver

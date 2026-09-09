@@ -100,6 +100,35 @@ public class DriverAPIController {
     public ResponseEntity<?> getDriverProfile(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
+            AppUser appUser = getAuthenticatedAppUser(request);
+            if (appUser != null) {
+                // Find or auto-provision draft driver profile so driver is never locked out with 401
+                String phone = appUser.getPhone();
+                if (phone != null && !phone.isBlank()) {
+                    String cleanPhone = driverAuthService.normalizePhone(phone);
+                    driver = driverRepository.findByPhone(cleanPhone).orElse(null);
+                    if (driver == null) driver = driverRepository.findByPhone(phone).orElse(null);
+                    if (driver == null) driver = driverRepository.findByPhone("+91" + cleanPhone).orElse(null);
+                }
+                if (driver == null && appUser.getEmail() != null && !appUser.getEmail().isBlank()) {
+                    driver = driverRepository.findByEmailIgnoreCase(appUser.getEmail()).orElse(null);
+                }
+                if (driver == null) {
+                    driver = new Driver();
+                    driver.setName(appUser.getName() != null && !appUser.getName().isBlank() ? appUser.getName() : "Driver");
+                    driver.setPhone(phone != null ? phone : "9876543210");
+                    driver.setEmail(appUser.getEmail() != null ? appUser.getEmail() : (phone != null ? phone + "@anushaporter.com" : null));
+                    driver.setDob("1995-01-01");
+                    driver.setGender("Male");
+                    driver.setStatus("offline");
+                    driver.setKyc("draft");
+                    driver.setRegistrationStep(1);
+                    driver = driverRepository.save(driver);
+                }
+            }
+        }
+
+        if (driver == null) {
             return ResponseEntity.status(401)
                     .body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
         }
@@ -744,13 +773,21 @@ public class DriverAPIController {
 
         String phone = appUser.getPhone();
         Driver driver = driverRepository.findByPhone(phone).orElse(null);
+        if (driver == null && phone != null) {
+            String cleanPhone = driverAuthService.normalizePhone(phone);
+            driver = driverRepository.findByPhone(cleanPhone).orElse(null);
+            if (driver == null) driver = driverRepository.findByPhone("+91" + cleanPhone).orElse(null);
+        }
         if (driver == null && appUser.getEmail() != null && !appUser.getEmail().isBlank()) {
             driver = driverRepository.findByEmail(appUser.getEmail()).orElse(null);
         }
         if (driver == null) {
             driver = new Driver();
             driver.setPhone(phone);
-            driver.setEmail(appUser.getEmail());
+            driver.setEmail(appUser.getEmail() != null ? appUser.getEmail() : (phone != null ? phone + "@anushaporter.com" : null));
+            driver.setName(appUser.getName() != null ? appUser.getName() : "Driver");
+            driver.setDob("1995-01-01");
+            driver.setGender("Male");
             driver.setStatus("offline");
             driver.setRegistrationStep(1);
         }
@@ -865,12 +902,21 @@ public class DriverAPIController {
         if (text(payload, "email") != null) {
             driver.setEmail(text(payload, "email"));
         } else if (driver.getEmail() == null || driver.getEmail().isBlank()) {
-            driver.setEmail(appUser.getEmail());
+            driver.setEmail(appUser.getEmail() != null && !appUser.getEmail().isBlank() ? appUser.getEmail() : (phone != null ? phone + "@anushaporter.com" : "driver@anushaporter.com"));
         }
 
         if (name != null) driver.setName(name);
-        if (text(payload, "dob") != null) driver.setDob(text(payload, "dob"));
-        if (text(payload, "gender") != null) driver.setGender(text(payload, "gender"));
+        if (text(payload, "dob") != null) {
+            driver.setDob(text(payload, "dob"));
+        } else if (driver.getDob() == null || driver.getDob().isBlank()) {
+            driver.setDob("1995-01-01");
+        }
+
+        if (text(payload, "gender") != null) {
+            driver.setGender(text(payload, "gender"));
+        } else if (driver.getGender() == null || driver.getGender().isBlank()) {
+            driver.setGender("Male");
+        }
 
         if (resolvedVehicle != null) {
             driver.setVehicle(resolvedVehicle);
@@ -919,6 +965,12 @@ public class DriverAPIController {
 
         if (profilePhotoInput != null && !profilePhotoInput.isBlank()) {
             driver.setProfilePhotoUri(s3ImageService.processAndUploadImageUri(profilePhotoInput, "profile-photo"));
+        } else if (driver.getProfilePhotoUri() == null || driver.getProfilePhotoUri().isBlank()) {
+            if (appUser.getProfilePhotoUri() != null && !appUser.getProfilePhotoUri().isBlank()) {
+                driver.setProfilePhotoUri(appUser.getProfilePhotoUri());
+            } else {
+                driver.setProfilePhotoUri("https://api.dicebear.com/7.x/initials/svg?seed=" + (driver.getName() != null ? driver.getName().replace(" ", "") : "Driver"));
+            }
         }
         if (aadhaarInput != null && !aadhaarInput.isBlank()) {
             driver.setAadhaarUri(s3ImageService.processAndUploadImageUri(aadhaarInput, "aadhaar"));
@@ -1007,20 +1059,38 @@ public class DriverAPIController {
         }
         String phone = appUser.getPhone();
         Driver driver = driverRepository.findByPhone(phone).orElse(null);
+        if (driver == null && phone != null) {
+            String cleanPhone = driverAuthService.normalizePhone(phone);
+            driver = driverRepository.findByPhone(cleanPhone).orElse(null);
+            if (driver == null) driver = driverRepository.findByPhone("+91" + cleanPhone).orElse(null);
+        }
         if (driver == null && appUser.getEmail() != null && !appUser.getEmail().isBlank()) {
             driver = driverRepository.findByEmail(appUser.getEmail()).orElse(null);
         }
         if (driver == null) {
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "hasDraft", false,
-                    "registrationStep", 1,
-                    "kycStatus", "not_started"
-            ));
+            String defaultAvatar = "https://api.dicebear.com/7.x/initials/svg?seed=" + (appUser.getName() != null ? appUser.getName().replace(" ", "") : "Driver");
+            String defaultEmail = appUser.getEmail() != null && !appUser.getEmail().contains("@anushaporter.com") ? appUser.getEmail() : (phone != null ? phone + "@anushaporter.com" : "");
+            Map<String, Object> fallback = new java.util.LinkedHashMap<>();
+            fallback.put("success", true);
+            fallback.put("hasDraft", false);
+            fallback.put("registrationStep", 1);
+            fallback.put("kycStatus", "draft");
+            fallback.put("name", appUser.getName() != null ? appUser.getName() : "");
+            fallback.put("phone", appUser.getPhone() != null ? appUser.getPhone() : "");
+            fallback.put("email", defaultEmail);
+            fallback.put("dob", "1995-01-01");
+            fallback.put("gender", "Male");
+            fallback.put("profilePhotoUri", appUser.getProfilePhotoUri() != null ? appUser.getProfilePhotoUri() : defaultAvatar);
+            fallback.put("profilePhotoUrl", appUser.getProfilePhotoUri() != null ? appUser.getProfilePhotoUri() : defaultAvatar);
+            return ResponseEntity.ok(fallback);
         }
 
         boolean isFullyRegistered = driver != null &&
                 ("approved".equalsIgnoreCase(driver.getKyc()) || "verified".equalsIgnoreCase(driver.getKyc()));
+
+        String defaultAvatar = "https://api.dicebear.com/7.x/initials/svg?seed=" + (driver.getName() != null ? driver.getName().replace(" ", "") : "Driver");
+        String photoUrl = storageService.getPresignedOrSanitizedUrl(driver.getProfilePhotoUri());
+        if (photoUrl == null || photoUrl.isBlank()) photoUrl = defaultAvatar;
 
         Map<String, Object> data = new java.util.LinkedHashMap<>();
         data.put("success", true);
@@ -1028,11 +1098,11 @@ public class DriverAPIController {
         data.put("driverId", driver.getId());
         data.put("registrationStep", driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
         data.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "draft");
-        data.put("name", driver.getName());
-        data.put("phone", driver.getPhone());
-        data.put("email", driver.getEmail());
-        data.put("dob", driver.getDob());
-        data.put("gender", driver.getGender());
+        data.put("name", driver.getName() != null ? driver.getName() : (appUser.getName() != null ? appUser.getName() : ""));
+        data.put("phone", driver.getPhone() != null ? driver.getPhone() : (appUser.getPhone() != null ? appUser.getPhone() : ""));
+        data.put("email", driver.getEmail() != null ? driver.getEmail() : (appUser.getEmail() != null ? appUser.getEmail() : ""));
+        data.put("dob", driver.getDob() != null && !driver.getDob().isBlank() ? driver.getDob() : "1995-01-01");
+        data.put("gender", driver.getGender() != null && !driver.getGender().isBlank() ? driver.getGender() : "Male");
         data.put("vehicle", driver.getVehicle());
         data.put("vehicleType", driver.getVehicleType());
         data.put("vehicleNumber", driver.getVehicleNumber());
@@ -1048,7 +1118,9 @@ public class DriverAPIController {
         data.put("accountHolderName", driver.getAccountHolderName());
         data.put("accountNumber", driver.getAccountNumber());
         data.put("ifscCode", driver.getIfscCode());
-        data.put("profilePhotoUri", storageService.getPresignedOrSanitizedUrl(driver.getProfilePhotoUri()));
+        data.put("profilePhotoUri", photoUrl);
+        data.put("profilePhotoUrl", photoUrl);
+        data.put("profilePhoto", photoUrl);
         data.put("aadhaarUri", storageService.getPresignedOrSanitizedUrl(driver.getAadhaarUri()));
         data.put("licenseUri", storageService.getPresignedOrSanitizedUrl(driver.getLicenseUri()));
         data.put("rcUri", storageService.getPresignedOrSanitizedUrl(driver.getRcUri()));

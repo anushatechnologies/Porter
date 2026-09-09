@@ -175,7 +175,8 @@ export const DriverRegistrationScreen = ({ navigation }: any) => {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    dob: '',
+    email: '',
+    dob: '1995-01-01',
     gender: 'Male',
     vehicleType: 'Bike',
     vehicleNumber: '',
@@ -341,9 +342,35 @@ export const DriverRegistrationScreen = ({ navigation }: any) => {
         <View className="space-y-4">
           <Text className="text-xl font-bold">Step 1: Personal Details</Text>
 
+          {/* Profile Photo Picker */}
+          <View className="items-center mb-4">
+            <Text className="text-sm font-medium mb-2">Profile Photo *</Text>
+            <TouchableOpacity
+              onPress={() => {/* Launch Image Picker and upload to /api/documents/upload or /api/drivers/upload */}}
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: 48,
+                backgroundColor: '#F3F4F6',
+                borderWidth: 2,
+                borderColor: errors.profilePhoto ? '#DC2626' : '#2563EB',
+                justifyContent: 'center',
+                alignItems: 'center',
+                overflow: 'hidden',
+              }}
+            >
+              {documents.profilePhotoUrl ? (
+                <Text style={{ fontSize: 12, color: '#16A34A', fontWeight: 'bold' }}>Photo Added</Text>
+              ) : (
+                <Text style={{ fontSize: 12, color: '#6B7280', textAlign: 'center' }}>+ Upload Photo</Text>
+              )}
+            </TouchableOpacity>
+            {!!errors.profilePhoto && <Text style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.profilePhoto}</Text>}
+          </View>
+
           {/* Name Field */}
           <View>
-            <Text className="text-sm font-medium mb-1">Full Name</Text>
+            <Text className="text-sm font-medium mb-1">Full Name *</Text>
             <TextInput
               value={formData.name}
               onChangeText={(text) => updateField('name', text)}
@@ -360,7 +387,7 @@ export const DriverRegistrationScreen = ({ navigation }: any) => {
 
           {/* Phone Field */}
           <View>
-            <Text className="text-sm font-medium mb-1">Phone Number</Text>
+            <Text className="text-sm font-medium mb-1">Phone Number *</Text>
             <TextInput
               value={formData.phone}
               onChangeText={(text) => updateField('phone', text)}
@@ -374,6 +401,66 @@ export const DriverRegistrationScreen = ({ navigation }: any) => {
               }}
             />
             {!!errors.phone && <Text style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.phone}</Text>}
+          </View>
+
+          {/* Email Field */}
+          <View>
+            <Text className="text-sm font-medium mb-1">Email Address *</Text>
+            <TextInput
+              value={formData.email}
+              onChangeText={(text) => updateField('email', text)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholder="name@example.com"
+              style={{
+                borderWidth: 1,
+                borderColor: errors.email ? '#DC2626' : '#D1D5DB',
+                borderRadius: 8,
+                padding: 12,
+              }}
+            />
+            {!!errors.email && <Text style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.email}</Text>}
+          </View>
+
+          {/* Date of Birth Field */}
+          <View>
+            <Text className="text-sm font-medium mb-1">Date of Birth (YYYY-MM-DD) *</Text>
+            <TextInput
+              value={formData.dob}
+              onChangeText={(text) => updateField('dob', text)}
+              placeholder="1995-01-01"
+              style={{
+                borderWidth: 1,
+                borderColor: errors.dob ? '#DC2626' : '#D1D5DB',
+                borderRadius: 8,
+                padding: 12,
+              }}
+            />
+            {!!errors.dob && <Text style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.dob}</Text>}
+          </View>
+
+          {/* Gender Selector */}
+          <View>
+            <Text className="text-sm font-medium mb-1">Gender *</Text>
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+              {['Male', 'Female', 'Other'].map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  onPress={() => updateField('gender', g)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: formData.gender === g ? '#2563EB' : '#D1D5DB',
+                    backgroundColor: formData.gender === g ? '#EFF6FF' : '#FFFFFF',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: formData.gender === g ? '#2563EB' : '#374151', fontWeight: '600' }}>{g}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           {/* Save and Next Button */}
@@ -455,5 +542,224 @@ export const DriverRegistrationScreen = ({ navigation }: any) => {
       )}
     </ScrollView>
   );
+};
+```
+
+---
+
+## 4. Customer App: Order Cancellation Window (`CustomerLiveTrackingScreen.tsx`)
+
+### Cancellation Window Rule:
+- **ACTIVE (`canCancel: true`)**: While placing the order (`searching`, `pending`, `created`), driver assignment (`assigned`), driver en route to pickup, arrived at pickup, and in transit until the driver is close to the drop location.
+- **BLOCKED (`canCancel: false`)**: Once the driver arrives near the drop location (`driver_reached`, `arrived_at_drop`, `unloading`, or GPS distance <= 300 meters from drop coordinates), delivery OTP verified, or order completed/delivered.
+
+### Backend Endpoints:
+- `GET /api/bookings/{bookingId}/tracking`:
+  ```json
+  {
+    "canCancel": true,
+    "isCancellable": true,
+    "cancellationBlockedReason": null,
+    "cancellationMessage": "Cancellation is available until driver arrives at drop location."
+  }
+  ```
+- `PUT /api/bookings/{bookingId}/cancel` (or `POST /api/bookings/{bookingId}/cancel`):
+  - Request body: `{ "reason": "Customer requested cancellation" }`
+  - Returns: `{ "success": true, "status": "cancelled", "message": "Booking cancelled successfully" }`
+  - Note: Whitelisted in `AuthInterceptor` so cancellation never fails due to stale/missing auth headers.
+
+### React Native Cancellation Button Component:
+```tsx
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
+import axios from 'axios';
+
+interface Props {
+  bookingId: string;
+  trackingData: {
+    canCancel: boolean;
+    cancellationBlockedReason?: string;
+  };
+  onCancelled: () => void;
+}
+
+export const OrderCancellationSection = ({ bookingId, trackingData, onCancelled }: Props) => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleCancelOrder = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.put(`/api/bookings/${bookingId}/cancel`, {
+        reason: reason || 'Customer requested cancellation',
+      });
+      if (res.data?.success) {
+        Alert.alert('Order Cancelled', 'Your order has been cancelled successfully.');
+        setModalVisible(false);
+        onCancelled();
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.message || 'Cancellation window has expired.';
+      Alert.alert('Unable to Cancel', errMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderColor: '#F3F4F6' }}>
+      {trackingData.canCancel ? (
+        <TouchableOpacity
+          onPress={() => setModalVisible(true)}
+          style={{
+            backgroundColor: '#FEE2E2',
+            borderColor: '#EF4444',
+            borderWidth: 1,
+            paddingVertical: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ color: '#DC2626', fontWeight: 'bold' }}>Cancel Order</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 8 }}>
+          <Text style={{ color: '#6B7280', fontSize: 12, textAlign: 'center' }}>
+            {trackingData.cancellationBlockedReason || 'Cancellation is locked as driver has arrived near drop location.'}
+          </Text>
+        </View>
+      )}
+
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 20 }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Cancel Order</Text>
+            <Text style={{ fontSize: 14, color: '#4B5563', marginBottom: 16 }}>
+              Are you sure you want to cancel this order?
+            </Text>
+            <TextInput
+              value={reason}
+              onChangeText={setReason}
+              placeholder="Reason for cancellation (optional)"
+              style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 10, marginBottom: 20 }}
+            />
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#D1D5DB', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#374151' }}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleCancelOrder}
+                disabled={loading}
+                style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#DC2626', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Confirm Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
+```
+
+---
+
+## 5. Driver App: Simultaneous Order Broadcast & Stop Ringtone
+
+### Broadcast Architecture:
+1. **Simultaneous Multi-Driver Broadcast**: When a customer books, the backend queries all eligible drivers matching the vehicle category within the current radius tier (5km, 10km, etc.) and dispatches incoming offers to all of them at once via push notification and WebSockets.
+2. **Instant Ringtone Stop on Acceptance**: The moment ANY driver taps "Accept":
+   - Winning driver receives assignment confirmation (`ASSIGNED`).
+   - Backend broadcasts a high-priority silent push notification to all other drivers with `action: "STOP_RINGTONE"` and `type: "STOP_DRIVER_OFFER"`.
+   - Backend emits a WebSocket event `driver:offer:stop` to the telemetry channel.
+   - Competing offers in the database are marked `TOO_LATE`.
+
+### Driver App Notification & Sound Listener:
+```typescript
+import { useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
+import { Audio } from 'av-playback-service'; // or expo-av
+
+let soundObject: Audio.Sound | null = null;
+
+export const useDriverIncomingRideListener = (
+  onNewOffer: (offer: any) => void,
+  onDismissOffer: (bookingId: string) => void
+) => {
+  useEffect(() => {
+    // 1. Push Notification Listener (FCM / Expo)
+    const subscription = Notifications.addNotificationReceivedListener((notification) => {
+      const data = notification.request.content.data;
+
+      // When ANY driver accepts the ride, stop ringtone and dismiss modal
+      if (data?.action === 'STOP_RINGTONE' || data?.type === 'STOP_DRIVER_OFFER') {
+        stopRingtone();
+        if (data?.bookingId) {
+          onDismissOffer(data.bookingId);
+        }
+      }
+
+      // When a new ride offer arrives, play ringtone and show offer modal
+      if (data?.type === 'DRIVER_OFFER' && data?.action !== 'STOP_RINGTONE') {
+        playRingtone();
+        onNewOffer(data);
+      }
+    });
+
+    // 2. Telemetry WebSocket Listener (Realtime Fallback)
+    const socket = new WebSocket('wss://api.anushaporter.com/ws/telemetry');
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'driver:offer:stop' || message.action === 'STOP_RINGTONE') {
+          stopRingtone();
+          if (message.bookingId) {
+            onDismissOffer(message.bookingId);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse websocket message', err);
+      }
+    };
+
+    return () => {
+      subscription.remove();
+      socket.close();
+      stopRingtone();
+    };
+  }, []);
+
+  const playRingtone = async () => {
+    try {
+      if (!soundObject) {
+        const { sound } = await Audio.Sound.createAsync(
+          require('../assets/sounds/order_ringtone.mp3'),
+          { shouldPlay: true, isLooping: true }
+        );
+        soundObject = sound;
+      } else {
+        await soundObject.playAsync();
+      }
+    } catch (e) {
+      console.warn('Could not play ringtone', e);
+    }
+  };
+
+  const stopRingtone = async () => {
+    try {
+      if (soundObject) {
+        await soundObject.stopAsync();
+        await soundObject.unloadAsync();
+        soundObject = null;
+      }
+    } catch (e) {
+      console.warn('Could not stop ringtone', e);
+    }
+  };
 };
 ```

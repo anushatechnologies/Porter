@@ -120,6 +120,11 @@ public class DriverWalletRechargeIntegrationTest {
         s4.setSettingValue("true");
         globalSettingsRepository.save(s4);
 
+        GlobalSettings s5 = new GlobalSettings();
+        s5.setSettingKey("wallet_min_recharge_amount");
+        s5.setSettingValue("100.0");
+        globalSettingsRepository.save(s5);
+
         // Seed Driver
         testDriver = new Driver();
         testDriver.setName("Rajesh Kumar");

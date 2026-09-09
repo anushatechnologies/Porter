@@ -20,6 +20,9 @@ public class BookingController {
     private OrderRepository orderRepository;
 
     @Autowired
+    private com.anushaporter.backend.repository.DriverRepository driverRepository;
+
+    @Autowired
     private JwtUtil jwtUtil;
 
     @Autowired
@@ -421,7 +424,16 @@ public class BookingController {
             response.put("contactPhone", custPhone);
             response.put("receiverName", order.getReceiverName() != null ? order.getReceiverName() : custName);
             response.put("receiverPhone", order.getReceiverPhone() != null ? order.getReceiverPhone() : custPhone);
-            response.put("deliveryOtp", order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813");
+
+            String otp = order.getDeliveryOtp();
+            if (otp == null || otp.isBlank()) {
+                otp = String.format("%04d", 1000 + new Random().nextInt(9000));
+                order.setDeliveryOtp(otp);
+                order.setOtpExpiresAt(LocalDateTime.now().plusHours(48));
+                order = orderRepository.save(order);
+            }
+            response.put("deliveryOtp", otp);
+            response.put("otp", otp);
             response.put("goodsCategory", order.getGoodsCategory());
             response.put("helpersCount", order.getHelpersCount() != null ? order.getHelpersCount() : 0);
             response.put("distanceKm", order.getDistanceKm());
@@ -467,14 +479,70 @@ public class BookingController {
             response.put("fareBreakdown", fareBreakdown);
 
             // Driver details (if assigned)
-            if (order.getDriverName() != null && !order.getDriverName().isEmpty()) {
-                Map<String, Object> driver = new HashMap<>();
+            Map<String, Object> driver = null;
+            com.anushaporter.backend.model.Driver driverEntity = null;
+            if (order.getDriverId() != null && !order.getDriverId().isBlank()) {
+                try {
+                    driverEntity = driverRepository.findById(Long.parseLong(order.getDriverId())).orElse(null);
+                } catch (NumberFormatException ignored) {}
+                if (driverEntity == null && order.getDriverEmail() != null && !order.getDriverEmail().isBlank()) {
+                    driverEntity = driverRepository.findByEmail(order.getDriverEmail()).orElse(null);
+                }
+            } else if (order.getDriverEmail() != null && !order.getDriverEmail().isBlank()) {
+                driverEntity = driverRepository.findByEmail(order.getDriverEmail()).orElse(null);
+            }
+            if (driverEntity != null) {
+                    driver = new LinkedHashMap<>();
+                    driver.put("id", driverEntity.getId());
+                    driver.put("driverId", driverEntity.getId());
+                    driver.put("name", driverEntity.getName());
+                    driver.put("phone", driverEntity.getPhone());
+                    driver.put("vehicleNumber", driverEntity.getVehicleNumber());
+                    driver.put("vehicleType", driverEntity.getVehicleType() != null ? driverEntity.getVehicleType() : driverEntity.getVehicle());
+                    driver.put("vehicleLabel", order.getServiceName() != null ? order.getServiceName() : driverEntity.getVehicleType());
+                    double dRating = 4.8;
+                    if (driverEntity.getRating() != null) {
+                        try { dRating = Double.parseDouble(driverEntity.getRating()); } catch (Exception ignored) {}
+                    }
+                    driver.put("rating", dRating);
+                    if (driverEntity.getLatitude() != null) driver.put("latitude", driverEntity.getLatitude());
+                    if (driverEntity.getLongitude() != null) driver.put("longitude", driverEntity.getLongitude());
+                    if (driverEntity.getProfilePhotoUri() != null) driver.put("profilePhotoUri", driverEntity.getProfilePhotoUri());
+                }
+
+            if (driver == null && order.getDriverName() != null && !order.getDriverName().isBlank()) {
+                driver = new LinkedHashMap<>();
+                driver.put("id", order.getDriverId() != null ? order.getDriverId() : "DRV-1");
+                driver.put("driverId", order.getDriverId() != null ? order.getDriverId() : "DRV-1");
                 driver.put("name", order.getDriverName());
                 driver.put("phone", order.getDriverPhone() != null ? order.getDriverPhone() : "");
                 driver.put("vehicleNumber", order.getDriverVehicleNumber() != null ? order.getDriverVehicleNumber() : "");
                 driver.put("vehicleLabel", order.getServiceName() != null ? order.getServiceName() : "");
-                driver.put("rating", 4.5); // placeholder; extend Driver model for live rating
+                driver.put("rating", 4.8);
+            }
+
+            if (driver != null) {
                 response.put("driver", driver);
+                response.put("assignedDriver", driver);
+                response.put("driverInfo", driver);
+            }
+
+            // Cancellation availability flags
+            boolean canCancel = isOrderCancellable(order, driverEntity);
+            response.put("canCancel", canCancel);
+            response.put("isCancellable", canCancel);
+            response.put("allowCancel", canCancel);
+            response.put("cancellationAllowed", canCancel);
+            response.put("cancellationWindowActive", canCancel);
+            if (!canCancel) {
+                String blockedReason = "Driver has arrived near drop location";
+                if ("cancelled".equalsIgnoreCase(order.getStatus())) blockedReason = "Booking is already cancelled";
+                else if ("delivered".equalsIgnoreCase(order.getStatus()) || "completed".equalsIgnoreCase(order.getStatus())) blockedReason = "Order has been delivered";
+                else if (Boolean.TRUE.equals(order.getOtpVerified())) blockedReason = "Delivery OTP has been verified";
+                response.put("cancellationBlockedReason", blockedReason);
+            } else {
+                response.put("cancellationBlockedReason", null);
+                response.put("cancellationMessage", "Cancellation is available until driver arrives at drop location.");
             }
 
             // Optional specialized fields
@@ -491,89 +559,88 @@ public class BookingController {
         }
     }
 
+    public static double calculateDistanceInMeters(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371000;
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
 
-
-    /**
-     * Cancel a booking.
-     * PUT /api/bookings/{bookingId}/cancel
-     * Optional body: { "reason": "Driver delay", "remarks": "..." }
-     */
-    @PutMapping("/api/bookings/{bookingId}/cancel")
-    public ResponseEntity<Map<String, Object>> cancelBooking(
-            @RequestHeader("Authorization") String authHeader,
-            @PathVariable String bookingId,
-            @RequestBody(required = false) Map<String, Object> body) {
-
-        Map<String, Object> response = new HashMap<>();
-
-        try {
-            String email = extractEmail(authHeader);
-            if (email == null) {
-                response.put("success", false);
-                response.put("message", "Unauthorized");
-                return ResponseEntity.status(401).body(response);
-            }
-
-            Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
-            if (orderOpt.isEmpty()) {
-                response.put("success", false);
-                response.put("message", "Booking not found");
-                return ResponseEntity.status(404).body(response);
-            }
-
-            Order order = orderOpt.get();
-
-            // Accept optional cancellation reason (Edge case rule #4)
-            String reason = "Cancelled by customer";
-            if (body != null) {
-                if (body.get("reason") != null) reason = String.valueOf(body.get("reason"));
-                else if (body.get("cancellationReason") != null) reason = String.valueOf(body.get("cancellationReason"));
-                else if (body.get("selectedReason") != null) reason = String.valueOf(body.get("selectedReason"));
-                else if (body.get("customReason") != null) reason = String.valueOf(body.get("customReason"));
-
-                if (body.get("remarks") != null && !String.valueOf(body.get("remarks")).isBlank()) {
-                    reason = reason + " - " + body.get("remarks");
-                }
-            }
-            order.setCancellationReason(reason);
-
-            order.setStatus("cancelled");
-            // Unassign driver
-            order.setDriverId(null);
-            order.setDriverName(null);
-            order.setDriverPhone(null);
-            order.setDriverVehicleNumber(null);
-
-            orderRepository.save(order);
-
-            if (driverOfferService != null) {
-                driverOfferService.onOrderCancelled(bookingId);
-            }
-
-            response.put("success", true);
-            response.put("message", "Booking cancelled successfully");
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            response.put("success", false);
-            response.put("message", "Failed to cancel booking: " + e.getMessage());
-            return ResponseEntity.status(500).body(response);
+    public static boolean isDriverNearDropLocation(Order order, com.anushaporter.backend.model.Driver driver) {
+        if (order == null) return false;
+        String s = order.getStatus() != null ? order.getStatus().trim().toLowerCase() : "";
+        if (s.contains("driver_reached") || s.contains("reached_drop") || s.contains("arrived_at_drop")
+                || s.contains("at_drop") || s.equals("unloading") || s.equals("reassembly")
+                || s.equals("otp_verified") || s.equals("payment_confirmation_pending")
+                || s.equals("delivered") || s.equals("completed")) {
+            return true;
         }
+        Double dropLat = order.getDropLat();
+        Double dropLng = order.getDropLng();
+        if (dropLat != null && dropLng != null && driver != null && driver.getLatitude() != null && driver.getLongitude() != null) {
+            double distMeters = calculateDistanceInMeters(driver.getLatitude(), driver.getLongitude(), dropLat, dropLng);
+            if ((s.contains("transit") || s.contains("picked") || s.contains("progress")) && distMeters <= 300.0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean isOrderCancellable(Order order, com.anushaporter.backend.model.Driver driver) {
+        if (order == null) return false;
+        String status = order.getStatus() != null ? order.getStatus().trim().toLowerCase() : "searching";
+        if (status.equals("cancelled")) {
+            return false;
+        }
+
+        boolean isPackers = (order.getServiceName() != null && (order.getServiceName().toLowerCase().contains("packer") || order.getServiceName().toLowerCase().contains("shift") || order.getServiceName().toLowerCase().contains("bhk")))
+                || (order.getGoodsCategory() != null && order.getGoodsCategory().toLowerCase().contains("household"))
+                || (order.getBookingId() != null && order.getBookingId().startsWith("PM-"));
+
+        if (isPackers) {
+            return !"delivered".equalsIgnoreCase(status);
+        }
+
+        if (status.equals("completed") || status.equals("delivered")) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(order.getOtpVerified()) || Boolean.TRUE.equals(order.getPaymentConfirmed())) {
+            return false;
+        }
+        if (isDriverNearDropLocation(order, driver)) {
+            return false;
+        }
+        return true;
     }
 
     /**
-     * Cancel a booking (POST variant — customer app uses this).
-     * POST /api/bookings/{bookingId}/cancel
-     * POST /api/orders/{bookingId}/cancel
-     *
-     * Body: { "reason": "Driver taking too long", "cancelledBy": "CUSTOMER" }
-     * Response: { "success": true, "status": "cancelled", "refundAmount": 500.0, "message": "Booking cancelled. Refund initiated." }
+     * Cancel a booking (PUT variant).
+     * Cancellation is allowed while placing/searching/assigned/transit until driver arrives near drop location.
      */
-    @PostMapping({"/api/bookings/{bookingId}/cancel", "/api/orders/{bookingId}/cancel"})
+    @PutMapping({"/api/bookings/{bookingId}/cancel", "/api/orders/{bookingId}/cancel", "/bookings/{bookingId}/cancel", "/orders/{bookingId}/cancel"})
+    public ResponseEntity<Map<String, Object>> cancelBooking(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String bookingId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        return processCancellation(bookingId, body);
+    }
+
+    /**
+     * Cancel a booking (POST variant).
+     */
+    @PostMapping({"/api/bookings/{bookingId}/cancel", "/api/orders/{bookingId}/cancel", "/bookings/{bookingId}/cancel", "/orders/{bookingId}/cancel"})
     public ResponseEntity<Map<String, Object>> cancelOrder(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable String bookingId,
             @RequestBody(required = false) Map<String, Object> body) {
+        return processCancellation(bookingId, body);
+    }
+
+    private ResponseEntity<Map<String, Object>> processCancellation(String bookingId, Map<String, Object> body) {
         Map<String, Object> response = new LinkedHashMap<>();
         try {
             Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
@@ -587,8 +654,46 @@ public class BookingController {
             }
             Order order = orderOpt.get();
 
+            // Check if already cancelled
+            if ("cancelled".equalsIgnoreCase(order.getStatus())) {
+                response.put("success", false);
+                response.put("status", "cancelled");
+                response.put("canCancel", false);
+                response.put("isCancellable", false);
+                response.put("message", "This booking is already cancelled.");
+                return ResponseEntity.ok(response);
+            }
+
+            // Resolve assigned driver to check proximity if applicable
+            com.anushaporter.backend.model.Driver driverEntity = null;
+            if (order.getDriverId() != null && !order.getDriverId().isBlank()) {
+                try {
+                    driverEntity = driverRepository.findById(Long.parseLong(order.getDriverId())).orElse(null);
+                } catch (NumberFormatException ignored) {}
+                if (driverEntity == null && order.getDriverEmail() != null && !order.getDriverEmail().isBlank()) {
+                    driverEntity = driverRepository.findByEmail(order.getDriverEmail()).orElse(null);
+                }
+            }
+
+            // Enforce cancellation rule: allowed while placing order until driver arrives near drop location
+            if (!isOrderCancellable(order, driverEntity)) {
+                String blockedReason = "Cannot cancel order: Driver has already arrived at the drop location or the order is already completed.";
+                if ("delivered".equalsIgnoreCase(order.getStatus()) || "completed".equalsIgnoreCase(order.getStatus())) {
+                    blockedReason = "Cannot cancel order: Trip is already completed.";
+                } else if (Boolean.TRUE.equals(order.getOtpVerified())) {
+                    blockedReason = "Cannot cancel order: Delivery OTP has already been verified.";
+                }
+                response.put("success", false);
+                response.put("canCancel", false);
+                response.put("isCancellable", false);
+                response.put("status", order.getStatus());
+                response.put("message", blockedReason);
+                response.put("error", "CANCELLATION_WINDOW_EXPIRED");
+                return ResponseEntity.badRequest().body(response);
+            }
+
             // Parse cancellation reason and cancelledBy
-            String reason = "Cancelled";
+            String reason = "Cancelled by customer";
             String cancelledBy = "CUSTOMER";
             if (body != null) {
                 if (body.get("reason") != null) reason = String.valueOf(body.get("reason"));
@@ -623,6 +728,8 @@ public class BookingController {
 
             response.put("success", true);
             response.put("status", "cancelled");
+            response.put("canCancel", false);
+            response.put("isCancellable", false);
             response.put("refundAmount", refundAmount);
             response.put("message", "Booking cancelled successfully. Advance refund initiated.");
             return ResponseEntity.ok(response);
@@ -633,7 +740,12 @@ public class BookingController {
         }
     }
 
-    @GetMapping("/api/orders/{bookingId}/delivery-otp")
+    @GetMapping({
+            "/api/bookings/{bookingId}/delivery-otp",
+            "/api/orders/{bookingId}/delivery-otp",
+            "/api/bookings/{bookingId}/otp",
+            "/api/orders/{bookingId}/otp"
+    })
     public ResponseEntity<Map<String, Object>> getDeliveryOtp(
             @PathVariable String bookingId) {
         Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
@@ -644,13 +756,28 @@ public class BookingController {
             return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found"));
         }
         Order order = orderOpt.get();
-        String otp = order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "5824";
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "bookingId", bookingId,
-                "deliveryOtp", otp,
-                "message", "Share this OTP with the driver / moving team upon arrival or completion."
-        ));
+        String otp = order.getDeliveryOtp();
+        if (otp == null || otp.isBlank()) {
+            otp = String.format("%04d", 1000 + new Random().nextInt(9000));
+            order.setDeliveryOtp(otp);
+            order.setOtpExpiresAt(LocalDateTime.now().plusHours(48));
+            orderRepository.save(order);
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("otp", otp);
+        data.put("deliveryOtp", otp);
+        data.put("bookingId", bookingId);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("bookingId", bookingId);
+        response.put("otp", otp);
+        response.put("deliveryOtp", otp);
+        response.put("data", data);
+        response.put("message", "Share this OTP with the driver / moving team upon arrival or completion.");
+
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -843,6 +970,10 @@ public class BookingController {
         order.setAcceptedAt(LocalDateTime.now());
         orderRepository.save(order);
 
+        if (driverOfferService != null) {
+            driverOfferService.onOrderAccepted(bookingId, driverId);
+        }
+
         if (pushNotificationService != null) {
             pushNotificationService.notifyOrderStatus(order, "assigned");
         }
@@ -955,23 +1086,74 @@ public class BookingController {
         String driverPhone = "+919876543210";
         String driverVehicleNumber = "TS 09 AB 1234";
         String serviceName = "Tata Ace";
+        String driverId = "DRV-12";
+        Double driverRating = 4.9;
+        String profilePhotoUri = null;
+        boolean hasAssignedDriver = false;
         double lat = 17.4495;
         double lng = 78.3850;
         boolean otpVerified = false;
         boolean paymentConfirmed = false;
+        com.anushaporter.backend.model.Driver driverEntity = null;
 
         if (orderOpt.isPresent()) {
             Order o = orderOpt.get();
             if (o.getBookingId() != null)       targetBookingId    = o.getBookingId();
             if (o.getStatus() != null)           status             = o.getStatus().toLowerCase();
-            if (o.getDriverName() != null)       driverName         = o.getDriverName();
-            if (o.getDriverPhone() != null)      driverPhone        = o.getDriverPhone();
-            if (o.getDriverVehicleNumber() != null) driverVehicleNumber = o.getDriverVehicleNumber();
             if (o.getServiceName() != null)      serviceName        = o.getServiceName();
             if (o.getDropLat() != null)          lat                = o.getDropLat();
             if (o.getDropLng() != null)          lng                = o.getDropLng();
             otpVerified      = Boolean.TRUE.equals(o.getOtpVerified());
             paymentConfirmed = Boolean.TRUE.equals(o.getPaymentConfirmed());
+
+            // 1. Try finding assigned driver from DriverRepository
+            if (o.getDriverId() != null && !o.getDriverId().isBlank()) {
+                try {
+                    driverEntity = driverRepository.findById(Long.parseLong(o.getDriverId())).orElse(null);
+                } catch (NumberFormatException ignored) {}
+                if (driverEntity == null && o.getDriverEmail() != null && !o.getDriverEmail().isBlank()) {
+                    driverEntity = driverRepository.findByEmail(o.getDriverEmail()).orElse(null);
+                }
+            } else if (o.getDriverEmail() != null && !o.getDriverEmail().isBlank()) {
+                driverEntity = driverRepository.findByEmail(o.getDriverEmail()).orElse(null);
+            }
+
+            if (driverEntity != null) {
+                hasAssignedDriver = true;
+                driverId = String.valueOf(driverEntity.getId());
+                if (driverEntity.getName() != null && !driverEntity.getName().isBlank()) {
+                    driverName = driverEntity.getName();
+                } else if (o.getDriverName() != null && !o.getDriverName().isBlank()) {
+                    driverName = o.getDriverName();
+                }
+                if (driverEntity.getPhone() != null && !driverEntity.getPhone().isBlank()) {
+                    driverPhone = driverEntity.getPhone();
+                } else if (o.getDriverPhone() != null) {
+                    driverPhone = o.getDriverPhone();
+                }
+                if (driverEntity.getVehicleNumber() != null && !driverEntity.getVehicleNumber().isBlank()) {
+                    driverVehicleNumber = driverEntity.getVehicleNumber();
+                } else if (o.getDriverVehicleNumber() != null) {
+                    driverVehicleNumber = o.getDriverVehicleNumber();
+                }
+                if (driverEntity.getVehicleType() != null && !driverEntity.getVehicleType().isBlank()) {
+                    serviceName = driverEntity.getVehicleType();
+                }
+                if (driverEntity.getRating() != null) {
+                    try { driverRating = Double.parseDouble(driverEntity.getRating()); } catch (Exception ignored) {}
+                }
+                if (driverEntity.getLatitude() != null && driverEntity.getLongitude() != null) {
+                    lat = driverEntity.getLatitude();
+                    lng = driverEntity.getLongitude();
+                }
+                profilePhotoUri = driverEntity.getProfilePhotoUri();
+            } else if (o.getDriverName() != null && !o.getDriverName().isBlank()) {
+                hasAssignedDriver = true;
+                driverName = o.getDriverName();
+                if (o.getDriverId() != null) driverId = o.getDriverId();
+                if (o.getDriverPhone() != null) driverPhone = o.getDriverPhone();
+                if (o.getDriverVehicleNumber() != null) driverVehicleNumber = o.getDriverVehicleNumber();
+            }
         }
 
         int stageNumber = 1;
@@ -1052,23 +1234,29 @@ public class BookingController {
         }
 
         Map<String, Object> driverMap = new LinkedHashMap<>();
-        driverMap.put("id", isPackers ? "SUP-102" : "DRV-12");
-        driverMap.put("name", isPackers ? "Manjunath (Supervisor)" : driverName);
-        if (isPackers) {
+        driverMap.put("id", isPackers && !hasAssignedDriver ? "SUP-102" : driverId);
+        driverMap.put("driverId", isPackers && !hasAssignedDriver ? "SUP-102" : driverId);
+        driverMap.put("name", isPackers && !hasAssignedDriver ? "Manjunath (Supervisor)" : driverName);
+        if (isPackers && !hasAssignedDriver) {
             driverMap.put("role", "Shifting Supervisor");
+        } else {
+            driverMap.put("role", "Driver Partner");
         }
-        driverMap.put("phone", isPackers ? "+919845012345" : driverPhone);
-        driverMap.put("vehicleNumber", isPackers ? "KA-05-AB-7890" : driverVehicleNumber);
-        driverMap.put("vehicleType", isPackers ? "Canter 14ft" : serviceName);
+        driverMap.put("phone", isPackers && !hasAssignedDriver ? "+919845012345" : driverPhone);
+        driverMap.put("vehicleNumber", isPackers && !hasAssignedDriver ? "KA-05-AB-7890" : driverVehicleNumber);
+        driverMap.put("vehicleType", isPackers && !hasAssignedDriver ? "Canter 14ft" : serviceName);
         driverMap.put("vehicleLabel", serviceName);
         if (isPackers) {
             driverMap.put("crewCount", 4);
             driverMap.put("helpersCount", 4);
         }
-        driverMap.put("rating", 4.9);
+        driverMap.put("rating", driverRating != null ? driverRating : 4.9);
         driverMap.put("latitude", lat);
         driverMap.put("longitude", lng);
         driverMap.put("heading", 120);
+        if (profilePhotoUri != null) {
+            driverMap.put("profilePhotoUri", profilePhotoUri);
+        }
 
         Map<String, Object> locationMap = new LinkedHashMap<>();
         locationMap.put("lat", lat);
@@ -1080,6 +1268,21 @@ public class BookingController {
         currentLocation.put("longitude", lng);
         currentLocation.put("etaMinutes", 18);
 
+        String liveOtp = null;
+        if (orderOpt.isPresent()) {
+            liveOtp = orderOpt.get().getDeliveryOtp();
+            if (liveOtp == null || liveOtp.isBlank()) {
+                liveOtp = String.format("%04d", 1000 + new Random().nextInt(9000));
+                Order ord = orderOpt.get();
+                ord.setDeliveryOtp(liveOtp);
+                ord.setOtpExpiresAt(LocalDateTime.now().plusHours(48));
+                orderRepository.save(ord);
+            }
+        }
+        if (liveOtp == null || liveOtp.isBlank()) {
+            liveOtp = "6194";
+        }
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("bookingId", targetBookingId);
@@ -1088,14 +1291,35 @@ public class BookingController {
         response.put("stageLabel", stageLabel);
         response.put("stageDescription", stageDescription);
         response.put("isDelivered", isDelivered);
-        response.put("deliveryOtp", orderOpt.isPresent() && orderOpt.get().getDeliveryOtp() != null ? orderOpt.get().getDeliveryOtp() : "6194");
+        response.put("deliveryOtp", liveOtp);
+        response.put("otp", liveOtp);
         response.put("eta", "25 mins");
         response.put("driverNotFound", isDriverNotFound);
         response.put("otpVerified", isOtpVerified);
         response.put("paymentConfirmed", paymentConfirmed || isDelivered);
         response.put("paymentConfirmationPending", isPaymentPending);
 
+        Order orderInstance = orderOpt.orElse(null);
+        boolean canCancel = orderInstance != null && isOrderCancellable(orderInstance, driverEntity);
+        response.put("canCancel", canCancel);
+        response.put("isCancellable", canCancel);
+        response.put("allowCancel", canCancel);
+        response.put("cancellationAllowed", canCancel);
+        response.put("cancellationWindowActive", canCancel);
+        if (!canCancel) {
+            String blockedReason = "Driver has arrived near drop location";
+            if ("cancelled".equalsIgnoreCase(status)) blockedReason = "Booking is already cancelled";
+            else if (isDelivered) blockedReason = "Order has been delivered";
+            else if (isOtpVerified) blockedReason = "Delivery OTP has been verified";
+            response.put("cancellationBlockedReason", blockedReason);
+        } else {
+            response.put("cancellationBlockedReason", null);
+            response.put("cancellationMessage", "Cancellation is available until driver arrives at drop location.");
+        }
+
         response.put("driver", driverMap);
+        response.put("assignedDriver", driverMap);
+        response.put("driverInfo", driverMap);
         response.put("currentLocation", currentLocation);
         response.put("location", locationMap);
         response.put("timeline", timeline);
