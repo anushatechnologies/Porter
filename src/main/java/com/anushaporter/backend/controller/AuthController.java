@@ -262,7 +262,7 @@ public class AuthController {
                 user = new AppUser();
                 user.setPhone(localPhone);
                 user.setName(name != null ? name : "User");
-                user.setEmail(localPhone + "@anushaporter.com");
+                user.setEmail(null);
                 user.setRole("Customer");
                 user.setStatus("Active");
                 userRepository.save(user);
@@ -275,7 +275,7 @@ public class AuthController {
                 user = new AppUser();
                 user.setPhone(localPhone);
                 user.setName(name != null ? name : "Customer");
-                user.setEmail(localPhone + "@anushaporter.com");
+                user.setEmail(null);
                 user.setRole("Customer");
                 user.setStatus("Active");
                 userRepository.save(user);
@@ -293,7 +293,9 @@ public class AuthController {
             }
         }
 
-        String emailKey = user.getEmail() != null ? user.getEmail() : user.getPhone();
+        String emailKey = (user.getEmail() != null && !isPlaceholderEmail(user.getEmail(), user.getPhone()))
+                ? user.getEmail()
+                : (user.getPhone() != null ? user.getPhone() : localPhone);
         String accessToken = jwtUtil.generateToken(emailKey);
         String refreshToken = jwtUtil.generateToken(emailKey);
 
@@ -302,7 +304,7 @@ public class AuthController {
         userProfile.put("name", user.getName());
         userProfile.put("phone", user.getPhone());
         userProfile.put("email",
-                user.getEmail() != null && !user.getEmail().contains("@anushaporter.com") ? user.getEmail() : "");
+                user.getEmail() != null && !isPlaceholderEmail(user.getEmail(), user.getPhone()) ? user.getEmail() : "");
         userProfile.put("role", user.getRole() != null ? user.getRole() : "Customer");
         userProfile.put("isPhoneVerified", true);
 
@@ -313,6 +315,23 @@ public class AuthController {
         response.put("user", userProfile);
 
         return ResponseEntity.ok(response);
+    }
+
+    public static boolean isPlaceholderEmail(String email, String phone) {
+        if (email == null || email.isBlank()) return true;
+        String lower = email.trim().toLowerCase();
+        if (lower.contains("@anushaporter.com")
+                || lower.equals("testdriver@example.com")
+                || lower.equals("driver@anushaporter.com")) {
+            return true;
+        }
+        if (phone != null && !phone.isBlank()) {
+            String digits = phone.replaceAll("\\D+", "");
+            if (!digits.isEmpty() && lower.startsWith(digits + "@")) {
+                return true;
+            }
+        }
+        return lower.matches("^\\+?[0-9]{10,12}@.*");
     }
 
     // ─── Forgot Password Endpoints ────────────────────────────────────────────

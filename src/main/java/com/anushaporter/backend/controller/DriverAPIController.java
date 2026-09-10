@@ -64,6 +64,23 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.util.JwtUtil jwtUtil;
 
+    public static boolean isPlaceholderEmail(String email, String phone) {
+        if (email == null || email.isBlank()) return true;
+        String lower = email.trim().toLowerCase();
+        if (lower.contains("@anushaporter.com")
+                || lower.equals("testdriver@example.com")
+                || lower.equals("driver@anushaporter.com")) {
+            return true;
+        }
+        if (phone != null && !phone.isBlank()) {
+            String digits = phone.replaceAll("\\D+", "");
+            if (!digits.isEmpty() && lower.startsWith(digits + "@")) {
+                return true;
+            }
+        }
+        return lower.matches("^\\+?[0-9]{10,12}@.*");
+    }
+
     public Driver getAuthenticatedDriver(HttpServletRequest request) {
         return driverAuthService.resolveAuthenticatedDriver(request);
     }
@@ -117,7 +134,7 @@ public class DriverAPIController {
                     driver = new Driver();
                     driver.setName(appUser.getName() != null && !appUser.getName().isBlank() ? appUser.getName() : "");
                     driver.setPhone(phone != null ? phone : "");
-                    if (appUser.getEmail() != null && !appUser.getEmail().isBlank() && !appUser.getEmail().contains("@anushaporter.com")) {
+                    if (appUser.getEmail() != null && !appUser.getEmail().isBlank() && !isPlaceholderEmail(appUser.getEmail(), phone)) {
                         driver.setEmail(appUser.getEmail());
                     }
                     driver.setStatus("offline");
@@ -139,7 +156,7 @@ public class DriverAPIController {
         map.put("name", driver.getName() != null ? driver.getName() : "");
         map.put("phone", driver.getPhone() != null ? driver.getPhone() : "");
         String rawEmail = driver.getEmail() != null ? driver.getEmail() : "";
-        if (rawEmail.contains("@anushaporter.com")) rawEmail = "";
+        if (isPlaceholderEmail(rawEmail, driver.getPhone())) rawEmail = "";
         map.put("email", rawEmail);
         String rawDob = driver.getDob() != null ? driver.getDob() : "";
         if ("1995-01-01".equals(rawDob) && ("draft".equalsIgnoreCase(driver.getKyc()) || driver.getRegistrationStep() == null || driver.getRegistrationStep() <= 1)) {
@@ -797,10 +814,12 @@ public class DriverAPIController {
         if (driver == null) {
             driver = new Driver();
             driver.setPhone(phone);
-            driver.setEmail(appUser.getEmail() != null ? appUser.getEmail() : (phone != null ? phone + "@anushaporter.com" : null));
+            String initEmail = appUser.getEmail();
+            if (isPlaceholderEmail(initEmail, phone)) initEmail = null;
+            driver.setEmail(initEmail);
             driver.setName(appUser.getName() != null ? appUser.getName() : "Driver");
-            driver.setDob("1995-01-01");
-            driver.setGender("Male");
+            driver.setDob("");
+            driver.setGender("");
             driver.setStatus("offline");
             driver.setRegistrationStep(1);
         }
@@ -913,9 +932,10 @@ public class DriverAPIController {
         // Non-destructive field updates (preserve existing data across steps)
         if (phone != null && !phone.isBlank()) driver.setPhone(phone);
         if (text(payload, "email") != null) {
-            driver.setEmail(text(payload, "email"));
+            String inputEmail = text(payload, "email");
+            driver.setEmail(!isPlaceholderEmail(inputEmail, phone) ? inputEmail : null);
         } else if (driver.getEmail() == null || driver.getEmail().isBlank()) {
-            if (appUser.getEmail() != null && !appUser.getEmail().isBlank() && !appUser.getEmail().contains("@anushaporter.com")) {
+            if (appUser.getEmail() != null && !appUser.getEmail().isBlank() && !isPlaceholderEmail(appUser.getEmail(), phone)) {
                 driver.setEmail(appUser.getEmail());
             }
         }
@@ -1077,7 +1097,7 @@ public class DriverAPIController {
             driver = driverRepository.findByEmail(appUser.getEmail()).orElse(null);
         }
         if (driver == null) {
-            String realEmail = appUser.getEmail() != null && !appUser.getEmail().contains("@anushaporter.com") ? appUser.getEmail() : "";
+            String realEmail = appUser.getEmail() != null && !isPlaceholderEmail(appUser.getEmail(), phone) ? appUser.getEmail() : "";
             String realPhoto = appUser.getProfilePhotoUri() != null && !appUser.getProfilePhotoUri().contains("dicebear.com") ? appUser.getProfilePhotoUri() : "";
             Map<String, Object> fallback = new java.util.LinkedHashMap<>();
             fallback.put("success", true);
@@ -1105,7 +1125,7 @@ public class DriverAPIController {
         String photoUrl = rawPhoto != null ? storageService.getPresignedOrSanitizedUrl(rawPhoto) : "";
 
         String rawEmail = driver.getEmail() != null ? driver.getEmail() : (appUser.getEmail() != null ? appUser.getEmail() : "");
-        if (rawEmail.contains("@anushaporter.com")) rawEmail = "";
+        if (isPlaceholderEmail(rawEmail, phone != null ? phone : (driver.getPhone() != null ? driver.getPhone() : ""))) rawEmail = "";
 
         String dobVal = driver.getDob() != null ? driver.getDob() : "";
         if ("1995-01-01".equals(dobVal) && ("draft".equalsIgnoreCase(driver.getKyc()) || driver.getRegistrationStep() == null || driver.getRegistrationStep() <= 1)) {
