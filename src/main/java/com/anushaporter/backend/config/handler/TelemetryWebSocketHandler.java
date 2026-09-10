@@ -20,10 +20,12 @@ import java.util.concurrent.TimeUnit;
 public class TelemetryWebSocketHandler extends TextWebSocketHandler {
 
     private final CopyOnWriteArrayList<WebSocketSession> sessions = new CopyOnWriteArrayList<>();
+    private final java.util.Map<String, java.util.Set<WebSocketSession>> bookingSubscriptions = new java.util.concurrent.ConcurrentHashMap<>();
     private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public TelemetryWebSocketHandler() {
-        // Broadcast periodic driver telemetry to connected admin sessions
+        // Broadcast periodic driver telemetry to connected admin sessions and subscribed passenger apps
         executorService.scheduleAtFixedRate(this::broadcastTelemetry, 3, 3, TimeUnit.SECONDS);
     }
 
@@ -36,18 +38,45 @@ public class TelemetryWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String payload = message.getPayload();
-        // Echo back ping or handle incoming driver telemetry
+        if (payload == null || payload.isBlank()) return;
+
         if (payload.contains("ping")) {
             session.sendMessage(new TextMessage("{\"event\":\"pong\",\"timestamp\":" + System.currentTimeMillis() + "}"));
-        } else {
-            // Broadcast telemetry update to all connected clients
-            broadcastMessage("{\"event\":\"driver:telemetry\",\"payload\":" + payload + "}");
+            return;
         }
+
+        try {
+            com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(payload);
+            String type = node.has("type") ? node.get("type").asText() : "";
+
+            if ("SUBSCRIBE_BOOKING".equalsIgnoreCase(type) || "SUBSCRIBE_ORDER".equalsIgnoreCase(type)) {
+                String bookingId = node.has("bookingId") ? node.get("bookingId").asText()
+                        : (node.has("orderId") ? node.get("orderId").asText() : "");
+                if (!bookingId.isBlank()) {
+                    bookingSubscriptions.computeIfAbsent(bookingId, k -> java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>())).add(session);
+                    session.sendMessage(new TextMessage("{\"type\":\"SUBSCRIPTION_CONFIRMED\",\"bookingId\":\"" + bookingId + "\"}"));
+                }
+                return;
+            } else if ("UNSUBSCRIBE_BOOKING".equalsIgnoreCase(type)) {
+                String bookingId = node.has("bookingId") ? node.get("bookingId").asText() : "";
+                if (!bookingId.isBlank() && bookingSubscriptions.containsKey(bookingId)) {
+                    bookingSubscriptions.get(bookingId).remove(session);
+                }
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Broadcast telemetry update to all connected clients
+        broadcastMessage("{\"event\":\"driver:telemetry\",\"payload\":" + payload + "}");
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         sessions.remove(session);
+        for (java.util.Set<WebSocketSession> subs : bookingSubscriptions.values()) {
+            subs.remove(session);
+        }
     }
 
     private void broadcastTelemetry() {
@@ -63,6 +92,54 @@ public class TelemetryWebSocketHandler extends TextWebSocketHandler {
                 + "}}";
 
         broadcastMessage(json);
+
+        // Emit live DRIVER_LOCATION updates for subscribed passenger rides
+        if (!bookingSubscriptions.isEmpty()) {
+            for (java.util.Map.Entry<String, java.util.Set<WebSocketSession>> entry : bookingSubscriptions.entrySet()) {
+                String bId = entry.getKey();
+                java.util.Set<WebSocketSession> subs = entry.getValue();
+                if (subs != null && !subs.isEmpty()) {
+                    double lat = 17.4420 + (Math.random() * 0.003 - 0.0015);
+                    double lng = 78.3510 + (Math.random() * 0.003 - 0.0015);
+                    int heading = (int) (Math.random() * 360);
+                    String locJson = "{"
+                            + "\"type\":\"DRIVER_LOCATION\","
+                            + "\"bookingId\":\"" + bId + "\","
+                            + "\"lat\":" + String.format(java.util.Locale.US, "%.5f", lat) + ","
+                            + "\"lng\":" + String.format(java.util.Locale.US, "%.5f", lng) + ","
+                            + "\"heading\":" + heading
+                            + "}";
+                    for (WebSocketSession s : subs) {
+                        if (s.isOpen()) {
+                            try {
+                                s.sendMessage(new TextMessage(locJson));
+                            } catch (IOException ignored) {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public void broadcastDriverLocation(String bookingId, double lat, double lng, int heading) {
+        String json = "{"
+                + "\"type\":\"DRIVER_LOCATION\","
+                + "\"bookingId\":\"" + bookingId + "\","
+                + "\"lat\":" + lat + ","
+                + "\"lng\":" + lng + ","
+                + "\"heading\":" + heading
+                + "}";
+        broadcastMessage(json);
+    }
+
+    public void broadcastPassengerStatus(String bookingId, String status) {
+        String json = "{"
+                + "\"type\":\"ORDER_STATUS_UPDATED\","
+                + "\"bookingId\":\"" + bookingId + "\","
+                + "\"status\":\"" + status + "\""
+                + "}";
+        broadcastMessage(json);
+        broadcastOrderUpdate(bookingId, status);
     }
 
     public void broadcastOrderUpdate(String orderId, String status) {

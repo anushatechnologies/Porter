@@ -309,11 +309,115 @@ public class PassengerBookingIntegrationTest {
         mockMvc.perform(get("/api/passenger/vehicles"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.vehicles").isArray())
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data[0].code").value("BIKE"))
                 .andExpect(jsonPath("$.data[0].categoryCode").value("BIKE"))
                 .andExpect(jsonPath("$.data[0].passengerCapacity").value(1))
                 .andExpect(jsonPath("$.data[0].basePrice").value(20.00));
+    }
+
+    @Test
+    void testPassengerDailyRidesFullApiSuite_ContractsAndAliases() throws Exception {
+        // 1. GET /api/passenger/services
+        mockMvc.perform(get("/api/passenger/services"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.services").isArray());
+
+        // 2. GET /api/passenger/vehicles
+        mockMvc.perform(get("/api/passenger/vehicles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.vehicles").isArray());
+
+        // 3. POST /api/passenger/fare-estimate
+        String estimateJson = """
+                {
+                  "serviceType": "ONE_WAY",
+                  "vehicleCategoryCode": "SEDAN",
+                  "pickupAddress": "Gachibowli, Hyderabad",
+                  "dropAddress": "Hitech City, Hyderabad",
+                  "pickupLatitude": 17.4401,
+                  "pickupLongitude": 78.3489,
+                  "dropLatitude": 17.4483,
+                  "dropLongitude": 78.3915,
+                  "passengerCount": 2,
+                  "luggageCount": 1
+                }
+                """;
+        MvcResult estResult = mockMvc.perform(post("/api/passenger/fare-estimate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(estimateJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.fareToken").isNotEmpty())
+                .andExpect(jsonPath("$.estimatedFare").isNotEmpty())
+                .andExpect(jsonPath("$.estimates").isArray())
+                .andReturn();
+
+        JsonNode estNode = objectMapper.readTree(estResult.getResponse().getContentAsString());
+        String fareToken = estNode.get("fareToken").asText();
+
+        // 4. POST /api/passenger/bookings
+        String bookingJson = String.format("""
+                {
+                  "fareToken": "%s",
+                  "serviceType": "ONE_WAY",
+                  "vehicleCategoryCode": "SEDAN",
+                  "pickupAddress": "Gachibowli, Hyderabad",
+                  "dropAddress": "Hitech City, Hyderabad",
+                  "pickupLatitude": 17.4401,
+                  "pickupLongitude": 78.3489,
+                  "dropLatitude": 17.4483,
+                  "dropLongitude": 78.3915,
+                  "passengerName": "Anusha",
+                  "passengerPhone": "9876543210",
+                  "passengerCount": 2,
+                  "luggageCount": 1,
+                  "paymentMode": "CASH"
+                }
+                """, fareToken);
+
+        MvcResult createResult = mockMvc.perform(post("/api/passenger/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bookingJson))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.bookingId").isNotEmpty())
+                .andExpect(jsonPath("$.bookingNumber").isNotEmpty())
+                .andExpect(jsonPath("$.trackingNumber").isNotEmpty())
+                .andExpect(jsonPath("$.startOtp").isNotEmpty())
+                .andExpect(jsonPath("$.status").value("DRIVER_SEARCHING"))
+                .andReturn();
+
+        JsonNode createNode = objectMapper.readTree(createResult.getResponse().getContentAsString());
+        String bookingNumber = createNode.get("bookingNumber").asText();
+
+        // 5. GET /api/passenger/bookings/:bookingId
+        mockMvc.perform(get("/api/passenger/bookings/" + bookingNumber))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.bookingId").value(bookingNumber))
+                .andExpect(jsonPath("$.bookingNumber").value(bookingNumber))
+                .andExpect(jsonPath("$.status").isNotEmpty())
+                .andExpect(jsonPath("$.startOtp").isNotEmpty());
+
+        // 6. POST /api/passenger/bookings/:bookingId/cancel
+        mockMvc.perform(post("/api/passenger/bookings/" + bookingNumber + "/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\": \"Found alternate transport\", \"cancelledBy\": \"CUSTOMER\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Ride cancelled successfully"));
+
+        // 7. POST /api/passenger/bookings/:bookingId/review
+        mockMvc.perform(post("/api/passenger/bookings/" + bookingNumber + "/review")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rating\": 5, \"feedback\": \"Smooth ride\", \"tags\": [\"Clean Cab\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Thank you for your rating!"));
     }
 
     private PassengerBooking parseBookingResponse(MvcResult result) throws Exception {

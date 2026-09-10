@@ -27,6 +27,11 @@ public class PassengerFareEstimateResponse {
     private BookingFareBreakdown breakdown;
     private String message;
 
+    @Builder.Default
+    private boolean success = true;
+
+    private java.util.List<java.util.Map<String, Object>> estimates;
+
     public String getFareToken() {
         return fareLockToken;
     }

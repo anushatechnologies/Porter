@@ -225,4 +225,23 @@ public class PassengerBooking {
     public Integer getEtaMinutes() {
         return 4;
     }
+
+    public java.util.Map<String, Object> getDriver() {
+        if (driverId == null && driverName == null) {
+            return null;
+        }
+        java.util.Map<String, Object> driverMap = new java.util.LinkedHashMap<>();
+        driverMap.put("id", driverId != null ? "drv_pass_" + driverId : "drv_pass_1");
+        driverMap.put("driverId", driverId);
+        driverMap.put("name", driverName != null ? driverName : "");
+        driverMap.put("phone", driverPhone != null ? driverPhone : "");
+        driverMap.put("vehicleNumber", vehicleNumber != null ? vehicleNumber : "");
+        driverMap.put("vehicleModel", vehicleModel != null ? vehicleModel : "");
+        driverMap.put("rating", driverRating != null ? Double.valueOf(driverRating) : 4.9);
+        driverMap.put("latitude", getDriverLatitude());
+        driverMap.put("longitude", getDriverLongitude());
+        driverMap.put("driverBearing", getDriverBearing());
+        driverMap.put("etaMinutes", getEtaMinutes());
+        return driverMap;
+    }
 }

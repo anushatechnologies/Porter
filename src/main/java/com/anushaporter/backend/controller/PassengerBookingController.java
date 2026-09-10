@@ -33,9 +33,51 @@ public class PassengerBookingController {
     private final PassengerVehicleCategoryRepository vehicleCategoryRepository;
     private final RentalPackageRepository rentalPackageRepository;
 
-    @PostMapping("/fare-estimate")
+    @PostMapping({"/fare-estimate", "/fares/estimate"})
     public ResponseEntity<PassengerFareEstimateResponse> getFareEstimate(@RequestBody PassengerFareEstimateRequest request) {
         PassengerFareEstimateResponse response = pricingEngine.calculateFare(request);
+        response.setSuccess(true);
+
+        List<PassengerVehicleCategory> categories = vehicleCategoryRepository.findByActiveTrueOrderByDisplayOrderAsc();
+        List<Map<String, Object>> estimatesList = new ArrayList<>();
+        for (PassengerVehicleCategory cat : categories) {
+            Map<String, Object> estMap = new LinkedHashMap<>();
+            estMap.put("vehicleCategoryCode", cat.getCategoryCode());
+            estMap.put("code", cat.getCategoryCode());
+            estMap.put("name", cat.getDisplayName());
+            estMap.put("displayName", cat.getDisplayName());
+            estMap.put("imageUrl", cat.getImageUrl() != null ? cat.getImageUrl() : "");
+            estMap.put("passengerCapacity", cat.getPassengerCapacity());
+            estMap.put("luggageCapacity", cat.getLuggageCapacity());
+            estMap.put("eta", "3 mins");
+            if (cat.getCategoryCode().equalsIgnoreCase(response.getVehicleCategoryCode())) {
+                estMap.put("estimatedFare", response.getEstimatedFare());
+            } else {
+                try {
+                    PassengerFareEstimateRequest clone = PassengerFareEstimateRequest.builder()
+                            .serviceType(request.getServiceType())
+                            .vehicleCategoryCode(cat.getCategoryCode())
+                            .pickupAddress(request.getPickupAddress())
+                            .pickupLat(request.getPickupLat())
+                            .pickupLng(request.getPickupLng())
+                            .dropAddress(request.getDropAddress())
+                            .dropLat(request.getDropLat())
+                            .dropLng(request.getDropLng())
+                            .passengerCount(request.getPassengerCount())
+                            .luggageCount(request.getLuggageCount())
+                            .couponCode(request.getCouponCode())
+                            .manualDistanceKm(request.getManualDistanceKm())
+                            .manualDurationMinutes(request.getManualDurationMinutes())
+                            .build();
+                    PassengerFareEstimateResponse cloneResp = pricingEngine.calculateFare(clone);
+                    estMap.put("estimatedFare", cloneResp.getEstimatedFare());
+                } catch (Exception e) {
+                    estMap.put("estimatedFare", cat.getBaseFare() != null ? cat.getBaseFare() : new java.math.BigDecimal("50.00"));
+                }
+            }
+            estimatesList.add(estMap);
+        }
+        response.setEstimates(estimatesList);
         return ResponseEntity.ok(response);
     }
 
@@ -45,12 +87,20 @@ public class PassengerBookingController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("booking", booking);
-        // Include direct booking fields for backward compatibility
+        // Include direct booking fields for exact frontend contract alignment
         response.put("id", booking.getBookingNumber());
+        response.put("bookingId", booking.getBookingNumber());
         response.put("bookingNumber", booking.getBookingNumber());
         response.put("trackingNumber", booking.getTrackingNumber());
         response.put("status", booking.getStatus().name());
         response.put("startOtp", booking.getStartOtp());
+        if (booking.getFareBreakdown() != null) {
+            response.put("estimatedFare", booking.getFareBreakdown().getTotalFare());
+        }
+        response.put("paymentMode", booking.getPaymentMethod());
+        response.put("createdAt", booking.getCreatedAt());
+
+        response.put("driver", booking.getDriver());
         return ResponseEntity.status(201).body(response);
     }
 
@@ -60,10 +110,23 @@ public class PassengerBookingController {
         if (bookingOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "booking", bookingOpt.get()
-        ));
+        PassengerBooking booking = bookingOpt.get();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("id", booking.getBookingNumber());
+        response.put("bookingId", booking.getBookingNumber());
+        response.put("bookingNumber", booking.getBookingNumber());
+        response.put("trackingNumber", booking.getTrackingNumber());
+        response.put("status", booking.getStatus().name());
+        response.put("startOtp", booking.getStartOtp());
+        if (booking.getFareBreakdown() != null) {
+            response.put("estimatedFare", booking.getFareBreakdown().getTotalFare());
+        }
+        response.put("paymentMode", booking.getPaymentMethod());
+        response.put("createdAt", booking.getCreatedAt());
+        response.put("driver", booking.getDriver());
+        response.put("booking", booking);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/bookings/by-number/{bookingNumber}")
@@ -133,11 +196,11 @@ public class PassengerBookingController {
                 : (payload != null && payload.containsKey("notes") ? payload.get("notes").toString() : "");
         PassengerBooking rated = bookingService.rateTrip(bookingOpt.get().getId(), rating, notes);
 
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Review submitted successfully",
-                "booking", rated
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("message", "Thank you for your rating!");
+        response.put("booking", rated);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping({"/categories", "/vehicles"})
@@ -145,7 +208,7 @@ public class PassengerBookingController {
         List<PassengerVehicleCategory> categories = vehicleCategoryRepository.findByActiveTrueOrderByDisplayOrderAsc();
         List<Map<String, Object>> data = categories.stream().map(c -> {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", String.valueOf(c.getId()));
+            m.put("id", c.getCategoryCode() != null ? c.getCategoryCode().toLowerCase() : String.valueOf(c.getId()));
             m.put("code", c.getCategoryCode());
             m.put("categoryCode", c.getCategoryCode());
             m.put("name", c.getDisplayName());
@@ -161,21 +224,43 @@ public class PassengerBookingController {
             m.put("minimumFare", c.getMinimumFare());
             m.put("minimumKm", c.getMinimumKm());
             m.put("driverAllowance", c.getDriverAllowance());
+            m.put("eta", "3 mins");
             m.put("isActive", Boolean.TRUE.equals(c.getActive()));
             m.put("active", Boolean.TRUE.equals(c.getActive()));
             m.put("displayOrder", c.getDisplayOrder());
             return m;
         }).toList();
 
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "data", data
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("vehicles", data);
+        response.put("data", data);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/services")
-    public ResponseEntity<List<PassengerServiceEntity>> getServices() {
-        return ResponseEntity.ok(serviceRepository.findByActiveTrueOrderByDisplayOrderAsc());
+    public ResponseEntity<Map<String, Object>> getServices() {
+        List<PassengerServiceEntity> entities = serviceRepository.findByActiveTrueOrderByDisplayOrderAsc();
+        List<Map<String, Object>> services = entities.stream().map(s -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", s.getServiceCode() != null ? s.getServiceCode().toLowerCase().replace("_", "-") : String.valueOf(s.getId()));
+            m.put("code", s.getServiceCode());
+            m.put("serviceCode", s.getServiceCode());
+            m.put("name", s.getDisplayName());
+            m.put("displayName", s.getDisplayName());
+            m.put("description", s.getDescription());
+            m.put("iconUrl", s.getIconUrl());
+            m.put("isActive", Boolean.TRUE.equals(s.getActive()));
+            m.put("active", Boolean.TRUE.equals(s.getActive()));
+            m.put("displayOrder", s.getDisplayOrder());
+            return m;
+        }).toList();
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("services", services);
+        resp.put("data", services);
+        return ResponseEntity.ok(resp);
     }
 
     @GetMapping("/vehicles/available")
