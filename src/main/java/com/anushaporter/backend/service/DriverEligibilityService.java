@@ -118,7 +118,11 @@ public class DriverEligibilityService {
             return "UNKNOWN";
         }
         String s = raw.toLowerCase().replaceAll("[^a-z0-9]", "");
-        if (s.contains("2wheel") || s.contains("twowheel") || s.contains("bike") || s.contains("scooter") || s.contains("motorcycle") || s.equals("1")) {
+        if (s.contains("2wheel") || s.contains("twowheel") || s.contains("bike") || s.contains("scooter")
+                || s.contains("motorcycle") || s.contains("moto") || s.contains("courier") || s.contains("parcel")
+                || s.contains("activa") || s.contains("jupiter") || s.contains("platina") || s.contains("splendor")
+                || s.contains("pulsar") || s.contains("apache") || s.contains("dio") || s.contains("shine")
+                || s.equals("1")) {
             return "TWO_WHEELER";
         }
         if (s.contains("3wheel") || s.contains("threewheel") || s.contains("auto") || s.contains("rickshaw") || s.contains("cng") || s.equals("2")) {
@@ -133,6 +137,6 @@ public class DriverEligibilityService {
         if (s.contains("407") || s.contains("tata407") || s.contains("14ft") || s.contains("truck") || s.contains("eicher") || s.contains("large") || s.equals("5")) {
             return "TATA_407";
         }
-        return s;
+        return "UNKNOWN";
     }
 }

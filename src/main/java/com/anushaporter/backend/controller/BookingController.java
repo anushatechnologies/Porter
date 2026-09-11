@@ -279,7 +279,9 @@ public class BookingController {
 
             // Automatically initiate driver auto-assignment if status is searching/pending
             String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "";
-            if (currentStatus.equals("searching") || currentStatus.equals("pending") || currentStatus.equals("created")) {
+            if (autoAssignmentService != null && (currentStatus.equals("searching") || currentStatus.equals("pending")
+                    || currentStatus.equals("created") || currentStatus.equals("placed") || currentStatus.equals("unassigned")
+                    || currentStatus.equals("requested"))) {
                 autoAssignmentService.startAutoAssignment(order.getBookingId());
             }
 
@@ -526,6 +528,7 @@ public class BookingController {
                 response.put("assignedDriver", driver);
                 response.put("driverInfo", driver);
             }
+            response.put("hasAssignedDriver", driver != null);
 
             // Cancellation availability flags
             boolean canCancel = isOrderCancellable(order, driverEntity);
@@ -1081,13 +1084,13 @@ public class BookingController {
         }
 
         String targetBookingId = bookingId;
-        String status = "in_transit";
-        String driverName = "Ramesh Kumar";
-        String driverPhone = "+919876543210";
-        String driverVehicleNumber = "TS 09 AB 1234";
-        String serviceName = "Tata Ace";
-        String driverId = "DRV-12";
-        Double driverRating = 4.9;
+        String status = "searching";
+        String driverName = null;
+        String driverPhone = null;
+        String driverVehicleNumber = null;
+        String serviceName = "Standard Delivery";
+        String driverId = null;
+        Double driverRating = null;
         String profilePhotoUri = null;
         boolean hasAssignedDriver = false;
         double lat = 17.4495;
@@ -1153,68 +1156,92 @@ public class BookingController {
                 if (o.getDriverId() != null) driverId = o.getDriverId();
                 if (o.getDriverPhone() != null) driverPhone = o.getDriverPhone();
                 if (o.getDriverVehicleNumber() != null) driverVehicleNumber = o.getDriverVehicleNumber();
+                if (driverRating == null) driverRating = 4.8;
+            }
+        }
+
+        // Check if Packers & Movers order (strictly dedicated packers shift, NOT general courier)
+        boolean isPackers = (serviceName != null && (serviceName.toLowerCase().contains("packer") || serviceName.toLowerCase().contains("shift") || serviceName.toLowerCase().contains("14ft") || serviceName.toLowerCase().contains("bhk")))
+                || targetBookingId.startsWith("PM-");
+        if (serviceName != null) {
+            String sLower = serviceName.toLowerCase();
+            if (sLower.contains("2 wheel") || sLower.contains("twowheel") || sLower.contains("bike") || sLower.contains("scooter") || sLower.contains("moto") || sLower.contains("3 wheel") || sLower.contains("auto")) {
+                isPackers = false;
             }
         }
 
         int stageNumber = 1;
         String stageStatus = status != null ? status.toLowerCase() : "searching";
 
-        boolean isDriverNotFound = "driver_not_found".equals(status);
+        boolean isDriverNotFound = "driver_not_found".equals(status) || "auto_assign_failed".equals(status);
         boolean isDelivered = "delivered".equals(status) || "completed".equals(status);
         boolean isPaymentPending = "payment_confirmation_pending".equals(status);
         boolean isOtpVerified = otpVerified || isPaymentPending || isDelivered;
 
         if (stageStatus.contains("delivered") || stageStatus.contains("completed")) {
-            stageNumber = 8;
+            stageNumber = isPackers ? 8 : 6;
         } else if (stageStatus.contains("unload") || stageStatus.contains("reassembly") || stageStatus.contains("payment")) {
-            stageNumber = 7;
+            stageNumber = isPackers ? 7 : 5;
         } else if (stageStatus.contains("in_transit") || stageStatus.contains("on_the_way")) {
-            stageNumber = 6;
-        } else if (stageStatus.contains("loading")) {
-            stageNumber = 5;
-        } else if (stageStatus.contains("packing")) {
-            stageNumber = 4;
+            stageNumber = isPackers ? 6 : 4;
+        } else if (stageStatus.contains("loading") || stageStatus.contains("packing")) {
+            stageNumber = isPackers ? 5 : 3;
         } else if (stageStatus.contains("arrived") || stageStatus.contains("driver_reached")) {
             stageNumber = 3;
-        } else if (stageStatus.contains("assigned") || stageStatus.contains("accepted") || stageStatus.contains("team") || stageStatus.contains("confirmed")) {
+        } else if (hasAssignedDriver || stageStatus.contains("assigned") || stageStatus.contains("accepted") || stageStatus.contains("team")) {
             stageNumber = 2;
+        } else {
+            stageNumber = 1;
         }
 
-        // Check if Packers & Movers order
-        boolean isPackers = (serviceName != null && (serviceName.toLowerCase().contains("packer") || serviceName.toLowerCase().contains("shift") || serviceName.toLowerCase().contains("14ft") || serviceName.toLowerCase().contains("bhk")))
-                || (orderOpt.isPresent() && orderOpt.get().getGoodsCategory() != null && orderOpt.get().getGoodsCategory().toLowerCase().contains("household"))
-                || targetBookingId.startsWith("PM-");
-
         String stageLabel = "Booking Confirmed";
-        String stageDescription = "Order received & moving schedule locked";
-        if (stageNumber == 2) {
-            stageLabel = "Team Assigned";
-            stageDescription = "Supervisor & movers assigned to order";
-        } else if (stageNumber == 3) {
-            stageLabel = "Team Arrived at Pickup";
-            stageDescription = "Truck & crew reached origin";
-        } else if (stageNumber == 4) {
-            stageLabel = "Packing Completed";
-            stageDescription = "Wrapping furniture, boxes & electronics";
-        } else if (stageNumber == 5) {
-            stageLabel = "Loading Completed";
-            stageDescription = "Loading wrapped items safely into truck";
-        } else if (stageNumber == 6) {
-            stageLabel = "In Transit";
-            stageDescription = "Truck traveling to destination";
-        } else if (stageNumber == 7) {
-            stageLabel = "Unloading & Reassembly";
-            stageDescription = "Unloading at destination & assembling beds/wardrobes";
-        } else if (stageNumber >= 8) {
-            stageLabel = "Move Completed";
-            stageDescription = "Verified via customer Delivery OTP";
+        String stageDescription = "Order received & searching for nearby driver partner";
+        if (isPackers) {
+            stageLabel = "Booking Confirmed";
+            stageDescription = "Order received & moving schedule locked";
+            if (stageNumber == 2) {
+                stageLabel = "Team Assigned";
+                stageDescription = "Supervisor & movers assigned to order";
+            } else if (stageNumber == 3) {
+                stageLabel = "Team Arrived at Pickup";
+                stageDescription = "Truck & crew reached origin";
+            } else if (stageNumber == 4) {
+                stageLabel = "Packing Completed";
+                stageDescription = "Wrapping furniture, boxes & electronics";
+            } else if (stageNumber == 5) {
+                stageLabel = "Loading Completed";
+                stageDescription = "Loading wrapped items safely into truck";
+            } else if (stageNumber == 6) {
+                stageLabel = "In Transit";
+                stageDescription = "Truck traveling to destination";
+            } else if (stageNumber == 7) {
+                stageLabel = "Unloading & Reassembly";
+                stageDescription = "Unloading at destination & assembling beds/wardrobes";
+            } else if (stageNumber >= 8) {
+                stageLabel = "Move Completed";
+                stageDescription = "Verified via customer Delivery OTP";
+            }
+        } else {
+            if (!hasAssignedDriver && (stageNumber <= 1 || "searching".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status))) {
+                stageLabel = "Searching for Driver Partner";
+                stageDescription = "Notifying nearby online drivers...";
+            } else if (stageNumber == 2 || "assigned".equalsIgnoreCase(status) || "accepted".equalsIgnoreCase(status)) {
+                stageLabel = "Driver Assigned";
+                stageDescription = (driverName != null ? driverName : "Driver partner") + " has accepted your booking and is heading to pickup";
+            } else if (stageNumber == 3 || "arrived".equalsIgnoreCase(status) || "driver_reached".equalsIgnoreCase(status)) {
+                stageLabel = "Driver Reached Drop Location";
+                stageDescription = "Driver partner has reached location";
+            } else if (stageNumber >= 6 || isDelivered) {
+                stageLabel = "Order Delivered";
+                stageDescription = "Verified via customer Delivery OTP";
+            }
         }
 
         List<Map<String, Object>> timeline;
         if (isPackers) {
             timeline = Arrays.asList(
                     createPackerTimelineStage(1, "Booking Confirmed", stageNumber >= 1),
-                    createPackerTimelineStage(2, "Team Assigned", stageNumber >= 2),
+                    createPackerTimelineStage(2, "Team Assigned", hasAssignedDriver || stageNumber >= 2),
                     createPackerTimelineStage(3, "Team Arrived at Pickup", stageNumber >= 3),
                     createPackerTimelineStage(4, "Packing Completed", stageNumber >= 4),
                     createPackerTimelineStage(5, "Loading Completed", stageNumber >= 5),
@@ -1225,7 +1252,7 @@ public class BookingController {
         } else {
             timeline = Arrays.asList(
                     createTimelineStage("booking_confirmed",            "Booking Confirmed",               stageNumber >= 1),
-                    createTimelineStage("driver_assigned",              "Driver Assigned",                 stageNumber >= 2),
+                    createTimelineStage("driver_assigned",              "Driver Assigned",                 hasAssignedDriver || stageNumber >= 2),
                     createTimelineStage("driver_reached",               "Driver Reached Drop Location",    stageNumber >= 3),
                     createTimelineStage("otp_verified",                 "Delivery OTP Verified",           isOtpVerified),
                     createTimelineStage("payment_confirmation_pending", "Payment Confirmation",            isPaymentPending || isDelivered),
@@ -1233,29 +1260,45 @@ public class BookingController {
             );
         }
 
-        Map<String, Object> driverMap = new LinkedHashMap<>();
-        driverMap.put("id", isPackers && !hasAssignedDriver ? "SUP-102" : driverId);
-        driverMap.put("driverId", isPackers && !hasAssignedDriver ? "SUP-102" : driverId);
-        driverMap.put("name", isPackers && !hasAssignedDriver ? "Manjunath (Supervisor)" : driverName);
-        if (isPackers && !hasAssignedDriver) {
+        Map<String, Object> driverMap = null;
+        if (hasAssignedDriver) {
+            driverMap = new LinkedHashMap<>();
+            driverMap.put("id", driverId);
+            driverMap.put("driverId", driverId);
+            driverMap.put("name", driverName);
+            driverMap.put("role", isPackers ? "Shifting Supervisor" : "Driver Partner");
+            driverMap.put("phone", driverPhone != null ? driverPhone : "");
+            driverMap.put("vehicleNumber", driverVehicleNumber != null ? driverVehicleNumber : "");
+            driverMap.put("vehicleType", serviceName != null ? serviceName : "");
+            driverMap.put("vehicleLabel", serviceName != null ? serviceName : "");
+            if (isPackers) {
+                driverMap.put("crewCount", 4);
+                driverMap.put("helpersCount", 4);
+            }
+            driverMap.put("rating", driverRating != null ? driverRating : 4.9);
+            driverMap.put("latitude", lat);
+            driverMap.put("longitude", lng);
+            driverMap.put("heading", 120);
+            if (profilePhotoUri != null) {
+                driverMap.put("profilePhotoUri", profilePhotoUri);
+            }
+        } else if (isPackers && targetBookingId.startsWith("PM-")) {
+            // Unassigned demo supervisor placeholder ONLY for dedicated Packers shifts (PM- bookings)
+            driverMap = new LinkedHashMap<>();
+            driverMap.put("id", "SUP-102");
+            driverMap.put("driverId", "SUP-102");
+            driverMap.put("name", "Manjunath (Supervisor)");
             driverMap.put("role", "Shifting Supervisor");
-        } else {
-            driverMap.put("role", "Driver Partner");
-        }
-        driverMap.put("phone", isPackers && !hasAssignedDriver ? "+919845012345" : driverPhone);
-        driverMap.put("vehicleNumber", isPackers && !hasAssignedDriver ? "KA-05-AB-7890" : driverVehicleNumber);
-        driverMap.put("vehicleType", isPackers && !hasAssignedDriver ? "Canter 14ft" : serviceName);
-        driverMap.put("vehicleLabel", serviceName);
-        if (isPackers) {
+            driverMap.put("phone", "+919845012345");
+            driverMap.put("vehicleNumber", "KA-05-AB-7890");
+            driverMap.put("vehicleType", "Canter 14ft");
+            driverMap.put("vehicleLabel", serviceName);
             driverMap.put("crewCount", 4);
             driverMap.put("helpersCount", 4);
-        }
-        driverMap.put("rating", driverRating != null ? driverRating : 4.9);
-        driverMap.put("latitude", lat);
-        driverMap.put("longitude", lng);
-        driverMap.put("heading", 120);
-        if (profilePhotoUri != null) {
-            driverMap.put("profilePhotoUri", profilePhotoUri);
+            driverMap.put("rating", 4.9);
+            driverMap.put("latitude", lat);
+            driverMap.put("longitude", lng);
+            driverMap.put("heading", 120);
         }
 
         Map<String, Object> locationMap = new LinkedHashMap<>();
@@ -1286,14 +1329,15 @@ public class BookingController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("bookingId", targetBookingId);
-        response.put("status", isPackers ? "IN_TRANSIT" : status);
+        response.put("status", isPackers && !hasAssignedDriver && targetBookingId.startsWith("PM-") ? "IN_TRANSIT" : status);
         response.put("stageNumber", stageNumber);
         response.put("stageLabel", stageLabel);
         response.put("stageDescription", stageDescription);
+        response.put("hasAssignedDriver", hasAssignedDriver);
         response.put("isDelivered", isDelivered);
         response.put("deliveryOtp", liveOtp);
         response.put("otp", liveOtp);
-        response.put("eta", "25 mins");
+        response.put("eta", (hasAssignedDriver || isPackers) ? "25 mins" : "Finding driver...");
         response.put("driverNotFound", isDriverNotFound);
         response.put("otpVerified", isOtpVerified);
         response.put("paymentConfirmed", paymentConfirmed || isDelivered);

@@ -198,7 +198,7 @@ public class PassengerBookingController {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
-        response.put("message", "Thank you for your rating!");
+        response.put("message", "Review submitted successfully");
         response.put("booking", rated);
         return ResponseEntity.ok(response);
     }
