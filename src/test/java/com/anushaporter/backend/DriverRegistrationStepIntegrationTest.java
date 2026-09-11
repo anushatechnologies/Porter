@@ -224,14 +224,37 @@ public class DriverRegistrationStepIntegrationTest {
                         .content(objectMapper.writeValueAsString(finalSubmit)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.isRegistered", is(true)))
+                .andExpect(jsonPath("$.registrationCompleted", is(true)))
+                .andExpect(jsonPath("$.hasDraft", is(false)))
+                .andExpect(jsonPath("$.registrationStep", is(5)))
                 .andExpect(jsonPath("$.kycStatus", is("approved")));
 
         Driver finalInDb = driverRepository.findByPhone(testPhone).orElseThrow();
         assertEquals("approved", finalInDb.getKyc());
         assertEquals("approved", finalInDb.getVerificationStatus());
+        assertEquals(5, finalInDb.getRegistrationStep());
         assertEquals("Ramesh Kumar", finalInDb.getName());
         assertEquals("DL1234567890ABC", finalInDb.getLicenseNumber());
         assertEquals("50100012345678", finalInDb.getAccountNumber());
+
+        // Progress check after completion returns hasDraft: false, isRegistered: true, registrationStep: 5
+        mockMvc.perform(get("/api/drivers/register/progress")
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isRegistered", is(true)))
+                .andExpect(jsonPath("$.registrationCompleted", is(true)))
+                .andExpect(jsonPath("$.hasDraft", is(false)))
+                .andExpect(jsonPath("$.registrationStep", is(5)))
+                .andExpect(jsonPath("$.kycStatus", is("approved")));
+
+        // Profile check returns isRegistered: true, registrationStep: 5
+        mockMvc.perform(get("/api/drivers/me")
+                        .header("Authorization", testToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isRegistered", is(true)))
+                .andExpect(jsonPath("$.registrationCompleted", is(true)))
+                .andExpect(jsonPath("$.registrationStep", is(5)));
     }
 
     @Test
@@ -379,5 +402,71 @@ public class DriverRegistrationStepIntegrationTest {
                 .andExpect(jsonPath("$.dob", is("1998-11-20")))
                 .andExpect(jsonPath("$.gender", is("Female")))
                 .andExpect(jsonPath("$.email", is("ananya.verma@example.com")));
+    }
+
+    @Test
+    public void testOldDriverLoginAndProgress_HealsRegistrationStepTo5AndNeverPromptsAgain() throws Exception {
+        // Create an old driver in DB whose registrationStep was left as 2, 3, or null
+        Driver oldDriver = new Driver();
+        oldDriver.setName("Old Suresh");
+        oldDriver.setPhone("9876599999");
+        oldDriver.setEmail("old.suresh@anushaporter.com");
+        oldDriver.setKyc("approved");
+        oldDriver.setVerificationStatus("approved");
+        oldDriver.setRegistrationStep(2); // old bug left step as 2
+        oldDriver.setVehicle("Auto");
+        oldDriver.setVehicleType("Auto");
+        driverRepository.save(oldDriver);
+
+        // AppUser corresponding to old driver
+        AppUser oldUser = new AppUser();
+        oldUser.setName("Old Suresh");
+        oldUser.setPhone("9876599999");
+        oldUser.setEmail("old.suresh@anushaporter.com");
+        oldUser.setRole("Driver");
+        appUserRepository.save(oldUser);
+
+        String oldToken = "Bearer " + jwtUtil.generateToken("old.suresh@anushaporter.com");
+
+        // 1. Old driver logs in via POST /api/auth/verify-otp
+        Map<String, String> otpBody = new HashMap<>();
+        otpBody.put("phone", "9876599999");
+        otpBody.put("mode", "login");
+
+        mockMvc.perform(post("/api/auth/verify-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(otpBody)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.isRegistered", is(true)))
+                .andExpect(jsonPath("$.registrationCompleted", is(true)))
+                .andExpect(jsonPath("$.hasDraft", is(false)))
+                .andExpect(jsonPath("$.registrationStep", is(5)))
+                .andExpect(jsonPath("$.user.isRegistered", is(true)))
+                .andExpect(jsonPath("$.user.registrationStep", is(5)));
+
+        // 2. Old driver checks progress: must return isRegistered: true, registrationStep: 5, hasDraft: false
+        mockMvc.perform(get("/api/drivers/register/progress")
+                        .header("Authorization", oldToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.isRegistered", is(true)))
+                .andExpect(jsonPath("$.registrationCompleted", is(true)))
+                .andExpect(jsonPath("$.hasDraft", is(false)))
+                .andExpect(jsonPath("$.registrationStep", is(5)))
+                .andExpect(jsonPath("$.kycStatus", is("approved")));
+
+        // 3. Old driver checks profile: registrationStep is 5
+        mockMvc.perform(get("/api/drivers/me")
+                        .header("Authorization", oldToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isRegistered", is(true)))
+                .andExpect(jsonPath("$.registrationCompleted", is(true)))
+                .andExpect(jsonPath("$.registrationStep", is(5)));
+
+        // 4. DB is healed so registrationStep is permanently 5
+        Driver healed = driverRepository.findByPhone("9876599999").orElseThrow();
+        assertEquals(5, healed.getRegistrationStep());
+        assertTrue(healed.isFullyRegistered());
     }
 }

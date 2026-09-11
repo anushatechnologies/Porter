@@ -178,4 +178,37 @@ public class DriverAuthService {
         }
         return "offline";
     }
+
+    /**
+     * Checks if a driver has completed registration and is approved.
+     */
+    public boolean isFullyRegistered(Driver driver) {
+        return driver != null && driver.isFullyRegistered();
+    }
+
+    /**
+     * Ensures an approved or completed driver has registrationStep set to 5 and kyc set to approved.
+     * Persists updates to the database so old drivers are never prompted with registration steps.
+     */
+    public Driver ensureFullyRegisteredStatus(Driver driver) {
+        if (driver != null && driver.isFullyRegistered()) {
+            boolean modified = false;
+            if (!"approved".equalsIgnoreCase(driver.getKyc())) {
+                driver.setKyc("approved");
+                modified = true;
+            }
+            if (!"approved".equalsIgnoreCase(driver.getVerificationStatus())) {
+                driver.setVerificationStatus("approved");
+                modified = true;
+            }
+            if (driver.getRegistrationStep() == null || driver.getRegistrationStep() < 5) {
+                driver.setRegistrationStep(5);
+                modified = true;
+            }
+            if (modified) {
+                return driverRepository.save(driver);
+            }
+        }
+        return driver;
+    }
 }

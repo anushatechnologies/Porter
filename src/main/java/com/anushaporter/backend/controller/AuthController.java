@@ -1,6 +1,7 @@
 package com.anushaporter.backend.controller;
 
 import com.anushaporter.backend.model.AppUser;
+import com.anushaporter.backend.model.Driver;
 import com.anushaporter.backend.repository.AppUserRepository;
 import com.anushaporter.backend.service.EmailService;
 import com.anushaporter.backend.util.JwtUtil;
@@ -26,6 +27,9 @@ public class AuthController {
 
     @Autowired(required = false)
     private com.anushaporter.backend.repository.DriverRepository driverRepository;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.DriverAuthService driverAuthService;
 
     @Autowired
     private EmailService emailService;
@@ -80,6 +84,8 @@ public class AuthController {
                 userProfile.put("phone", user.getPhone());
                 userProfile.put("avatar", "https://api.dicebear.com/7.x/initials/svg?seed="
                         + (user.getName() != null ? user.getName().replace(" ", "") : "User"));
+
+                enrichDriverInfo(user, user.getPhone(), userProfile, response);
 
                 String token = jwtUtil.generateToken(user.getEmail() != null ? user.getEmail() : user.getPhone());
 
@@ -282,17 +288,6 @@ public class AuthController {
             }
         }
 
-        // If phone or email matches an existing Driver profile, ensure role is recognized as Driver
-        if (driverRepository != null) {
-            boolean isDriver = driverRepository.findByPhone(localPhone).isPresent()
-                    || (user.getEmail() != null && !user.getEmail().isBlank() && driverRepository.findByEmail(user.getEmail()).isPresent())
-                    || (verifiedPhone != null && driverRepository.findByPhone(verifiedPhone).isPresent());
-            if (isDriver && !"Driver".equalsIgnoreCase(user.getRole())) {
-                user.setRole("Driver");
-                userRepository.save(user);
-            }
-        }
-
         String emailKey = (user.getEmail() != null && !isPlaceholderEmail(user.getEmail(), user.getPhone()))
                 ? user.getEmail()
                 : (user.getPhone() != null ? user.getPhone() : localPhone);
@@ -308,6 +303,8 @@ public class AuthController {
         userProfile.put("role", user.getRole() != null ? user.getRole() : "Customer");
         userProfile.put("isPhoneVerified", true);
 
+        enrichDriverInfo(user, verifiedPhone != null ? verifiedPhone : localPhone, userProfile, response);
+
         response.put("success", true);
         response.put("accessToken", accessToken);
         response.put("token", accessToken);
@@ -315,6 +312,83 @@ public class AuthController {
         response.put("user", userProfile);
 
         return ResponseEntity.ok(response);
+    }
+
+    private void enrichDriverInfo(AppUser user, String phone, Map<String, Object> userProfile, Map<String, Object> response) {
+        if (driverRepository == null) return;
+        Driver driver = null;
+        if (driverAuthService != null) {
+            if (phone != null && !phone.isBlank()) {
+                driver = driverAuthService.resolveDriverByIdentifier(phone);
+            }
+            if (driver == null && user.getPhone() != null && !user.getPhone().isBlank()) {
+                driver = driverAuthService.resolveDriverByIdentifier(user.getPhone());
+            }
+            if (driver == null && user.getEmail() != null && !user.getEmail().isBlank()) {
+                driver = driverAuthService.resolveDriverByIdentifier(user.getEmail());
+            }
+        }
+        if (driver == null && phone != null && !phone.isBlank()) {
+            String clean = phone.replaceAll("\\D+", "");
+            if (clean.length() > 10) clean = clean.substring(clean.length() - 10);
+            if (!clean.isEmpty()) {
+                driver = driverRepository.findByPhone(clean).orElse(null);
+                if (driver == null) driver = driverRepository.findByPhone("+91" + clean).orElse(null);
+                if (driver == null) driver = driverRepository.findByPhone("91" + clean).orElse(null);
+            }
+            if (driver == null) driver = driverRepository.findByPhone(phone).orElse(null);
+        }
+        if (driver == null && user.getPhone() != null && !user.getPhone().isBlank()) {
+            String clean = user.getPhone().replaceAll("\\D+", "");
+            if (clean.length() > 10) clean = clean.substring(clean.length() - 10);
+            if (!clean.isEmpty()) {
+                driver = driverRepository.findByPhone(clean).orElse(null);
+                if (driver == null) driver = driverRepository.findByPhone("+91" + clean).orElse(null);
+                if (driver == null) driver = driverRepository.findByPhone("91" + clean).orElse(null);
+            }
+            if (driver == null) driver = driverRepository.findByPhone(user.getPhone()).orElse(null);
+        }
+        if (driver == null && user.getEmail() != null && !user.getEmail().isBlank()) {
+            driver = driverRepository.findByEmailIgnoreCase(user.getEmail()).orElse(null);
+            if (driver == null) driver = driverRepository.findByEmail(user.getEmail()).orElse(null);
+        }
+
+        if (driver != null) {
+            if (!"Driver".equalsIgnoreCase(user.getRole())) {
+                user.setRole("Driver");
+                userRepository.save(user);
+                userProfile.put("role", "Driver");
+            }
+            if (driverAuthService != null) {
+                driver = driverAuthService.ensureFullyRegisteredStatus(driver);
+            } else if (driver.isFullyRegistered()) {
+                boolean mod = false;
+                if (!"approved".equalsIgnoreCase(driver.getKyc())) { driver.setKyc("approved"); mod = true; }
+                if (!"approved".equalsIgnoreCase(driver.getVerificationStatus())) { driver.setVerificationStatus("approved"); mod = true; }
+                if (driver.getRegistrationStep() == null || driver.getRegistrationStep() < 5) { driver.setRegistrationStep(5); mod = true; }
+                if (mod) driver = driverRepository.save(driver);
+            }
+
+            boolean isReg = driver.isFullyRegistered();
+            int step = isReg ? 5 : (driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
+            String driverIdStr = driver.getId() != null ? driver.getId().toString() : "";
+
+            userProfile.put("driverId", driverIdStr);
+            userProfile.put("isRegistered", isReg);
+            userProfile.put("registrationCompleted", isReg);
+            userProfile.put("hasDraft", !isReg);
+            userProfile.put("registrationStep", step);
+            userProfile.put("nextStep", step);
+            userProfile.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "draft");
+
+            response.put("driverId", driverIdStr);
+            response.put("isRegistered", isReg);
+            response.put("registrationCompleted", isReg);
+            response.put("hasDraft", !isReg);
+            response.put("registrationStep", step);
+            response.put("nextStep", step);
+            response.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "draft");
+        }
     }
 
     public static boolean isPlaceholderEmail(String email, String phone) {

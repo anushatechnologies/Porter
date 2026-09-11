@@ -198,4 +198,20 @@ public class Driver {
     public void setServiceType(String serviceType) {
         this.serviceType = serviceType;
     }
+
+    public boolean isFullyRegistered() {
+        if ("approved".equalsIgnoreCase(kyc) || "verified".equalsIgnoreCase(kyc)) {
+            return true;
+        }
+        if ("approved".equalsIgnoreCase(verificationStatus) || "verified".equalsIgnoreCase(verificationStatus)) {
+            return true;
+        }
+        if (registrationStep != null && registrationStep >= 5) {
+            return true;
+        }
+        if (trips != null && trips > 0) {
+            return true;
+        }
+        return false;
+    }
 }

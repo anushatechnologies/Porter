@@ -152,10 +152,18 @@ public class DriverAPIController {
             return ResponseEntity.status(401)
                     .body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
         }
+
+        driver = driverAuthService.ensureFullyRegisteredStatus(driver);
+        boolean isFullyRegistered = driver != null && driver.isFullyRegistered();
+        int regStep = isFullyRegistered ? 5 : (driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
+
         Map<String, Object> map = new java.util.LinkedHashMap<>();
         map.put("success", true);
         map.put("id", driver.getId());
         map.put("driverId", driver.getId() != null ? driver.getId().toString() : "");
+        map.put("isRegistered", isFullyRegistered);
+        map.put("registrationCompleted", isFullyRegistered);
+        map.put("hasDraft", !isFullyRegistered);
         map.put("name", driver.getName() != null ? driver.getName() : "");
         map.put("phone", driver.getPhone() != null ? driver.getPhone() : "");
         String rawEmail = driver.getEmail() != null ? driver.getEmail() : "";
@@ -171,7 +179,8 @@ public class DriverAPIController {
         map.put("status", driver.getStatus() != null ? driver.getStatus().toLowerCase() : "offline");
         map.put("kyc", driver.getKyc() != null ? driver.getKyc() : "pending");
         map.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "pending");
-        map.put("registrationStep", driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
+        map.put("registrationStep", regStep);
+        map.put("nextStep", regStep);
         map.put("rating", driver.getRating() != null ? driver.getRating() : "4.8");
         String vType = driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType()
                 : (driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle() : "Vehicle");
@@ -1168,23 +1177,30 @@ public class DriverAPIController {
             try { stepParam = Integer.parseInt(text(payload, "step")); } catch (Exception ignored) {}
         }
 
-        if (isSaveAndNext) {
+        boolean alreadyFullyRegistered = driver != null && driver.isFullyRegistered();
+
+        if (alreadyFullyRegistered) {
+            driver.setKyc("approved");
+            driver.setVerificationStatus("approved");
+            driver.setRegistrationStep(5);
+        } else if (isSaveAndNext) {
             int currentStepVal = stepParam != null ? stepParam : (driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
             driver.setRegistrationStep(currentStepVal + 1);
             if (driver.getKyc() == null || "draft".equalsIgnoreCase(driver.getKyc()) || "in_progress".equalsIgnoreCase(driver.getKyc())) {
                 driver.setKyc("draft");
             }
         } else {
-            if (stepParam != null) {
-                driver.setRegistrationStep(stepParam);
-            }
             boolean isFinalSubmit = Boolean.TRUE.equals(payload.get("submit"))
                     || Boolean.TRUE.equals(payload.get("isFinalSubmit"))
-                    || "submit".equalsIgnoreCase(String.valueOf(payload.get("action")));
+                    || "submit".equalsIgnoreCase(String.valueOf(payload.get("action")))
+                    || (stepParam != null && stepParam >= 4);
             if (isFinalSubmit || (!isSaveAndNext && (driver.getKyc() == null || !"draft".equalsIgnoreCase(text(payload, "kyc"))))) {
                 // Auto-approve driver registration; no need of admin approval
                 driver.setKyc("approved");
                 driver.setVerificationStatus("approved");
+                driver.setRegistrationStep(5);
+            } else if (stepParam != null) {
+                driver.setRegistrationStep(stepParam);
             } else if (driver.getKyc() == null) {
                 driver.setKyc("draft");
             }
@@ -1201,15 +1217,20 @@ public class DriverAPIController {
         }
 
         Driver saved = driverRepository.save(driver);
+        boolean isComplete = saved.isFullyRegistered();
+        int savedStep = isComplete ? 5 : (saved.getRegistrationStep() != null ? saved.getRegistrationStep() : 1);
 
         Map<String, Object> resp = new java.util.LinkedHashMap<>();
         resp.put("success", true);
-        resp.put("message", isSaveAndNext ? "Step data saved successfully" : "Driver profile created and approved successfully");
+        resp.put("message", isSaveAndNext ? "Step data saved successfully" : (alreadyFullyRegistered ? "Driver registration details updated successfully" : "Driver profile created and approved successfully"));
         resp.put("driverId", saved.getId().toString());
         resp.put("id", saved.getId().toString());
         resp.put("kycStatus", saved.getKyc());
-        resp.put("registrationStep", saved.getRegistrationStep());
-        resp.put("nextStep", saved.getRegistrationStep() != null ? saved.getRegistrationStep() : 1);
+        resp.put("isRegistered", isComplete);
+        resp.put("registrationCompleted", isComplete);
+        resp.put("hasDraft", !isComplete);
+        resp.put("registrationStep", savedStep);
+        resp.put("nextStep", savedStep);
         resp.put("vehicle", saved.getVehicle());
         resp.put("vehicleType", saved.getVehicleType());
         resp.put("serviceType", saved.getServiceType());
@@ -1241,8 +1262,11 @@ public class DriverAPIController {
             String realPhoto = appUser.getProfilePhotoUri() != null && !appUser.getProfilePhotoUri().contains("dicebear.com") ? appUser.getProfilePhotoUri() : "";
             Map<String, Object> fallback = new java.util.LinkedHashMap<>();
             fallback.put("success", true);
+            fallback.put("isRegistered", false);
+            fallback.put("registrationCompleted", false);
             fallback.put("hasDraft", false);
             fallback.put("registrationStep", 1);
+            fallback.put("nextStep", 1);
             fallback.put("kycStatus", "draft");
             fallback.put("name", appUser.getName() != null ? appUser.getName() : "");
             fallback.put("phone", appUser.getPhone() != null ? appUser.getPhone() : "");
@@ -1255,8 +1279,9 @@ public class DriverAPIController {
             return ResponseEntity.ok(fallback);
         }
 
-        boolean isFullyRegistered = driver != null &&
-                ("approved".equalsIgnoreCase(driver.getKyc()) || "verified".equalsIgnoreCase(driver.getKyc()));
+        driver = driverAuthService.ensureFullyRegisteredStatus(driver);
+        boolean isFullyRegistered = driver != null && driver.isFullyRegistered();
+        int progressStep = isFullyRegistered ? 5 : (driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
 
         String rawPhoto = driver.getProfilePhotoUri();
         if (rawPhoto != null && (rawPhoto.contains("dicebear.com") || rawPhoto.contains("ui-avatars.com"))) {
@@ -1276,9 +1301,12 @@ public class DriverAPIController {
 
         Map<String, Object> data = new java.util.LinkedHashMap<>();
         data.put("success", true);
+        data.put("isRegistered", isFullyRegistered);
+        data.put("registrationCompleted", isFullyRegistered);
         data.put("hasDraft", !isFullyRegistered);
         data.put("driverId", driver.getId());
-        data.put("registrationStep", driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
+        data.put("registrationStep", progressStep);
+        data.put("nextStep", progressStep);
         data.put("kycStatus", driver.getKyc() != null ? driver.getKyc() : "draft");
         data.put("name", driver.getName() != null ? driver.getName() : (appUser.getName() != null ? appUser.getName() : ""));
         data.put("phone", driver.getPhone() != null ? driver.getPhone() : (appUser.getPhone() != null ? appUser.getPhone() : ""));

@@ -344,7 +344,16 @@ public class DriverController {
             if (updated.getIfscCode() != null) existing.setIfscCode(updated.getIfscCode());
             if (updated.getStatus() != null) existing.setStatus(driverAuthService.normalizeStatus(updated.getStatus()));
             if (updated.getKyc() != null) existing.setKyc(updated.getKyc());
-            if (updated.getRegistrationStep() != null) existing.setRegistrationStep(updated.getRegistrationStep());
+            if (updated.getRegistrationStep() != null) {
+                if (!existing.isFullyRegistered() || updated.getRegistrationStep() >= 5) {
+                    existing.setRegistrationStep(updated.getRegistrationStep());
+                }
+            }
+            if (existing.isFullyRegistered()) {
+                existing.setRegistrationStep(5);
+                existing.setKyc("approved");
+                existing.setVerificationStatus("approved");
+            }
 
             // Handle image updates and clean up old S3 images if replaced
             if (updated.getProfilePhotoUri() != null && !updated.getProfilePhotoUri().equals(existing.getProfilePhotoUri())) {
@@ -409,10 +418,20 @@ public class DriverController {
 
     @GetMapping("/{id:[0-9]+}")
     public ResponseEntity<?> getById(@PathVariable Long id) {
-        return repository.findById(id).map(d -> {
+        return repository.findById(id).map(driverEntity -> {
+            Driver d = driverEntity;
+            if (driverAuthService != null) {
+                d = driverAuthService.ensureFullyRegisteredStatus(d);
+            }
+            boolean isFullyRegistered = d.isFullyRegistered();
+            int regStep = isFullyRegistered ? 5 : (d.getRegistrationStep() != null ? d.getRegistrationStep() : 1);
+
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", d.getId());
             map.put("driverId", d.getId().toString());
+            map.put("isRegistered", isFullyRegistered);
+            map.put("registrationCompleted", isFullyRegistered);
+            map.put("hasDraft", !isFullyRegistered);
             map.put("name", d.getName() != null ? d.getName() : "Unknown");
             map.put("email", d.getEmail() != null ? d.getEmail() : "");
             map.put("phone", d.getPhone() != null ? d.getPhone() : "");
@@ -440,7 +459,8 @@ public class DriverController {
             map.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
             map.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
             map.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
-            map.put("registrationStep", d.getRegistrationStep() != null ? d.getRegistrationStep() : 1);
+            map.put("registrationStep", regStep);
+            map.put("nextStep", regStep);
             map.put("rating", d.getRating() != null ? d.getRating() : "4.8");
             map.put("trips", d.getTrips() != null ? d.getTrips() : 0);
             map.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
