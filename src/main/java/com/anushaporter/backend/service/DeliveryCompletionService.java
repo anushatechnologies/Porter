@@ -267,9 +267,10 @@ public class DeliveryCompletionService {
         // ── 9b. Sync with PassengerBooking entity if applicable ───────────────
         if (isPassenger && passengerBookingRepository != null) {
             try {
+                final LocalDateTime completedTime = order.getCompletedAt() != null ? order.getCompletedAt() : LocalDateTime.now();
                 passengerBookingRepository.findByBookingNumber(bookingId).ifPresent(pb -> {
                     pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.TRIP_COMPLETED);
-                    pb.setTripCompletedAt(order.getCompletedAt() != null ? order.getCompletedAt() : LocalDateTime.now());
+                    pb.setTripCompletedAt(completedTime);
                     pb.setPaymentStatus("PAID");
                     passengerBookingRepository.save(pb);
                 });
