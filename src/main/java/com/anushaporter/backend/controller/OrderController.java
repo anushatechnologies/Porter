@@ -44,6 +44,9 @@ public class OrderController {
     @Autowired(required = false)
     private com.anushaporter.backend.service.DriverOfferService driverOfferService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
+
     /**
      * GET /api/orders
      * Returns formatted orders list for Admin Dashboard, Orders view, and Live Dispatch screen.
@@ -319,10 +322,12 @@ public class OrderController {
         // If the caller sends OTP, route to the dedicated verify-otp flow.
         // Direct jumps to 'delivered'/'completed' without OTP_VERIFIED are blocked.
         if ("delivered".equalsIgnoreCase(targetStatus) || "completed".equalsIgnoreCase(targetStatus)) {
+            boolean isPassenger = "PASSENGER".equalsIgnoreCase(order.getServiceType());
             String currentStatusLower = order.getStatus() != null ? order.getStatus().toLowerCase() : "";
             boolean otpAlreadyVerified = currentStatusLower.equals("otp_verified")
-                    || currentStatusLower.equals("payment_confirmation_pending");
-            if (!otpAlreadyVerified) {
+                    || currentStatusLower.equals("payment_confirmation_pending")
+                    || (isPassenger && (currentStatusLower.equals("in_transit") || currentStatusLower.equals("trip_started") || Boolean.TRUE.equals(order.getOtpVerified())));
+            if (!otpAlreadyVerified && !isPassenger) {
                 return ResponseEntity.status(422).body(Map.of(
                         "success", false,
                         "message", "Direct completion blocked. Verify OTP first via POST /{orderId}/verify-otp, then confirm payment via POST /{orderId}/complete."
@@ -341,6 +346,16 @@ public class OrderController {
         if (targetStatus != null && !targetStatus.isBlank()) {
             order.setStatus(targetStatus);
             if ("completed".equalsIgnoreCase(targetStatus) || "delivered".equalsIgnoreCase(targetStatus)) {
+                if ("PASSENGER".equalsIgnoreCase(order.getServiceType()) && passengerBookingRepository != null) {
+                    try {
+                        passengerBookingRepository.findByBookingNumber(order.getBookingId()).ifPresent(pb -> {
+                            pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.TRIP_COMPLETED);
+                            pb.setTripCompletedAt(java.time.LocalDateTime.now());
+                            pb.setPaymentStatus("PAID");
+                            passengerBookingRepository.save(pb);
+                        });
+                    } catch (Exception ignored) {}
+                }
                 String driverId = order.getDriverId();
                 if (driverId != null && !driverId.isBlank() && order.getAmount() != null && order.getAmount() > 0) {
                     try {
@@ -360,6 +375,78 @@ public class OrderController {
                 : "Status updated successfully";
 
         return ResponseEntity.ok(Map.of("success", true, "message", msg, "order", savedOrder));
+    }
+
+    @PostMapping({"/{id}/start-trip", "/{id}/start-ride"})
+    public ResponseEntity<?> startTrip(
+            @PathVariable String id,
+            @RequestBody(required = false) Map<String, String> payload,
+            HttpServletRequest request
+    ) {
+        Optional<Order> orderOpt = repository.findByBookingId(id);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = repository.findById(Long.valueOf(id));
+            } catch (NumberFormatException ignored) {}
+        }
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found: " + id));
+        }
+        Order order = orderOpt.get();
+
+        String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "";
+        if ("in_transit".equals(currentStatus) || "trip_started".equals(currentStatus) || "picked_up".equals(currentStatus)) {
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("success", true);
+            resp.put("message", "Trip has already started.");
+            resp.put("status", "IN_TRANSIT");
+            resp.put("order", order);
+            return ResponseEntity.ok(resp);
+        }
+
+        String inputOtp = null;
+        if (payload != null) {
+            inputOtp = payload.get("otp");
+            if (inputOtp == null) inputOtp = payload.get("startOtp");
+            if (inputOtp == null) inputOtp = payload.get("enteredOtp");
+            if (inputOtp == null) inputOtp = payload.get("pin");
+        }
+
+        String expectedOtp = order.getStartOtp();
+        if (expectedOtp == null || expectedOtp.isBlank()) expectedOtp = order.getDeliveryOtp();
+        if (expectedOtp == null || expectedOtp.isBlank()) expectedOtp = "8813";
+
+        if (inputOtp == null || inputOtp.isBlank() || !inputOtp.trim().equals(expectedOtp.trim())) {
+            return ResponseEntity.status(400).body(Map.of(
+                    "success", false,
+                    "message", "Incorrect Start Ride OTP. Please enter the valid 4-digit code provided by the passenger."
+            ));
+        }
+
+        order.setStatus("in_transit");
+        order.setOtpVerified(true);
+        Order savedOrder = repository.save(order);
+
+        if (passengerBookingRepository != null && order.getBookingId() != null) {
+            try {
+                passengerBookingRepository.findByBookingNumber(order.getBookingId()).ifPresent(pb -> {
+                    pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.TRIP_STARTED);
+                    pb.setTripStartedAt(java.time.LocalDateTime.now());
+                    passengerBookingRepository.save(pb);
+                });
+            } catch (Exception ignored) {}
+        }
+
+        if (pushNotificationService != null) {
+            pushNotificationService.notifyOrderStatus(savedOrder, "IN_TRANSIT");
+        }
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("message", "Start OTP verified successfully. Trip started.");
+        resp.put("status", "IN_TRANSIT");
+        resp.put("order", savedOrder);
+        return ResponseEntity.ok(resp);
     }
 
     @RequestMapping(value = { "/{id}/reject", "/{id}/dismiss" }, method = { RequestMethod.POST, RequestMethod.PUT, RequestMethod.GET })

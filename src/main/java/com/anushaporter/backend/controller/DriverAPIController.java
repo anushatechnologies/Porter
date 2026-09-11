@@ -46,6 +46,9 @@ public class DriverAPIController {
     @Autowired
     private PushNotificationService pushNotificationService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
+
     @Autowired
     private com.anushaporter.backend.service.DriverAuthService driverAuthService;
 
@@ -642,6 +645,117 @@ public class DriverAPIController {
         return s.equals("searching") || s.equals("pending") || s.equals("created")
                 || s.equals("broadcasted") || s.equals("unassigned") || s.equals("placed")
                 || s.equals("available");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // START TRIP / START RIDE — POST /api/driver/orders/:bookingId/start-trip
+    //
+    // Driver enters the 4-digit start OTP provided by the passenger at pickup.
+    // On success: status → in_transit, otpVerified = true, PassengerBooking → TRIP_STARTED.
+    // ─────────────────────────────────────────────────────────────────────────
+    @PostMapping({
+            "/driver/orders/{bookingId}/start-trip",
+            "/drivers/orders/{bookingId}/start-trip",
+            "/orders/{bookingId}/start-trip",
+            "/driver/orders/{bookingId}/start-ride",
+            "/drivers/orders/{bookingId}/start-ride",
+            "/orders/{bookingId}/start-ride"
+    })
+    public ResponseEntity<?> startTrip(
+            HttpServletRequest request,
+            @PathVariable String bookingId,
+            @RequestBody(required = false) Map<String, String> payload) {
+
+        Driver driver = getAuthenticatedDriver(request);
+        Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+        if (orderOpt.isEmpty()) {
+            try {
+                orderOpt = orderRepository.findById(Long.valueOf(bookingId));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Order not found: " + bookingId));
+        }
+
+        Order order = orderOpt.get();
+
+        String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "";
+        if ("in_transit".equals(currentStatus) || "trip_started".equals(currentStatus) || "picked_up".equals(currentStatus)) {
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("success", true);
+            resp.put("message", "Trip has already started.");
+            resp.put("status", "IN_TRANSIT");
+            resp.put("order", order);
+            return ResponseEntity.ok(resp);
+        }
+
+        String inputOtp = null;
+        if (payload != null) {
+            inputOtp = payload.get("otp");
+            if (inputOtp == null) inputOtp = payload.get("startOtp");
+            if (inputOtp == null) inputOtp = payload.get("enteredOtp");
+            if (inputOtp == null) inputOtp = payload.get("pin");
+        }
+
+        String expectedOtp = order.getStartOtp();
+        if (expectedOtp == null || expectedOtp.isBlank()) {
+            expectedOtp = order.getDeliveryOtp();
+        }
+        if (expectedOtp == null || expectedOtp.isBlank()) {
+            expectedOtp = "8813";
+        }
+
+        if (inputOtp == null || inputOtp.isBlank() || !inputOtp.trim().equals(expectedOtp.trim())) {
+            return ResponseEntity.status(400).body(Map.of(
+                    "success", false,
+                    "message", "Incorrect Start Ride OTP. Please enter the valid 4-digit code provided by the passenger."
+            ));
+        }
+
+        order.setStatus("in_transit");
+        order.setOtpVerified(true);
+        Order savedOrder = orderRepository.save(order);
+
+        if (passengerBookingRepository != null && order.getBookingId() != null) {
+            try {
+                passengerBookingRepository.findByBookingNumber(order.getBookingId()).ifPresent(pb -> {
+                    pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.TRIP_STARTED);
+                    pb.setTripStartedAt(java.time.LocalDateTime.now());
+                    passengerBookingRepository.save(pb);
+                });
+            } catch (Exception ignored) {}
+        }
+
+        if (pushNotificationService != null) {
+            pushNotificationService.notifyOrderStatus(savedOrder, "IN_TRANSIT");
+        }
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("message", "Start OTP verified successfully. Trip started.");
+        resp.put("status", "IN_TRANSIT");
+        resp.put("order", savedOrder);
+        return ResponseEntity.ok(resp);
+    }
+
+    @PostMapping({
+            "/driver/orders/start-trip",
+            "/orders/start-trip",
+            "/driver/orders/start-ride",
+            "/orders/start-ride"
+    })
+    public ResponseEntity<?> startTripFromBody(
+            HttpServletRequest request,
+            @RequestBody(required = false) Map<String, String> payload) {
+        if (payload == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Request body is missing"));
+        }
+        String bookingId = payload.get("bookingId") != null ? payload.get("bookingId") : payload.get("orderId");
+        if (bookingId == null || bookingId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "bookingId or orderId is required"));
+        }
+        return startTrip(request, bookingId, payload);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

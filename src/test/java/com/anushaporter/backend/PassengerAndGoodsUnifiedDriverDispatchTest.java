@@ -27,6 +27,7 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -261,5 +262,87 @@ public class PassengerAndGoodsUnifiedDriverDispatchTest {
         assertEquals(1, cabOffers3.size(), "Cab driver must receive Cab passenger offer");
         assertEquals("PASSENGER", cabOffers3.get(0).getServiceType());
         assertEquals("Passenger Ride (Cab)", cabOffers3.get(0).getServiceLabel());
+    }
+
+    @Test
+    void testPassengerStartTripWithValidAndInvalidOtp() throws Exception {
+        Driver driver = new Driver();
+        driver.setName("Test Driver");
+        driver.setEmail("testdriver12@example.com");
+        driver.setPhone("9999900001");
+        driver.setVehicle("Cab");
+        driver.setVehicleType("Cab");
+        driver.setStatus("online");
+        driver = driverRepository.save(driver);
+
+        String driverToken = jwtUtil.generateToken(driver.getEmail());
+
+        Order order = new Order();
+        order.setBookingId("BK-PASS-TEST-1");
+        order.setServiceType("PASSENGER");
+        order.setStartOtp("4321");
+        order.setDeliveryOtp("4321");
+        order.setStatus("assigned");
+        order.setDriverId(driver.getId().toString());
+        order.setAmount(150.0);
+        orderRepository.save(order);
+
+        // 1. Wrong OTP -> should return 400 Bad Request
+        mockMvc.perform(post("/api/driver/orders/BK-PASS-TEST-1/start-trip")
+                        .header("Authorization", "Bearer " + driverToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"otp\":\"9999\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(containsString("Incorrect Start Ride OTP")));
+
+        // 2. Correct OTP -> should return 200 OK and status IN_TRANSIT
+        mockMvc.perform(post("/api/driver/orders/BK-PASS-TEST-1/start-trip")
+                        .header("Authorization", "Bearer " + driverToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"otp\":\"4321\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.status").value("IN_TRANSIT"));
+
+        Order updated = orderRepository.findByBookingId("BK-PASS-TEST-1").orElseThrow();
+        assertEquals("in_transit", updated.getStatus().toLowerCase());
+        assertTrue(Boolean.TRUE.equals(updated.getOtpVerified()));
+    }
+
+    @Test
+    void testPassengerRideCompletionWithoutDropOffDeliveryOtp() throws Exception {
+        Driver driver = new Driver();
+        driver.setName("Passenger Driver");
+        driver.setEmail("passdriver@example.com");
+        driver.setPhone("9999900002");
+        driver.setVehicle("2 Wheeler");
+        driver.setVehicleType("2 Wheeler");
+        driver.setStatus("online");
+        driver = driverRepository.save(driver);
+
+        String driverToken = jwtUtil.generateToken(driver.getEmail());
+
+        Order order = new Order();
+        order.setBookingId("BK-PASS-COMP-2");
+        order.setServiceType("PASSENGER");
+        order.setStartOtp("1234");
+        order.setDeliveryOtp("1234");
+        order.setStatus("in_transit");
+        order.setOtpVerified(true);
+        order.setDriverId(driver.getId().toString());
+        order.setAmount(80.0);
+        orderRepository.save(order);
+
+        // At drop-off, driver completes via PUT /api/orders/{id}/status without sending deliveryOtp
+        mockMvc.perform(put("/api/orders/BK-PASS-COMP-2/status")
+                        .header("Authorization", "Bearer " + driverToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"completed\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        Order completed = orderRepository.findByBookingId("BK-PASS-COMP-2").orElseThrow();
+        assertEquals("completed", completed.getStatus().toLowerCase());
     }
 }

@@ -57,6 +57,7 @@ public class DeliveryCompletionService {
     @Autowired private DriverWalletService driverWalletService;
     @Autowired private FinancialLedgerService ledgerService;
     @Autowired private PushNotificationService pushNotificationService;
+    @Autowired(required = false) private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
 
     // ──────────────────────────────────────────────────────────────────────────
     // STEP 1: Validate Customer Delivery OTP
@@ -100,12 +101,16 @@ public class DeliveryCompletionService {
         }
 
         // ── OTP validation ───────────────────────────────────────────────────
+        boolean isPassenger = "PASSENGER".equalsIgnoreCase(order.getServiceType());
         String validOtp = (order.getDeliveryOtp() != null && !order.getDeliveryOtp().isBlank())
                 ? order.getDeliveryOtp()
-                : "8813";
+                : (order.getStartOtp() != null && !order.getStartOtp().isBlank() ? order.getStartOtp() : "8813");
 
         if (inputOtp == null || inputOtp.isBlank() || !inputOtp.trim().equals(validOtp.trim())) {
-            return error(400, "Incorrect Customer Delivery OTP. Verification failed.");
+            String errorMsg = isPassenger
+                    ? "Incorrect Start Ride OTP. Verification failed."
+                    : "Incorrect Customer Delivery OTP. Verification failed.";
+            return error(400, errorMsg);
         }
 
         // ── Status transition: mark OTP verified ─────────────────────────────
@@ -200,8 +205,11 @@ public class DeliveryCompletionService {
             return alreadyCompletedResponse(order);
         }
 
-        // ── 4. OTP Status Check (Pre-requisite: Step 1 must be completed) ────
-        boolean isOtpVerified = Boolean.TRUE.equals(order.getOtpVerified()) || OTP_VERIFIED_STATUSES.contains(currentStatus);
+        // ── 4. OTP Status Check (Pre-requisite: Step 1 must be completed for Goods) ────
+        boolean isPassenger = "PASSENGER".equalsIgnoreCase(order.getServiceType());
+        boolean isOtpVerified = Boolean.TRUE.equals(order.getOtpVerified())
+                || OTP_VERIFIED_STATUSES.contains(currentStatus)
+                || isPassenger;
         if (!isOtpVerified) {
             return error(422, "OTP has not been verified yet");
         }
@@ -255,6 +263,20 @@ public class DeliveryCompletionService {
             order.setIdempotencyKey(idempotencyKey);
         }
         order = orderRepository.save(order);
+
+        // ── 9b. Sync with PassengerBooking entity if applicable ───────────────
+        if (isPassenger && passengerBookingRepository != null) {
+            try {
+                passengerBookingRepository.findByBookingNumber(bookingId).ifPresent(pb -> {
+                    pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.TRIP_COMPLETED);
+                    pb.setTripCompletedAt(order.getCompletedAt() != null ? order.getCompletedAt() : LocalDateTime.now());
+                    pb.setPaymentStatus("PAID");
+                    passengerBookingRepository.save(pb);
+                });
+            } catch (Exception e) {
+                System.err.println("[PassengerBooking] Warning: error syncing trip completion: " + e.getMessage());
+            }
+        }
 
         // ── 10. Create or update PaymentOrder record ──────────────────────────
         if (paymentOrderRepository != null) {
