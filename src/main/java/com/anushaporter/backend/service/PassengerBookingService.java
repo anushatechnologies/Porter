@@ -32,6 +32,12 @@ public class PassengerBookingService {
     private final DriverRepository driverRepository;
     private final PassengerNotificationService notificationService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private OrderRepository orderRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AutoAssignmentService autoAssignmentService;
+
     @Transactional
     public PassengerBooking createBooking(PassengerBookingCreateRequest req) {
         String serviceCode = req.getServiceType() != null ? req.getServiceType().toUpperCase() : "ONE_WAY";
@@ -126,6 +132,36 @@ public class PassengerBookingService {
                 savedBooking.getCustomerEmail(),
                 "Your passenger car booking has been requested successfully."
         );
+
+        if (orderRepository != null) {
+            try {
+                Order order = new Order();
+                order.setBookingId(savedBooking.getBookingNumber());
+                order.setUserEmail(savedBooking.getCustomerEmail());
+                order.setServiceName(categoryCode);
+                order.setServiceType("PASSENGER");
+                order.setPassengerCount(passengers);
+                order.setPickupAddress(savedBooking.getPickupAddress());
+                order.setDropAddress(savedBooking.getDropAddress());
+                order.setPickupLat(savedBooking.getPickupLatitude());
+                order.setPickupLng(savedBooking.getPickupLongitude());
+                order.setDropLat(savedBooking.getDropLatitude());
+                order.setDropLng(savedBooking.getDropLongitude());
+                order.setAmount(estimate.getBreakdown() != null && estimate.getBreakdown().getTotalFare() != null
+                        ? estimate.getBreakdown().getTotalFare().doubleValue() : 50.0);
+                order.setStatus("searching");
+                order.setDeliveryOtp(startOtp);
+                order.setStartOtp(startOtp);
+                order.setCreatedAt(LocalDateTime.now());
+                orderRepository.save(order);
+
+                if (autoAssignmentService != null) {
+                    autoAssignmentService.startAutoAssignment(savedBooking.getBookingNumber());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to auto-assign passenger order {}: {}", savedBooking.getBookingNumber(), e.getMessage());
+            }
+        }
 
         return savedBooking;
     }

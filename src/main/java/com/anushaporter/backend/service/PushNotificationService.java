@@ -121,6 +121,53 @@ public class PushNotificationService {
         }
     }
 
+    public void notifyDriverOffer(Driver driver, Order order) {
+        if (driver == null || order == null) return;
+        boolean isPassenger = "PASSENGER".equalsIgnoreCase(order.getServiceType());
+        int count = order.getPassengerCount() != null ? order.getPassengerCount() : 1;
+        String title;
+        String message;
+        if (isPassenger) {
+            String s = (order.getServiceName() != null ? order.getServiceName() : "").toLowerCase();
+            if (s.contains("bike") || s.contains("2wheel")) {
+                title = "New Bike Taxi Ride Request! 🛵";
+            } else if (s.contains("auto") || s.contains("3wheel")) {
+                title = "New Auto Ride Request! 🛺";
+            } else if (s.contains("cab") || s.contains("car")) {
+                title = "New Cab Ride Request! 🚗";
+            } else {
+                title = "New Passenger Ride Request! 👤";
+            }
+            message = String.format("Passenger Ride (%d rider%s) | Pickup: %s → Drop: %s (₹%.0f)",
+                    count, count > 1 ? "s" : "",
+                    safe(order.getPickupAddress(), "Near you"),
+                    safe(order.getDropAddress(), "Destination"),
+                    order.getAmount() != null ? order.getAmount() : 0.0);
+        } else {
+            title = "New Goods Delivery Offer! 📦🚚";
+            message = String.format("Goods: %s | Pickup: %s → Drop: %s (₹%.0f)",
+                    safe(order.getGoodsCategory() != null ? order.getGoodsCategory() : order.getServiceName(), "Package"),
+                    safe(order.getPickupAddress(), "Near you"),
+                    safe(order.getDropAddress(), "Destination"),
+                    order.getAmount() != null ? order.getAmount() : 0.0);
+        }
+
+        AppUser driverUser = resolveDriverUser(driver);
+        if (driverUser != null) {
+            notifyUser(driverUser, order.getBookingId(), "DRIVER_OFFER", title, message);
+        } else {
+            Notification notification = new Notification();
+            notification.setUserId(driver.getId());
+            notification.setBookingId(order.getBookingId());
+            notification.setNotificationType("DRIVER_OFFER");
+            notification.setTitle(title);
+            notification.setMessage(message);
+            notification.setAudience("driver");
+            notification.setTarget(driver.getEmail() != null ? driver.getEmail() : driver.getPhone());
+            notificationRepository.save(notification);
+        }
+    }
+
     public void notifyDriverOffer(Driver driver, String bookingId, String pickup, String drop, Double fare) {
         if (driver == null) return;
         AppUser driverUser = resolveDriverUser(driver);

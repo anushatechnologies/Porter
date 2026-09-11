@@ -206,6 +206,35 @@ public class BookingController {
             order.setCurrency("INR");
             order.setCreatedAt(LocalDateTime.now());
 
+            // Service Type & Passenger Count resolution
+            String inputServiceType = (String) body.getOrDefault("serviceType", body.getOrDefault("service_type", body.getOrDefault("rideType", null)));
+            if (inputServiceType != null && !inputServiceType.isBlank()) {
+                order.setServiceType(inputServiceType.trim().toUpperCase());
+            } else if (serviceName != null) {
+                String sLower = serviceName.toLowerCase();
+                if (sLower.contains("cab") || sLower.contains("taxi") || sLower.contains("passenger") || sLower.contains("ride")) {
+                    order.setServiceType("PASSENGER");
+                } else {
+                    order.setServiceType("GOODS");
+                }
+            } else {
+                order.setServiceType("GOODS");
+            }
+
+            Integer pCount = null;
+            if (body.get("passengerCount") instanceof Number) {
+                pCount = ((Number) body.get("passengerCount")).intValue();
+            } else if (body.get("passengers") instanceof Number) {
+                pCount = ((Number) body.get("passengers")).intValue();
+            } else if (body.get("riders") instanceof Number) {
+                pCount = ((Number) body.get("riders")).intValue();
+            } else if (body.get("passenger_count") instanceof Number) {
+                pCount = ((Number) body.get("passenger_count")).intValue();
+            }
+            if (pCount != null) {
+                order.setPassengerCount(pCount);
+            }
+
             // Helpers / Crew / Workers count
             if (body.get("workerCount") != null) {
                 order.setHelpersCount(((Number) body.get("workerCount")).intValue());
@@ -273,6 +302,7 @@ public class BookingController {
             // Generate a single 4-digit Delivery OTP per order and persist it
             String deliveryOtp = String.format("%04d", 1000 + new Random().nextInt(9000));
             order.setDeliveryOtp(deliveryOtp);
+            order.setStartOtp(deliveryOtp);
             order.setOtpExpiresAt(LocalDateTime.now().plusHours(48));
 
             orderRepository.save(order);

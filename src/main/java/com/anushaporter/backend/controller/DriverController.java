@@ -89,6 +89,13 @@ public class DriverController {
             orderMap.put("pickupAddress", o.getPickupAddress() != null ? o.getPickupAddress() : "");
             orderMap.put("dropAddress", o.getDropAddress() != null ? o.getDropAddress() : "");
             orderMap.put("deliveryOtp", o.getDeliveryOtp() != null ? o.getDeliveryOtp() : "8813");
+            orderMap.put("startOtp", o.getStartOtp() != null ? o.getStartOtp() : "8813");
+            orderMap.put("serviceType", o.getServiceType());
+            orderMap.put("serviceName", o.getServiceName());
+            orderMap.put("passengerCount", o.getPassengerCount());
+            boolean isPass = "PASSENGER".equalsIgnoreCase(o.getServiceType());
+            int cnt = o.getPassengerCount() != null ? o.getPassengerCount() : 1;
+            orderMap.put("serviceLabel", isPass ? ("Passenger Ride (" + cnt + " Rider" + (cnt > 1 ? "s" : "") + ")") : "Goods Delivery");
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("success", true);
@@ -262,6 +269,18 @@ public class DriverController {
         entity.setVehicle(resolvedVeh);
         entity.setVehicleType(resolvedVeh);
 
+        if (entity.getServiceType() == null || entity.getServiceType().isBlank()) {
+            String vClean = resolvedVeh.toLowerCase().replaceAll("[^a-z0-9]", "");
+            if (vClean.contains("cab") || vClean.contains("car") || vClean.contains("taxi") || vClean.contains("sedan") || vClean.contains("hatchback") || vClean.contains("suv") || vClean.equals("6")) {
+                entity.setServiceType("PASSENGER");
+            } else if (vClean.contains("2wheel") || vClean.contains("bike") || vClean.contains("scooter") || vClean.equals("1")
+                    || vClean.contains("3wheel") || vClean.contains("auto") || vClean.contains("rickshaw") || vClean.equals("2")) {
+                entity.setServiceType("BOTH");
+            } else {
+                entity.setServiceType("GOODS");
+            }
+        }
+
         // Upload/migrate all Driver document images to S3 under dedicated folder names
         if (entity.getLicenseUri() != null && !entity.getLicenseUri().isBlank()) {
             entity.setLicenseUri(s3ImageService.processAndUploadImageUri(entity.getLicenseUri(), "license"));
@@ -310,6 +329,7 @@ public class DriverController {
             if (updated.getGender() != null) existing.setGender(updated.getGender());
             if (updated.getVehicle() != null) existing.setVehicle(updated.getVehicle());
             if (updated.getVehicleType() != null) existing.setVehicleType(updated.getVehicleType());
+            if (updated.getServiceType() != null) existing.setServiceType(updated.getServiceType());
             if (updated.getVehicleNumber() != null) existing.setVehicleNumber(updated.getVehicleNumber());
             if (updated.getRcNumber() != null) existing.setRcNumber(updated.getRcNumber());
             if (updated.getAadhaarNumber() != null) existing.setAadhaarNumber(updated.getAadhaarNumber());

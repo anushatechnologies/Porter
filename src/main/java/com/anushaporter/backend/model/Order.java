@@ -60,6 +60,15 @@ public class Order {
     /** Goods category e.g. "Electronics", "Furniture", "General" */
     private String goodsCategory;
 
+    @Column(name = "service_type")
+    private String serviceType;
+
+    @Column(name = "passenger_count")
+    private Integer passengerCount;
+
+    @Column(name = "start_otp", length = 10)
+    private String startOtp;
+
     /** Number of helper laborers requested */
     private Integer helpersCount;
 
@@ -230,4 +239,62 @@ public class Order {
     public void setVehicleType(String type) { if ((this.serviceName == null || this.serviceName.isBlank()) && type != null) this.serviceName = type; }
     public void setVehicleName(String name) { if ((this.serviceName == null || this.serviceName.isBlank()) && name != null) this.serviceName = name; }
     public void setVehicle(String name) { if ((this.serviceName == null || this.serviceName.isBlank()) && name != null) this.serviceName = name; }
+
+    public String getServiceType() {
+        if (serviceType != null && !serviceType.isBlank()) {
+            return serviceType.trim().toUpperCase();
+        }
+        String s = (serviceName != null ? serviceName : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (s.contains("cab") || s.contains("car") || s.contains("taxi") || s.contains("passenger")
+                || s.contains("biketaxi") || s.contains("autotaxi") || s.contains("ride")
+                || (passengerCount != null && passengerCount > 0)) {
+            return "PASSENGER";
+        }
+        return "GOODS";
+    }
+
+    public void setServiceType(String serviceType) {
+        this.serviceType = serviceType;
+    }
+
+    public Integer getPassengerCount() {
+        if (passengerCount != null) {
+            return passengerCount;
+        }
+        if ("PASSENGER".equalsIgnoreCase(getServiceType())) {
+            String s = (serviceName != null ? serviceName : "").toLowerCase();
+            if (s.contains("bike") || s.contains("2wheel") || s.contains("scooter")) {
+                return 1;
+            }
+            if (s.contains("auto") || s.contains("3wheel") || s.contains("rickshaw")) {
+                return 3;
+            }
+            if (s.contains("cab") || s.contains("car") || s.contains("sedan") || s.contains("hatchback")) {
+                return 4;
+            }
+            if (s.contains("suv")) {
+                return 6;
+            }
+            return 1;
+        }
+        return null;
+    }
+
+    public void setPassengerCount(Integer passengerCount) {
+        this.passengerCount = passengerCount;
+    }
+
+    public void setRiderCount(Integer count) { if (count != null) this.passengerCount = count; }
+    public void setSeatCount(Integer count) { if (count != null) this.passengerCount = count; }
+
+    public String getStartOtp() {
+        if (startOtp != null && !startOtp.isBlank()) {
+            return startOtp;
+        }
+        return deliveryOtp;
+    }
+
+    public void setStartOtp(String startOtp) {
+        this.startOtp = startOtp;
+    }
 }

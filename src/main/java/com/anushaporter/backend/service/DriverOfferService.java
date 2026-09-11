@@ -46,6 +46,12 @@ public class DriverOfferService {
     @Autowired(required = false)
     private DriverRankingService driverRankingService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
+
+    @Autowired(required = false)
+    private DriverEligibilityService driverEligibilityService;
+
     public List<DriverOffer> createAndDispatchOffers(Order order, List<DriverRankingService.RankedDriver> rankedDrivers, double radiusTierKm, int timeoutSeconds) {
         if (order == null || rankedDrivers == null || rankedDrivers.isEmpty()) {
             return List.of();
@@ -80,7 +86,7 @@ public class DriverOfferService {
             // Dispatch Push Notification to driver
             if (pushNotificationService != null) {
                 try {
-                    pushNotificationService.notifyDriverOffer(driver, order.getBookingId(), order.getPickupAddress(), order.getDropAddress(), order.getAmount());
+                    pushNotificationService.notifyDriverOffer(driver, order);
                 } catch (Exception e) {
                     log.warn("Failed to send push notification to driver {}: {}", driver.getId(), e.getMessage());
                 }
@@ -141,7 +147,7 @@ public class DriverOfferService {
             // Dispatch Push Notification to driver
             if (pushNotificationService != null) {
                 try {
-                    pushNotificationService.notifyDriverOffer(driver, order.getBookingId(), order.getPickupAddress(), order.getDropAddress(), order.getAmount());
+                    pushNotificationService.notifyDriverOffer(driver, order);
                 } catch (Exception e) {
                     log.warn("Failed to send push notification to driver {}: {}", driver.getId(), e.getMessage());
                 }
@@ -160,12 +166,17 @@ public class DriverOfferService {
                         .distinct()
                         .collect(Collectors.toList());
 
-                String payload = String.format("{\"bookingId\":\"%s\",\"pickupAddress\":\"%s\",\"dropAddress\":\"%s\",\"amount\":%.2f,\"distanceKm\":%.1f}",
+                String sType = order.getServiceType() != null ? order.getServiceType().toUpperCase() : "GOODS";
+                int pCount = order.getPassengerCount() != null ? order.getPassengerCount() : 1;
+                String sLabel = "PASSENGER".equalsIgnoreCase(sType) ? ("Passenger Ride (" + pCount + " Rider" + (pCount > 1 ? "s" : "") + ")") : "Goods Delivery";
+
+                String payload = String.format("{\"bookingId\":\"%s\",\"pickupAddress\":\"%s\",\"dropAddress\":\"%s\",\"amount\":%.2f,\"distanceKm\":%.1f,\"serviceType\":\"%s\",\"serviceLabel\":\"%s\",\"passengerCount\":%d}",
                         order.getBookingId(),
                         order.getPickupAddress() != null ? order.getPickupAddress().replace("\"", "\\\"") : "",
                         order.getDropAddress() != null ? order.getDropAddress().replace("\"", "\\\"") : "",
                         order.getAmount() != null ? order.getAmount() : 0.0,
-                        order.getDistanceKm() != null ? order.getDistanceKm() : 0.0);
+                        order.getDistanceKm() != null ? order.getDistanceKm() : 0.0,
+                        sType, sLabel, pCount);
                 telemetryWebSocketHandler.broadcastOfferNew(order.getBookingId(), payload, targetDriverIds);
             } catch (Exception e) {
                 log.warn("Failed to broadcast WebSocket offer: {}", e.getMessage());
@@ -211,6 +222,33 @@ public class DriverOfferService {
                     dto.setServiceName(o.getServiceName());
                     dto.setGoodsCategory(o.getGoodsCategory());
                     dto.setHelpersCount(o.getHelpersCount());
+
+                    String sType = o.getServiceType() != null ? o.getServiceType().toUpperCase() : "GOODS";
+                    dto.setServiceType(sType);
+                    dto.setPassengerCount(o.getPassengerCount());
+                    dto.setStartOtp(o.getStartOtp());
+
+                    String vehCat = driverEligibilityService != null ? driverEligibilityService.normalizeVehicleCategory(o.getServiceName()) : "UNKNOWN";
+                    if ("PASSENGER".equalsIgnoreCase(sType)) {
+                        if ("TWO_WHEELER".equals(vehCat)) {
+                            dto.setServiceLabel("Passenger Ride (1 Rider)");
+                        } else if ("THREE_WHEELER".equals(vehCat)) {
+                            dto.setServiceLabel("Passenger Ride (Auto Rickshaw)");
+                        } else if ("CAB".equals(vehCat)) {
+                            dto.setServiceLabel("Passenger Ride (Cab)");
+                        } else {
+                            int count = o.getPassengerCount() != null ? o.getPassengerCount() : 1;
+                            dto.setServiceLabel("Passenger Ride (" + count + " Rider" + (count > 1 ? "s" : "") + ")");
+                        }
+                    } else {
+                        if ("TWO_WHEELER".equals(vehCat)) {
+                            dto.setServiceLabel("Goods Delivery (Parcel / Courier)");
+                        } else if ("THREE_WHEELER".equals(vehCat)) {
+                            dto.setServiceLabel("Goods Delivery (Auto Loader)");
+                        } else {
+                            dto.setServiceLabel("Goods Delivery (" + (o.getServiceName() != null ? o.getServiceName() : "Cargo") + ")");
+                        }
+                    }
                 });
             }
 
@@ -464,6 +502,28 @@ public class DriverOfferService {
             try {
                 telemetryWebSocketHandler.broadcastOfferDismiss(bookingId, "ACCEPTED", winningDriverId);
             } catch (Exception ignored) {}
+        }
+
+        // 5. Synchronize PassengerBooking table if this is a passenger ride
+        if (passengerBookingRepository != null) {
+            try {
+                passengerBookingRepository.findByBookingNumber(bookingId).ifPresent(pb -> {
+                    if (winningDriverId != null) {
+                        driverRepository.findById(winningDriverId).ifPresent(d -> {
+                            pb.setDriverId(d.getId());
+                            pb.setDriverName(d.getName());
+                            pb.setDriverPhone(d.getPhone());
+                            pb.setVehicleNumber(d.getVehicleNumber());
+                            pb.setVehicleModel(d.getVehicle() != null ? d.getVehicle() : pb.getVehicleCategoryCode());
+                            pb.setDriverAssignedAt(now);
+                            pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.DRIVER_ASSIGNED);
+                            passengerBookingRepository.save(pb);
+                        });
+                    }
+                });
+            } catch (Exception e) {
+                log.warn("Failed to synchronize PassengerBooking assignment for {}: {}", bookingId, e.getMessage());
+            }
         }
     }
 

@@ -179,6 +179,7 @@ public class DriverAPIController {
         map.put("vehicleType", vType);
         map.put("vehicle_type", vType);
         map.put("vehicleName", vType);
+        map.put("serviceType", driver.getServiceType());
         map.put("vehicleNumber", driver.getVehicleNumber() != null ? driver.getVehicleNumber() : "");
         map.put("rcNumber", driver.getRcNumber() != null ? driver.getRcNumber() : "");
         map.put("licenseNumber", driver.getLicenseNumber() != null ? driver.getLicenseNumber() : "");
@@ -310,6 +311,14 @@ public class DriverAPIController {
         result.put("pickupLng", order.getPickupLng());
         result.put("dropLat", order.getDropLat());
         result.put("dropLng", order.getDropLng());
+        result.put("deliveryOtp", order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813");
+        result.put("startOtp", order.getStartOtp() != null ? order.getStartOtp() : "8813");
+        result.put("serviceType", order.getServiceType());
+        result.put("serviceName", order.getServiceName());
+        result.put("passengerCount", order.getPassengerCount());
+        boolean isPassOrder = "PASSENGER".equalsIgnoreCase(order.getServiceType());
+        int pCnt = order.getPassengerCount() != null ? order.getPassengerCount() : 1;
+        result.put("serviceLabel", isPassOrder ? ("Passenger Ride (" + pCnt + " Rider" + (pCnt > 1 ? "s" : "") + ")") : "Goods Delivery");
         return ResponseEntity.ok(Map.of("success", true, "order", result));
     }
 
@@ -957,6 +966,22 @@ public class DriverAPIController {
             driver.setVehicleType("Vehicle");
         }
 
+        String inputServiceType = text(payload, "serviceType");
+        if (inputServiceType == null) inputServiceType = text(payload, "service_type");
+        if (inputServiceType != null && !inputServiceType.isBlank()) {
+            driver.setServiceType(inputServiceType.trim().toUpperCase());
+        } else if (resolvedVehicle != null) {
+            String vClean = resolvedVehicle.toLowerCase().replaceAll("[^a-z0-9]", "");
+            if (vClean.contains("cab") || vClean.contains("car") || vClean.contains("taxi") || vClean.contains("sedan") || vClean.contains("hatchback") || vClean.contains("suv") || vClean.equals("6")) {
+                driver.setServiceType("PASSENGER");
+            } else if (vClean.contains("2wheel") || vClean.contains("bike") || vClean.contains("scooter") || vClean.equals("1")
+                    || vClean.contains("3wheel") || vClean.contains("auto") || vClean.contains("rickshaw") || vClean.equals("2")) {
+                driver.setServiceType("BOTH");
+            } else {
+                driver.setServiceType("GOODS");
+            }
+        }
+
         if (text(payload, "vehicleNumber") != null) driver.setVehicleNumber(text(payload, "vehicleNumber"));
         if (rcNumber != null) driver.setRcNumber(rcNumber);
         if (aadhaar != null) driver.setAadhaarNumber(aadhaar);
@@ -1073,6 +1098,7 @@ public class DriverAPIController {
         resp.put("nextStep", saved.getRegistrationStep() != null ? saved.getRegistrationStep() : 1);
         resp.put("vehicle", saved.getVehicle());
         resp.put("vehicleType", saved.getVehicleType());
+        resp.put("serviceType", saved.getServiceType());
         resp.put("driver", saved);
 
         return ResponseEntity.ok(resp);

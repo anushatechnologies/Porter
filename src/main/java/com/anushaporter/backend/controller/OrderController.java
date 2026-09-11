@@ -118,6 +118,9 @@ public class OrderController {
             entity.setDeliveryOtp(deliveryOtp);
             entity.setOtpExpiresAt(java.time.LocalDateTime.now().plusHours(48));
         }
+        if (entity.getStartOtp() == null || entity.getStartOtp().isBlank()) {
+            entity.setStartOtp(entity.getDeliveryOtp());
+        }
         Order saved = repository.save(entity);
         String st = saved.getStatus().toLowerCase();
         if (autoAssignmentService != null && (st.equals("searching") || st.equals("pending") || st.equals("created"))) {

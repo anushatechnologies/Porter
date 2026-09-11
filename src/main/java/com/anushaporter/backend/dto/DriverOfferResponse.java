@@ -23,6 +23,10 @@ public class DriverOfferResponse {
     private Double dropLng;
     private String serviceName;
     private String goodsCategory;
+    private String serviceType;
+    private String serviceLabel;
+    private Integer passengerCount;
+    private String startOtp;
     private Integer helpersCount;
     private LocalDateTime offeredAt;
     private LocalDateTime expiresAt;

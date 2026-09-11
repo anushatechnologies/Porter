@@ -40,13 +40,13 @@ public class VehicleTypeController {
     public void seedDefaultVehicleTypes() {
         if (vehicleTypeRepository.count() == 0) {
             List<VehicleType> defaults = Arrays.asList(
-                    build("1", "2 Wheeler", "two_wheeler", "Best for documents & small packages",
-                            "Load: Up to 20kg", 20, "Ideal for documents & food parcels",
+                    build("1", "2 Wheeler", "two_wheeler", "Best for goods delivery & 1-passenger bike taxi",
+                            "Load: Up to 20kg or 1 Passenger", 20, "Ideal for documents, food parcels & 1 passenger",
                             "bike", "https://poteranusha.s3.amazonaws.com/vehicles/bike.png",
                             40.00, 1.0, 12.00, 1),
 
-                    build("2", "3 Wheeler / Auto", "auto_rickshaw", "Best for mid-size goods and cartons",
-                            "Load: Up to 500kg", 500, "5ft x 3.5ft x 3.5ft",
+                    build("2", "3 Wheeler / Auto", "auto_rickshaw", "Best for cargo load & passenger auto rides",
+                            "Load: Up to 500kg or 3 Passengers", 500, "5ft x 3.5ft x 3.5ft / 3 Passengers",
                             "rickshaw", "https://poteranusha.s3.amazonaws.com/vehicles/auto.png",
                             120.00, 1.0, 20.00, 2),
 
@@ -63,10 +63,22 @@ public class VehicleTypeController {
                     build("5", "Tata 407", "tata_407", "Commercial heavy goods and shifting transport",
                             "Load: Up to 2500kg", 2500, "10ft x 6ft x 6ft",
                             "truck", "https://poteranusha.s3.amazonaws.com/vehicles/truck.png",
-                            600.00, 1.0, 50.00, 5)
+                            600.00, 1.0, 50.00, 5),
+
+                    build("6", "Cab", "cab", "Comfortable cab for city & outstation passenger rides",
+                            "Load: 4 Passengers", 400, "Compact Sedan / Hatchback / SUV",
+                            "car", "https://poteranusha.s3.amazonaws.com/vehicles/cab.png",
+                            150.00, 2.0, 15.00, 6)
             );
             vehicleTypeRepository.saveAll(defaults);
             System.out.println("[VehicleType] Seeded " + defaults.size() + " default vehicle types with dynamic pricing.");
+        } else if (vehicleTypeRepository.findById("6").isEmpty() && vehicleTypeRepository.findByType("cab").isEmpty()) {
+            VehicleType cab = build("6", "Cab", "cab", "Comfortable cab for city & outstation passenger rides",
+                    "Load: 4 Passengers", 400, "Compact Sedan / Hatchback / SUV",
+                    "car", "https://poteranusha.s3.amazonaws.com/vehicles/cab.png",
+                    150.00, 2.0, 15.00, 6);
+            vehicleTypeRepository.save(cab);
+            System.out.println("[VehicleType] Seeded Cab vehicle type for passenger rides.");
         }
     }
 
@@ -330,6 +342,21 @@ public class VehicleTypeController {
         map.put("perKmRate", v.getPerKmRate() != null ? v.getPerKmRate() : 12.0);
         map.put("status", v.getStatus() != null ? v.getStatus() : "active");
         map.put("priority", v.getPriority() != null ? v.getPriority() : 1);
+
+        String typeKey = (v.getType() != null ? v.getType() : "").toLowerCase();
+        String nameKey = (v.getName() != null ? v.getName() : "").toLowerCase();
+        String idKey = (v.getId() != null ? v.getId() : "").trim();
+        if (typeKey.contains("cab") || nameKey.contains("cab") || idKey.equals("6")) {
+            map.put("serviceType", "PASSENGER");
+            map.put("supportedServiceTypes", List.of("PASSENGER"));
+        } else if (typeKey.contains("2wheel") || typeKey.contains("bike") || nameKey.contains("2 wheeler") || idKey.equals("1")
+                || typeKey.contains("auto") || typeKey.contains("rickshaw") || nameKey.contains("3 wheeler") || idKey.equals("2")) {
+            map.put("serviceType", "BOTH");
+            map.put("supportedServiceTypes", List.of("GOODS", "PASSENGER"));
+        } else {
+            map.put("serviceType", "GOODS");
+            map.put("supportedServiceTypes", List.of("GOODS"));
+        }
         return map;
     }
 

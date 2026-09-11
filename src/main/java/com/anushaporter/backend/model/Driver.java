@@ -28,6 +28,8 @@ public class Driver {
     private String dob;
     private String gender;
     private String vehicleType;
+    @Column(name = "service_type")
+    private String serviceType;
     private String vehicleNumber;
     private String rcNumber;
     private String aadhaarNumber;
@@ -175,4 +177,25 @@ public class Driver {
     public void setPanNumber(String panNumber) { this.panNumber = panNumber; }
     public String getPanUri() { return panUri; }
     public void setPanUri(String panUri) { this.panUri = panUri; }
+
+    public String getServiceType() {
+        if (serviceType != null && !serviceType.isBlank()) {
+            return serviceType.trim().toUpperCase();
+        }
+        String veh = (vehicleType != null ? vehicleType : (vehicle != null ? vehicle : "")).toLowerCase();
+        if (veh.contains("cab") || veh.contains("car") || veh.contains("taxi") || veh.contains("sedan")
+                || veh.contains("hatchback") || veh.contains("suv") || veh.contains("etios") || veh.contains("dzire")
+                || veh.equals("6")) {
+            return "PASSENGER";
+        }
+        if (veh.contains("ace") || veh.contains("pickup") || veh.contains("407") || veh.contains("truck")
+                || veh.equals("3") || veh.equals("4") || veh.equals("5")) {
+            return "GOODS";
+        }
+        return "BOTH";
+    }
+
+    public void setServiceType(String serviceType) {
+        this.serviceType = serviceType;
+    }
 }

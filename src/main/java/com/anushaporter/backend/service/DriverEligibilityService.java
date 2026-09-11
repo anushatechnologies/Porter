@@ -87,14 +87,17 @@ public class DriverEligibilityService {
         }
 
         // 7. Check vehicle compatibility (strict category matching)
+        String requiredCategory = "UNKNOWN";
+        String driverCategory = "UNKNOWN";
+
+        String driverRaw = driver.getVehicleType() != null && !driver.getVehicleType().isBlank()
+                ? driver.getVehicleType()
+                : (driver.getVehicle() != null ? driver.getVehicle() : "");
+        driverCategory = normalizeVehicleCategory(driverRaw);
+
         if (order != null && order.getServiceName() != null && !order.getServiceName().isBlank()) {
             String requiredRaw = order.getServiceName();
-            String driverRaw = driver.getVehicleType() != null && !driver.getVehicleType().isBlank()
-                    ? driver.getVehicleType()
-                    : (driver.getVehicle() != null ? driver.getVehicle() : "");
-
-            String requiredCategory = normalizeVehicleCategory(requiredRaw);
-            String driverCategory = normalizeVehicleCategory(driverRaw);
+            requiredCategory = normalizeVehicleCategory(requiredRaw);
 
             // If the order specifies a recognized vehicle category, driver must match that exact category
             if (!"UNKNOWN".equals(requiredCategory)) {
@@ -106,12 +109,33 @@ public class DriverEligibilityService {
             }
         }
 
+        // 8. Check service capability compatibility (Goods vs. Passenger)
+        String orderType = order != null && order.getServiceType() != null ? order.getServiceType().toUpperCase() : "GOODS";
+        if ("CAB".equals(requiredCategory)) {
+            orderType = "PASSENGER";
+        }
+        String driverService = driver.getServiceType() != null ? driver.getServiceType().toUpperCase() : "BOTH";
+        if ("CAB".equals(driverCategory)) {
+            driverService = "PASSENGER";
+        } else if ("TATA_ACE".equals(driverCategory) || "PICKUP_8FT".equals(driverCategory) || "TATA_407".equals(driverCategory)) {
+            driverService = "GOODS";
+        }
+
+        if ("PASSENGER".equals(orderType) && "GOODS".equals(driverService)) {
+            log.debug("Driver '{}' is goods-only, rejecting for passenger order", driver.getId());
+            return false;
+        }
+        if ("GOODS".equals(orderType) && "PASSENGER".equals(driverService)) {
+            log.debug("Driver '{}' is passenger-only (Cab), rejecting for goods order", driver.getId());
+            return false;
+        }
+
         return true;
     }
 
     /**
      * Normalizes diverse vehicle labels and IDs to canonical categories:
-     * TWO_WHEELER, THREE_WHEELER, TATA_ACE, PICKUP_8FT, TATA_407
+     * TWO_WHEELER, THREE_WHEELER, CAB, TATA_ACE, PICKUP_8FT, TATA_407
      */
     public String normalizeVehicleCategory(String raw) {
         if (raw == null || raw.trim().isEmpty()) {
@@ -120,13 +144,21 @@ public class DriverEligibilityService {
         String s = raw.toLowerCase().replaceAll("[^a-z0-9]", "");
         if (s.contains("2wheel") || s.contains("twowheel") || s.contains("bike") || s.contains("scooter")
                 || s.contains("motorcycle") || s.contains("moto") || s.contains("courier") || s.contains("parcel")
+                || s.contains("biketaxi")
                 || s.contains("activa") || s.contains("jupiter") || s.contains("platina") || s.contains("splendor")
                 || s.contains("pulsar") || s.contains("apache") || s.contains("dio") || s.contains("shine")
                 || s.equals("1")) {
             return "TWO_WHEELER";
         }
-        if (s.contains("3wheel") || s.contains("threewheel") || s.contains("auto") || s.contains("rickshaw") || s.contains("cng") || s.equals("2")) {
+        if (s.contains("3wheel") || s.contains("threewheel") || s.contains("auto") || s.contains("rickshaw")
+                || s.contains("cng") || s.contains("autotaxi") || s.equals("2")) {
             return "THREE_WHEELER";
+        }
+        if (s.contains("cab") || s.contains("car") || s.contains("taxi") || s.contains("sedan")
+                || s.contains("hatchback") || s.contains("suv") || s.contains("dzire") || s.contains("etios")
+                || s.contains("wagonr") || s.contains("innova") || s.contains("ertiga")
+                || s.equals("6")) {
+            return "CAB";
         }
         if (s.contains("tataace") || s.contains("ace") || s.contains("chotahathi") || s.equals("3")) {
             return "TATA_ACE";
