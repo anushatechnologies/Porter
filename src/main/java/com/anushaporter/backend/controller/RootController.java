@@ -36,11 +36,9 @@ public class RootController {
         response.put("endpoints", java.util.List.of(
                 "/api/health/db",
                 "/api/drivers",
-                "/api/driver/wallet",
                 "/api/orders",
                 "/api/payments",
-                "/api/customer",
-                "/api/settings/wallet"
+                "/api/customer"
         ));
         return response;
     }
