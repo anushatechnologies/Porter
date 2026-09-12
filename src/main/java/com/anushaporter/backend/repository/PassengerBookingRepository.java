@@ -18,6 +18,21 @@ public interface PassengerBookingRepository extends JpaRepository<PassengerBooki
 
     List<PassengerBooking> findByCustomerPhoneOrderByCreatedAtDesc(String customerPhone);
 
+    List<PassengerBooking> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
+
+    List<PassengerBooking> findByCustomerEmailOrderByCreatedAtDesc(String customerEmail);
+
+    @Query("SELECT b FROM PassengerBooking b WHERE " +
+           "(:phone IS NOT NULL AND b.customerPhone = :phone) OR " +
+           "(:email IS NOT NULL AND b.customerEmail = :email) OR " +
+           "(:customerId IS NOT NULL AND b.customerId = :customerId) " +
+           "ORDER BY b.createdAt DESC")
+    List<PassengerBooking> findForCustomer(
+            @Param("phone") String phone,
+            @Param("email") String email,
+            @Param("customerId") Long customerId
+    );
+
     List<PassengerBooking> findByDriverIdOrderByCreatedAtDesc(Long driverId);
 
     List<PassengerBooking> findByStatusOrderByCreatedAtDesc(PassengerBookingStatus status);

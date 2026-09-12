@@ -43,6 +43,9 @@ public class BookingController {
     @Autowired(required = false)
     private com.anushaporter.backend.service.DriverOfferService driverOfferService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
+
     /**
      * Recommend optimal vehicle type based on weight, dimensions, and category.
      * POST /api/vehicles/recommend
@@ -342,38 +345,95 @@ public class BookingController {
      * List user's bookings, optionally filtered by status.
      * GET /api/bookings?status=active
      */
-    @GetMapping("/api/bookings")
+    @GetMapping({"/api/bookings", "/bookings", "/api/orders/my-orders"})
     public ResponseEntity<Map<String, Object>> getBookings(
-            @RequestHeader("Authorization") String authHeader,
-            @RequestParam(required = false) String status) {
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
 
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> response = new LinkedHashMap<>();
 
         try {
             String email = extractEmail(authHeader);
-            if (email == null) {
+            String userPhone = phone;
+
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7).trim();
+                String id = jwtUtil.extractIdentifierFromFirebaseOrJwt(token);
+                if (id != null && !id.isBlank()) {
+                    if (!id.contains("@")) {
+                        String clean = id.replaceAll("\\D+", "");
+                        if (clean.length() > 10) clean = clean.substring(clean.length() - 10);
+                        if (!clean.isEmpty() && userPhone == null) userPhone = clean;
+                    }
+                }
+            }
+
+            if (email == null && userPhone != null) {
+                email = userPhone + "@customer.porter.in";
+            }
+
+            if (email == null && userPhone == null) {
                 response.put("success", false);
                 response.put("message", "Unauthorized");
                 return ResponseEntity.status(401).body(response);
             }
 
-            List<Order> orders;
-            if (status != null && !status.isEmpty()) {
-                orders = orderRepository.findByUserEmailAndStatusOrderByCreatedAtDesc(email, status);
-            } else {
-                orders = orderRepository.findByUserEmailOrderByCreatedAtDesc(email);
+            List<Order> orders = new ArrayList<>();
+            if (email != null) {
+                if (status != null && !status.isEmpty()) {
+                    orders.addAll(orderRepository.findByUserEmailAndStatusOrderByCreatedAtDesc(email, status));
+                } else {
+                    orders.addAll(orderRepository.findByUserEmailOrderByCreatedAtDesc(email));
+                }
             }
 
-            List<Map<String, Object>> items = orders.stream().map(order -> {
-                Map<String, Object> item = new HashMap<>();
-                item.put("bookingId", order.getBookingId());
-                item.put("serviceName", order.getServiceName());
-                item.put("amount", order.getAmount());
+            // Also find by alternate phone email pattern if phone is known
+            if (userPhone != null && email != null && !email.startsWith(userPhone)) {
+                String phoneEmail = userPhone + "@customer.porter.in";
+                List<Order> byPhoneEmail = (status != null && !status.isEmpty())
+                        ? orderRepository.findByUserEmailAndStatusOrderByCreatedAtDesc(phoneEmail, status)
+                        : orderRepository.findByUserEmailOrderByCreatedAtDesc(phoneEmail);
+                for (Order o : byPhoneEmail) {
+                    if (orders.stream().noneMatch(existing -> Objects.equals(existing.getBookingId(), o.getBookingId()))) {
+                        orders.add(o);
+                    }
+                }
+            }
+
+            Set<String> seenBookingIds = new HashSet<>();
+            List<Map<String, Object>> items = new ArrayList<>();
+
+            for (Order order : orders) {
+                String bId = order.getBookingId() != null ? order.getBookingId() : "ORD-" + order.getId();
+                if (seenBookingIds.contains(bId)) continue;
+                seenBookingIds.add(bId);
+
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", bId);
+                item.put("bookingId", bId);
+                item.put("bookingNumber", bId);
+                item.put("serviceName", order.getServiceName() != null ? order.getServiceName() : "Standard Delivery");
+                item.put("amount", order.getAmount() != null ? order.getAmount() : 0.0);
                 item.put("status", order.getStatus());
                 item.put("pickupAddress", order.getPickupAddress());
                 item.put("dropAddress", order.getDropAddress());
                 item.put("paymentMethod", order.getPaymentMethod());
-                item.put("createdAt", order.getCreatedAt());
+                item.put("createdAt", order.getCreatedAt() != null ? order.getCreatedAt() : LocalDateTime.now());
+                item.put("startOtp", order.getStartOtp() != null ? order.getStartOtp() : order.getDeliveryOtp());
+                item.put("deliveryOtp", order.getDeliveryOtp() != null ? order.getDeliveryOtp() : order.getStartOtp());
+
+                boolean isPass = "PASSENGER".equalsIgnoreCase(order.getServiceType()) || bId.startsWith("AP-CAR-");
+                boolean isPack = "packers".equalsIgnoreCase(order.getServiceName()) || bId.startsWith("PM-");
+                String cat = isPass ? "passenger" : (isPack ? "packers" : "truck");
+                item.put("serviceCategory", cat);
+                item.put("serviceType", isPass ? "PASSENGER" : (isPack ? "PACKERS_MOVERS" : "FREIGHT"));
+                if (isPass) {
+                    item.put("vehicleCategory", order.getServiceName());
+                    item.put("vehicleCategoryCode", order.getServiceName());
+                }
 
                 String dateLabel = "Recently";
                 if (order.getScheduledDate() != null && order.getScheduledSlot() != null) {
@@ -383,21 +443,83 @@ public class BookingController {
                 }
                 item.put("dateLabel", dateLabel);
 
-                boolean trackable = "searching".equals(order.getStatus())
-                        || "driver_assigned".equals(order.getStatus())
-                        || "in_transit".equals(order.getStatus())
-                        || "accepted".equals(order.getStatus())
-                        || "assigned".equals(order.getStatus())
-                        || "pickup_started".equals(order.getStatus());
+                boolean trackable = "searching".equalsIgnoreCase(order.getStatus())
+                        || "driver_assigned".equalsIgnoreCase(order.getStatus())
+                        || "in_transit".equalsIgnoreCase(order.getStatus())
+                        || "accepted".equalsIgnoreCase(order.getStatus())
+                        || "assigned".equalsIgnoreCase(order.getStatus())
+                        || "pickup_started".equalsIgnoreCase(order.getStatus())
+                        || "arrived".equalsIgnoreCase(order.getStatus());
                 item.put("trackable", trackable);
 
-                return item;
-            }).collect(Collectors.toList());
+                items.add(item);
+            }
+
+            // Merge native PassengerBooking records if any were created without order sync
+            if (passengerBookingRepository != null) {
+                List<com.anushaporter.backend.model.PassengerBooking> pBookings = Collections.emptyList();
+                if (userPhone != null || email != null) {
+                    pBookings = passengerBookingRepository.findForCustomer(userPhone, email, null);
+                }
+                for (var pb : pBookings) {
+                    String pbNum = pb.getBookingNumber();
+                    if (pbNum != null && seenBookingIds.contains(pbNum)) {
+                        for (var it : items) {
+                            if (pbNum.equals(it.get("bookingId"))) {
+                                if (it.get("startOtp") == null && pb.getStartOtp() != null) {
+                                    it.put("startOtp", pb.getStartOtp());
+                                }
+                                if (it.get("driver") == null && pb.getDriver() != null) {
+                                    it.put("driver", pb.getDriver());
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    if (pbNum != null) seenBookingIds.add(pbNum);
+
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", pbNum);
+                    item.put("bookingId", pbNum);
+                    item.put("bookingNumber", pbNum);
+                    item.put("serviceCategory", "passenger");
+                    item.put("serviceType", pb.getServiceType() != null ? pb.getServiceType() : "PASSENGER");
+                    item.put("serviceName", pb.getVehicleCategoryCode() != null ? pb.getVehicleCategoryCode() : "Passenger Ride");
+                    item.put("vehicleCategory", pb.getVehicleCategoryCode());
+                    item.put("vehicleCategoryCode", pb.getVehicleCategoryCode());
+                    item.put("status", pb.getStatus() != null ? pb.getStatus().name().toLowerCase() : "searching");
+                    item.put("startOtp", pb.getStartOtp());
+                    item.put("deliveryOtp", pb.getStartOtp());
+                    java.math.BigDecimal fare = pb.getFareBreakdown() != null && pb.getFareBreakdown().getTotalFare() != null
+                            ? pb.getFareBreakdown().getTotalFare() : java.math.BigDecimal.ZERO;
+                    item.put("amount", fare);
+                    item.put("estimatedFare", fare);
+                    item.put("pickupAddress", pb.getPickupAddress());
+                    item.put("dropAddress", pb.getDropAddress());
+                    item.put("paymentMethod", pb.getPaymentMethod() != null ? pb.getPaymentMethod() : "CASH");
+                    item.put("createdAt", pb.getCreatedAt() != null ? pb.getCreatedAt() : LocalDateTime.now());
+                    item.put("dateLabel", "Recently");
+                    item.put("trackable", pb.getStatus() != null && !pb.getStatus().isTerminal());
+                    item.put("driver", pb.getDriver());
+
+                    items.add(item);
+                }
+            }
+
+            // Sort by createdAt descending
+            items.sort((a, b) -> {
+                Object cA = a.get("createdAt");
+                Object cB = b.get("createdAt");
+                if (cA == null || cB == null) return 0;
+                return cB.toString().compareTo(cA.toString());
+            });
 
             response.put("success", true);
             response.put("items", items);
+            response.put("bookings", items);
+            response.put("total", items.size());
             response.put("page", 1);
-            response.put("pageSize", items.size());
+            response.put("pageSize", Math.max(1, items.size()));
             response.put("hasMore", false);
             return ResponseEntity.ok(response);
 

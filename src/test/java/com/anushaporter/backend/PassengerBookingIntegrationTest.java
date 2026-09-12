@@ -70,6 +70,9 @@ public class PassengerBookingIntegrationTest {
     @Autowired
     private com.anushaporter.backend.util.JwtUtil jwtUtil;
 
+    @Autowired
+    private com.anushaporter.backend.repository.AppUserRepository appUserRepository;
+
     private String adminToken;
 
     @BeforeEach
@@ -417,7 +420,86 @@ public class PassengerBookingIntegrationTest {
                         .content("{\"rating\": 5, \"feedback\": \"Smooth ride\", \"tags\": [\"Clean Cab\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Thank you for your rating!"));
+                .andExpect(jsonPath("$.message").value("Review submitted successfully"));
+    }
+
+    @Test
+    void testPassengerBookings_CustomerListAndUnifiedEndpointIntegration() throws Exception {
+        String testPhone = "9988776655";
+        AppUser testUser = appUserRepository.findFirstByPhoneOrderByIdDesc(testPhone).orElseGet(() -> {
+            AppUser u = new AppUser();
+            u.setPhone(testPhone);
+            u.setName("Test Customer");
+            u.setEmail(testPhone + "@customer.porter.in");
+            u.setRole("Customer");
+            return appUserRepository.save(u);
+        });
+
+        String userToken = jwtUtil.generateToken(testPhone);
+
+        // 1. Create booking with Bearer token and NO customerPhone / customerId in payload
+        String createJson = """
+                {
+                  "serviceType": "ONE_WAY",
+                  "vehicleCategoryCode": "BIKE",
+                  "pickupAddress": "Madhapur Metro",
+                  "dropAddress": "Hitech City",
+                  "pickupLat": 17.4485,
+                  "pickupLng": 78.3908,
+                  "dropLat": 17.4412,
+                  "dropLng": 78.3809,
+                  "passengerCount": 1,
+                  "paymentMethod": "CASH"
+                }
+                """;
+
+        MvcResult result = mockMvc.perform(post("/api/passenger/bookings")
+                        .header("Authorization", "Bearer " + userToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createJson))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.bookingNumber").isNotEmpty())
+                .andExpect(jsonPath("$.startOtp").isNotEmpty())
+                .andReturn();
+
+        JsonNode created = objectMapper.readTree(result.getResponse().getContentAsString());
+        String bookingNumber = created.get("bookingNumber").asText();
+        String startOtp = created.get("startOtp").asText();
+
+        // Verify customer details were resolved and saved
+        PassengerBooking saved = bookingRepository.findByBookingNumber(bookingNumber).orElseThrow();
+        assertEquals(testUser.getId(), saved.getCustomerId());
+        assertEquals(testPhone, saved.getCustomerPhone());
+
+        // 2. GET /api/passenger/bookings (Customer's passenger bookings list)
+        mockMvc.perform(get("/api/passenger/bookings")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.items[0].bookingNumber").value(bookingNumber))
+                .andExpect(jsonPath("$.items[0].serviceCategory").value("passenger"))
+                .andExpect(jsonPath("$.items[0].startOtp").value(startOtp));
+
+        // 3. GET /api/bookings (Unified Orders List)
+        mockMvc.perform(get("/api/bookings")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.items[0].bookingNumber").value(bookingNumber))
+                .andExpect(jsonPath("$.items[0].serviceCategory").value("passenger"))
+                .andExpect(jsonPath("$.items[0].startOtp").value(startOtp));
+
+        // 4. POST /api/driver/passenger/bookings/{id}/start-trip
+        mockMvc.perform(post("/api/driver/passenger/bookings/" + bookingNumber + "/start-trip")
+                        .header("Authorization", "Bearer " + userToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"otp\": \"" + startOtp + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.status").value("IN_TRANSIT"));
     }
 
     private PassengerBooking parseBookingResponse(MvcResult result) throws Exception {

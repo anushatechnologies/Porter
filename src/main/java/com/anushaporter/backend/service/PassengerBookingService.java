@@ -137,7 +137,20 @@ public class PassengerBookingService {
             try {
                 Order order = new Order();
                 order.setBookingId(savedBooking.getBookingNumber());
-                order.setUserEmail(savedBooking.getCustomerEmail());
+
+                String userEmail = savedBooking.getCustomerEmail();
+                if ((userEmail == null || userEmail.isBlank()) && savedBooking.getCustomerPhone() != null
+                        && !savedBooking.getCustomerPhone().isBlank() && !"N/A".equalsIgnoreCase(savedBooking.getCustomerPhone())) {
+                    String cleanPhone = savedBooking.getCustomerPhone().replaceAll("\\D+", "");
+                    if (cleanPhone.length() > 10) cleanPhone = cleanPhone.substring(cleanPhone.length() - 10);
+                    if (!cleanPhone.isEmpty()) {
+                        userEmail = cleanPhone + "@customer.porter.in";
+                    }
+                }
+                order.setUserEmail(userEmail);
+                order.setReceiverName(savedBooking.getCustomerName());
+                order.setReceiverPhone(savedBooking.getCustomerPhone());
+                order.setPaymentMethod(savedBooking.getPaymentMethod() != null ? savedBooking.getPaymentMethod() : "CASH");
                 order.setServiceName(categoryCode);
                 order.setServiceType("PASSENGER");
                 order.setPassengerCount(passengers);
@@ -277,6 +290,16 @@ public class PassengerBookingService {
         booking.setCancellationFee(fee);
 
         PassengerBooking updated = bookingRepository.save(booking);
+
+        if (orderRepository != null && updated.getBookingNumber() != null) {
+            try {
+                orderRepository.findByBookingId(updated.getBookingNumber()).ifPresent(order -> {
+                    order.setStatus("cancelled");
+                    order.setCancellationReason(reason);
+                    orderRepository.save(order);
+                });
+            } catch (Exception ignored) {}
+        }
 
         notificationService.sendEvent(
                 PassengerNotificationService.EventType.BOOKING_CANCELLED,

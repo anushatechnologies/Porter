@@ -7,21 +7,24 @@ import com.anushaporter.backend.model.PassengerBooking;
 import com.anushaporter.backend.model.PassengerServiceEntity;
 import com.anushaporter.backend.model.PassengerVehicleCategory;
 import com.anushaporter.backend.model.RentalPackage;
+import com.anushaporter.backend.repository.AppUserRepository;
 import com.anushaporter.backend.repository.PassengerBookingRepository;
 import com.anushaporter.backend.repository.PassengerServiceRepository;
 import com.anushaporter.backend.repository.PassengerVehicleCategoryRepository;
 import com.anushaporter.backend.repository.RentalPackageRepository;
 import com.anushaporter.backend.service.PassengerBookingService;
 import com.anushaporter.backend.service.PassengerPricingEngine;
+import com.anushaporter.backend.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.*;
 
 @RestController
-@RequestMapping("/api/passenger")
+@RequestMapping({"/api/passenger", "/api/passenger-bookings"})
 @RequiredArgsConstructor
 @Slf4j
 public class PassengerBookingController {
@@ -32,6 +35,8 @@ public class PassengerBookingController {
     private final PassengerServiceRepository serviceRepository;
     private final PassengerVehicleCategoryRepository vehicleCategoryRepository;
     private final RentalPackageRepository rentalPackageRepository;
+    private final JwtUtil jwtUtil;
+    private final AppUserRepository appUserRepository;
 
     @PostMapping({"/fare-estimate", "/fares/estimate"})
     public ResponseEntity<PassengerFareEstimateResponse> getFareEstimate(@RequestBody PassengerFareEstimateRequest request) {
@@ -81,51 +86,104 @@ public class PassengerBookingController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/bookings")
-    public ResponseEntity<Map<String, Object>> createBooking(@RequestBody PassengerBookingCreateRequest request) {
-        PassengerBooking booking = bookingService.createBooking(request);
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("success", true);
-        response.put("booking", booking);
-        // Include direct booking fields for exact frontend contract alignment
-        response.put("id", booking.getBookingNumber());
-        response.put("bookingId", booking.getBookingNumber());
-        response.put("bookingNumber", booking.getBookingNumber());
-        response.put("trackingNumber", booking.getTrackingNumber());
-        response.put("status", booking.getStatus().name());
-        response.put("startOtp", booking.getStartOtp());
-        if (booking.getFareBreakdown() != null) {
-            response.put("estimatedFare", booking.getFareBreakdown().getTotalFare());
-        }
-        response.put("paymentMode", booking.getPaymentMethod());
-        response.put("createdAt", booking.getCreatedAt());
+    @PostMapping({"/bookings", "/bookings/book", "/book"})
+    public ResponseEntity<Map<String, Object>> createBooking(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody PassengerBookingCreateRequest request) {
 
-        response.put("driver", booking.getDriver());
+        // Enrich customer details from JWT Bearer token if not provided in payload
+        resolveCustomerDetails(authHeader, request);
+
+        PassengerBooking booking = bookingService.createBooking(request);
+        Map<String, Object> response = formatBookingResponse(booking);
+        response.put("success", true);
         return ResponseEntity.status(201).body(response);
     }
 
-    @GetMapping("/bookings/{id}")
+    @GetMapping({"/bookings", "/bookings/list"})
+    public ResponseEntity<Map<String, Object>> getCustomerBookings(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize
+    ) {
+        String resolvedPhone = phone;
+        String resolvedEmail = null;
+        Long resolvedCustomerId = null;
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7).trim();
+            String identifier = jwtUtil.extractIdentifierFromFirebaseOrJwt(token);
+            if (identifier != null && !identifier.isBlank()) {
+                if (identifier.contains("@")) {
+                    resolvedEmail = identifier;
+                    var userOpt = appUserRepository.findFirstByEmailOrderByIdDesc(identifier);
+                    if (userOpt.isPresent()) {
+                        resolvedCustomerId = userOpt.get().getId();
+                        if (resolvedPhone == null) resolvedPhone = userOpt.get().getPhone();
+                    }
+                } else {
+                    String clean = identifier.replaceAll("\\D+", "");
+                    if (clean.length() > 10) clean = clean.substring(clean.length() - 10);
+                    if (resolvedPhone == null && !clean.isEmpty()) resolvedPhone = clean;
+                    var userOpt = appUserRepository.findFirstByPhoneOrderByIdDesc(clean);
+                    if (userOpt.isPresent()) {
+                        resolvedCustomerId = userOpt.get().getId();
+                        if (resolvedEmail == null) resolvedEmail = userOpt.get().getEmail();
+                    }
+                }
+            }
+        }
+
+        List<PassengerBooking> allBookings;
+        if (resolvedPhone != null || resolvedEmail != null || resolvedCustomerId != null) {
+            allBookings = bookingRepository.findForCustomer(resolvedPhone, resolvedEmail, resolvedCustomerId);
+        } else {
+            allBookings = bookingRepository.findAllByOrderByCreatedAtDesc();
+        }
+
+        // Status filtering if requested
+        if (status != null && !status.isBlank()) {
+            String filterStatus = status.trim().toLowerCase();
+            allBookings = allBookings.stream().filter(b -> {
+                String bStatus = b.getStatus() != null ? b.getStatus().name().toLowerCase() : "";
+                if ("active".equals(filterStatus)) {
+                    return !bStatus.contains("completed") && !bStatus.contains("cancelled");
+                }
+                return bStatus.contains(filterStatus);
+            }).toList();
+        }
+
+        int total = allBookings.size();
+        int safePage = Math.max(1, page != null ? page : 1);
+        int safePageSize = Math.max(1, pageSize != null ? pageSize : 20);
+        int start = (safePage - 1) * safePageSize;
+        List<PassengerBooking> pagedList = start >= total ? Collections.emptyList()
+                : allBookings.subList(start, Math.min(start + safePageSize, total));
+
+        List<Map<String, Object>> formattedItems = pagedList.stream().map(this::formatBookingResponse).toList();
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("items", formattedItems);
+        resp.put("bookings", formattedItems);
+        resp.put("total", total);
+        resp.put("page", safePage);
+        resp.put("pageSize", safePageSize);
+        resp.put("hasMore", (start + safePageSize) < total);
+
+        return ResponseEntity.ok(resp);
+    }
+
+    @GetMapping({"/bookings/{id}", "/bookings/{id}/tracking", "/bookings/{id}/live"})
     public ResponseEntity<Map<String, Object>> getBookingById(@PathVariable String id) {
         Optional<PassengerBooking> bookingOpt = findBookingByIdOrNumber(id);
         if (bookingOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        PassengerBooking booking = bookingOpt.get();
-        Map<String, Object> response = new LinkedHashMap<>();
+        Map<String, Object> response = formatBookingResponse(bookingOpt.get());
         response.put("success", true);
-        response.put("id", booking.getBookingNumber());
-        response.put("bookingId", booking.getBookingNumber());
-        response.put("bookingNumber", booking.getBookingNumber());
-        response.put("trackingNumber", booking.getTrackingNumber());
-        response.put("status", booking.getStatus().name());
-        response.put("startOtp", booking.getStartOtp());
-        if (booking.getFareBreakdown() != null) {
-            response.put("estimatedFare", booking.getFareBreakdown().getTotalFare());
-        }
-        response.put("paymentMode", booking.getPaymentMethod());
-        response.put("createdAt", booking.getCreatedAt());
-        response.put("driver", booking.getDriver());
-        response.put("booking", booking);
         return ResponseEntity.ok(response);
     }
 
@@ -304,5 +362,105 @@ public class PassengerBookingController {
         } catch (NumberFormatException ignored) {}
 
         return bookingRepository.findByBookingNumber("AP-CAR-" + sanitized);
+    }
+
+    private Map<String, Object> formatBookingResponse(PassengerBooking b) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        String bookingNum = b.getBookingNumber() != null ? b.getBookingNumber() : String.valueOf(b.getId());
+        response.put("id", bookingNum);
+        response.put("bookingId", bookingNum);
+        response.put("bookingNumber", bookingNum);
+        response.put("trackingNumber", b.getTrackingNumber() != null ? b.getTrackingNumber() : bookingNum);
+        response.put("serviceCategory", "passenger");
+        response.put("serviceType", b.getServiceType() != null ? b.getServiceType() : "PASSENGER");
+        response.put("serviceName", b.getVehicleCategoryCode() != null ? b.getVehicleCategoryCode() : "Passenger Ride");
+        response.put("vehicleCategory", b.getVehicleCategoryCode());
+        response.put("vehicleCategoryCode", b.getVehicleCategoryCode());
+        response.put("status", b.getStatus() != null ? b.getStatus().name() : "DRIVER_SEARCHING");
+        response.put("startOtp", b.getStartOtp());
+        response.put("deliveryOtp", b.getStartOtp());
+
+        BigDecimal fare = (b.getFareBreakdown() != null && b.getFareBreakdown().getTotalFare() != null)
+                ? b.getFareBreakdown().getTotalFare() : BigDecimal.ZERO;
+        response.put("amount", fare);
+        response.put("estimatedFare", fare);
+        response.put("pickupAddress", b.getPickupAddress() != null ? b.getPickupAddress() : "");
+        response.put("dropAddress", b.getDropAddress() != null ? b.getDropAddress() : "");
+        response.put("pickupLat", b.getPickupLatitude());
+        response.put("pickupLng", b.getPickupLongitude());
+        response.put("dropLat", b.getDropLatitude());
+        response.put("dropLng", b.getDropLongitude());
+        response.put("paymentMethod", b.getPaymentMethod() != null ? b.getPaymentMethod() : "CASH");
+        response.put("paymentMode", b.getPaymentMethod() != null ? b.getPaymentMethod() : "CASH");
+        response.put("paymentStatus", b.getPaymentStatus() != null ? b.getPaymentStatus() : "PENDING");
+        response.put("createdAt", b.getCreatedAt());
+        response.put("driver", b.getDriver());
+        response.put("hasAssignedDriver", b.getDriver() != null || b.getDriverId() != null);
+        response.put("trackable", b.getStatus() != null && !b.getStatus().isTerminal());
+        response.put("booking", b);
+        return response;
+    }
+
+    private void resolveCustomerDetails(String authHeader, PassengerBookingCreateRequest request) {
+        if (request == null) return;
+
+        String identifier = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7).trim();
+            identifier = jwtUtil.extractIdentifierFromFirebaseOrJwt(token);
+        }
+
+        String phone = (request.getCustomerPhone() != null && !request.getCustomerPhone().isBlank() && !"N/A".equalsIgnoreCase(request.getCustomerPhone()))
+                ? request.getCustomerPhone() : null;
+        String email = (request.getCustomerEmail() != null && !request.getCustomerEmail().isBlank())
+                ? request.getCustomerEmail() : null;
+        Long customerId = request.getCustomerId();
+        String customerName = (request.getCustomerName() != null && !request.getCustomerName().isBlank() && !"Customer".equalsIgnoreCase(request.getCustomerName()))
+                ? request.getCustomerName() : null;
+
+        if (identifier != null && !identifier.isBlank()) {
+            if (identifier.contains("@")) {
+                if (email == null) email = identifier;
+                var userOpt = appUserRepository.findFirstByEmailOrderByIdDesc(identifier);
+                if (userOpt.isPresent()) {
+                    var u = userOpt.get();
+                    if (customerId == null) customerId = u.getId();
+                    if (customerName == null && u.getName() != null) customerName = u.getName();
+                    if (phone == null && u.getPhone() != null) phone = u.getPhone();
+                }
+            } else {
+                String cleanDigits = identifier.replaceAll("\\D+", "");
+                if (cleanDigits.length() > 10) cleanDigits = cleanDigits.substring(cleanDigits.length() - 10);
+                if (phone == null && !cleanDigits.isEmpty()) phone = cleanDigits;
+
+                var userOpt = appUserRepository.findFirstByPhoneOrderByIdDesc(cleanDigits);
+                if (userOpt.isPresent()) {
+                    var u = userOpt.get();
+                    if (customerId == null) customerId = u.getId();
+                    if (customerName == null && u.getName() != null) customerName = u.getName();
+                    if (email == null && u.getEmail() != null) email = u.getEmail();
+                }
+            }
+        }
+
+        if (phone != null && !phone.isBlank()) {
+            String cleanPhone = phone.replaceAll("\\D+", "");
+            if (cleanPhone.length() > 10) cleanPhone = cleanPhone.substring(cleanPhone.length() - 10);
+            if (customerId == null) {
+                var userOpt = appUserRepository.findFirstByPhoneOrderByIdDesc(cleanPhone);
+                if (userOpt.isPresent()) {
+                    customerId = userOpt.get().getId();
+                    if (customerName == null && userOpt.get().getName() != null) customerName = userOpt.get().getName();
+                }
+            }
+            if (email == null) {
+                email = cleanPhone + "@customer.porter.in";
+            }
+            request.setCustomerPhone(phone);
+        }
+
+        if (customerId != null) request.setCustomerId(customerId);
+        if (customerName != null) request.setCustomerName(customerName);
+        if (email != null) request.setCustomerEmail(email);
     }
 }

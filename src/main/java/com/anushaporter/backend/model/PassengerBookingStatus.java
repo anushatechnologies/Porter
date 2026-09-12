@@ -49,4 +49,12 @@ public enum PassengerBookingStatus {
         Set<PassengerBookingStatus> allowed = VALID_TRANSITIONS.get(this);
         return allowed != null && allowed.contains(next);
     }
+
+    public boolean isTerminal() {
+        return this == TRIP_COMPLETED
+                || this == CANCELLED_BY_CUSTOMER
+                || this == CANCELLED_BY_DRIVER
+                || this == CANCELLED_BY_ADMIN
+                || this == EXPIRED;
+    }
 }

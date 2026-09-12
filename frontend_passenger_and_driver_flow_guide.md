@@ -309,3 +309,335 @@ In Step 1 of Driver Registration, the UI must display input fields and prompt th
 }
 ```
 *(When submitted, the backend persists the driver's actual inputs into the database and returns `registrationStep: 2` to proceed to vehicle and document upload.)*
+
+---
+
+## 🚗 5. Updated Passenger & Driver End-to-End API Integration Flow (September 2026 Fixes)
+
+This section details all backend enhancements and route aliases implemented to resolve customer identity resolution, `GET /api/passenger/bookings` HTTP 500, unified `GET /api/bookings` feed synchronization, and driver lifecycle transitions.
+
+---
+
+### A. Customer Passenger Booking Flow
+
+#### 1. Fare Estimate
+* **Endpoint**: `POST /api/passenger/estimate` (or `/api/passenger/fare-estimate`)
+* **Headers**:
+  ```http
+  Content-Type: application/json
+  Authorization: Bearer <customer_jwt>
+  ```
+* **Request Body**:
+  ```json
+  {
+    "serviceType": "ONE_WAY",
+    "vehicleCategoryCode": "SEDAN",
+    "pickupAddress": "Indiranagar 100ft Road, Bengaluru",
+    "pickupLatitude": 12.9784,
+    "pickupLongitude": 77.6408,
+    "dropAddress": "Koramangala 4th Block, Bengaluru",
+    "dropLatitude": 12.9352,
+    "dropLongitude": 77.6245,
+    "passengerCount": 2,
+    "luggageCount": 1
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "fareLockToken": "e7b049d5-45c2-4919-913a-a1b920199e8d",
+    "fareLockExpiresAt": "2026-09-12T10:45:00",
+    "serviceType": "ONE_WAY",
+    "vehicleCategoryCode": "SEDAN",
+    "distanceKm": 6.8,
+    "durationMinutes": 18,
+    "breakdown": {
+      "baseFare": 60.00,
+      "distanceFare": 95.20,
+      "timeFare": 0.00,
+      "surgeMultiplier": 1.0,
+      "taxes": 7.76,
+      "totalFare": 162.96
+    }
+  }
+  ```
+
+---
+
+#### 2. Create Booking (JWT Customer Resolution)
+* **Endpoint**: `POST /api/passenger/bookings`
+* **Headers**:
+  ```http
+  Content-Type: application/json
+  Authorization: Bearer <customer_jwt>
+  ```
+* **Important Change**:
+  * You **no longer** need to hardcode or calculate `customerId`, `customerPhone`, or `customerEmail`.
+  * The backend automatically extracts customer identity, mobile number, and email from the `Authorization` Bearer token.
+* **Request Body**:
+  ```json
+  {
+    "fareLockToken": "e7b049d5-45c2-4919-913a-a1b920199e8d",
+    "serviceType": "ONE_WAY",
+    "vehicleCategoryCode": "SEDAN",
+    "passengerCount": 2,
+    "luggageCount": 1,
+    "pickupAddress": "Indiranagar 100ft Road, Bengaluru",
+    "pickupLatitude": 12.9784,
+    "pickupLongitude": 77.6408,
+    "dropAddress": "Koramangala 4th Block, Bengaluru",
+    "dropLatitude": 12.9352,
+    "dropLongitude": 77.6245,
+    "paymentMethod": "CASH"
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "id": "AP-CAR-260912102530-5793",
+    "bookingId": "AP-CAR-260912102530-5793",
+    "bookingNumber": "AP-CAR-260912102530-5793",
+    "trackingNumber": "TRK-PASS-260912102530-5793",
+    "serviceCategory": "passenger",
+    "status": "REQUESTED",
+    "startOtp": "8813",
+    "amount": 162.96,
+    "paymentMethod": "CASH",
+    "paymentStatus": "PENDING",
+    "hasAssignedDriver": false,
+    "driver": null
+  }
+  ```
+
+---
+
+#### 3. Passenger Bookings List Feed
+* **Endpoint**: `GET /api/passenger/bookings` (or `/api/passenger/bookings/list`)
+* **Headers**:
+  ```http
+  Authorization: Bearer <customer_jwt>
+  ```
+* **Query Parameters (Optional)**:
+  * `status`: Filter by status (`active`, `completed`, `cancelled`). Defaults to all.
+  * `page`: Page number (default: `1`).
+  * `pageSize`: Items per page (default: `20`).
+* **Response (200 OK)**:
+  * Contains both `items` and `bookings` arrays for full frontend compatibility:
+  ```json
+  {
+    "success": true,
+    "items": [
+      {
+        "id": "AP-CAR-260912102530-5793",
+        "bookingId": "AP-CAR-260912102530-5793",
+        "serviceCategory": "passenger",
+        "status": "DRIVER_ASSIGNED",
+        "startOtp": "8813",
+        "amount": 162.96,
+        "pickupAddress": "Indiranagar 100ft Road, Bengaluru",
+        "dropAddress": "Koramangala 4th Block, Bengaluru",
+        "hasAssignedDriver": true,
+        "driver": {
+          "id": "drv_pass_42",
+          "name": "Rajesh Kumar",
+          "phone": "+919876543210",
+          "vehicleNumber": "KA-01-AB-1234",
+          "vehicleModel": "SEDAN",
+          "rating": 4.9,
+          "latitude": 12.9812,
+          "longitude": 77.6373,
+          "etaMinutes": 4
+        }
+      }
+    ],
+    "bookings": [ /* Same items for backward compatibility */ ],
+    "total": 1,
+    "page": 1,
+    "pageSize": 20,
+    "hasMore": false
+  }
+  ```
+
+---
+
+#### 4. Unified Orders Feed (Freight + Passenger + Movers)
+* **Endpoint**: `GET /api/bookings` (or `/api/orders/my-orders`)
+* **Headers**:
+  ```http
+  Authorization: Bearer <customer_jwt>
+  ```
+* **Response (200 OK)**:
+  * Merges standard freight orders, packers & movers, and passenger bookings into a single, unified list.
+  * Passenger items are marked with `"serviceCategory": "passenger"`, `"serviceType": "PASSENGER"`, and include `startOtp` and driver details.
+
+---
+
+#### 5. Live Ride Tracking
+* **Endpoint**: `GET /api/passenger/bookings/{id}/tracking` (or `GET /api/passenger/bookings/{id}`)
+* **Path Parameter `{id}`**: Accepts numeric ID (`42`), booking number (`AP-CAR-260912102530-5793`), or tracking number (`TRK-PASS-...`).
+* **Headers**:
+  ```http
+  Authorization: Bearer <customer_jwt>
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "id": "AP-CAR-260912102530-5793",
+    "status": "DRIVER_ASSIGNED",
+    "startOtp": "8813",
+    "hasAssignedDriver": true,
+    "trackable": true,
+    "driver": {
+      "id": "drv_pass_42",
+      "name": "Rajesh Kumar",
+      "phone": "+919876543210",
+      "vehicleNumber": "KA-01-AB-1234",
+      "vehicleModel": "SEDAN",
+      "rating": 4.9,
+      "latitude": 12.9812,
+      "longitude": 77.6373,
+      "etaMinutes": 4
+    }
+  }
+  ```
+
+---
+
+#### 6. Customer Cancellation
+* **Endpoint**: `POST /api/passenger/bookings/{id}/cancel`
+* **Headers**:
+  ```http
+  Content-Type: application/json
+  Authorization: Bearer <customer_jwt>
+  ```
+* **Request Body**:
+  ```json
+  {
+    "reason": "Changed my mind",
+    "cancelledBy": "CUSTOMER"
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Ride cancelled successfully",
+    "cancellationFee": 0.00
+  }
+  ```
+
+---
+
+### B. Driver App Lifecycle Flow
+
+#### 1. Accept Ride
+* **Endpoint**: `POST /api/driver/passenger/bookings/{bookingId}/accept`
+  * *(Route aliases: `/api/driver/orders/{bookingId}/accept`, `/api/driver/bookings/{bookingId}/accept`)*
+* **Headers**:
+  ```http
+  Authorization: Bearer <driver_jwt>
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "statusCode": 200,
+    "message": "Order accepted successfully",
+    "bookingId": "AP-CAR-260912102530-5793",
+    "status": "accepted",
+    "stopSound": true,
+    "action": "STOP_RINGTONE"
+  }
+  ```
+* **Backend Side-Effect**:
+  * Passenger booking transitions to `DRIVER_ASSIGNED`.
+  * Competing drivers receive FCM push with `action: "STOP_RINGTONE"`.
+
+---
+
+#### 2. Driver Arrived at Pickup
+* **Endpoint**: `POST /api/driver/passenger/bookings/{bookingId}/arrived`
+  * *(Route alias: `/api/driver/orders/{bookingId}/arrived`)*
+* **Headers**:
+  ```http
+  Authorization: Bearer <driver_jwt>
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "statusCode": 200,
+    "status": "DRIVER_ARRIVED",
+    "message": "Status updated successfully."
+  }
+  ```
+* **Backend Side-Effect**:
+  * Passenger booking transitions to `DRIVER_ARRIVED`.
+  * Push notification is dispatched to passenger: *"Your driver has arrived at pickup."*
+
+---
+
+#### 3. Start Ride (Verify 4-Digit Passenger Start OTP)
+* **Endpoint**: `POST /api/driver/passenger/bookings/{bookingId}/start-trip`
+  * *(Route alias: `/api/driver/orders/{bookingId}/start-trip`, `/api/driver/orders/{bookingId}/start-ride`)*
+* **Headers**:
+  ```http
+  Content-Type: application/json
+  Authorization: Bearer <driver_jwt>
+  ```
+* **Request Body**:
+  ```json
+  {
+    "otp": "8813"
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Start OTP verified successfully. Trip started.",
+    "status": "IN_TRANSIT"
+  }
+  ```
+* **Error (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "message": "Incorrect Start Ride OTP. Please enter the valid 4-digit code provided by the passenger."
+  }
+  ```
+
+---
+
+#### 4. Complete Ride & Confirm Payment
+* **Endpoint**: `POST /api/driver/passenger/bookings/{bookingId}/complete`
+  * *(Route alias: `/api/driver/passenger/bookings/{bookingId}/confirm-payment`, `/api/driver/orders/{bookingId}/confirm-payment`)*
+* **Headers**:
+  ```http
+  Content-Type: application/json
+  Authorization: Bearer <driver_jwt>
+  ```
+* **Request Body**:
+  ```json
+  {
+    "paymentMethod": "CASH",
+    "amount": 162.96
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "statusCode": 200,
+    "message": "Payment confirmed and order completed successfully",
+    "bookingId": "AP-CAR-260912102530-5793",
+    "status": "completed",
+    "paymentStatus": "PAID"
+  }
+  ```
+* **Backend Side-Effect**:
+  * Calculates 5% platform commission and 95% driver net earning.
+  * Credits driver wallet and creates earnings record.
+  * Passenger booking transitions to `TRIP_COMPLETED` with `paymentStatus: "PAID"`.
+

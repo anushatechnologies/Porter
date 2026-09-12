@@ -349,7 +349,14 @@ public class DriverAPIController {
         return updateLocation(request, payload);
     }
 
-    @RequestMapping(value = { "/driver/orders/{bookingId}/accept", "/drivers/orders/{bookingId}/accept" }, method = {
+    @RequestMapping(value = {
+            "/driver/orders/{bookingId}/accept",
+            "/drivers/orders/{bookingId}/accept",
+            "/driver/passenger/bookings/{bookingId}/accept",
+            "/drivers/passenger/bookings/{bookingId}/accept",
+            "/driver/bookings/{bookingId}/accept",
+            "/drivers/bookings/{bookingId}/accept"
+    }, method = {
             RequestMethod.PUT, RequestMethod.POST })
     public ResponseEntity<?> acceptOrderByBookingId(
             HttpServletRequest request,
@@ -390,6 +397,40 @@ public class DriverAPIController {
             } catch (NumberFormatException ignored) {
             }
         }
+
+        if (orderOpt.isEmpty() && passengerBookingRepository != null) {
+            var pbOpt = passengerBookingRepository.findByBookingNumber(bookingId);
+            if (pbOpt.isEmpty()) {
+                try {
+                    pbOpt = passengerBookingRepository.findById(Long.valueOf(bookingId));
+                } catch (NumberFormatException ignored) {}
+            }
+            if (pbOpt.isPresent()) {
+                var pb = pbOpt.get();
+                orderOpt = orderRepository.findByBookingId(pb.getBookingNumber());
+                if (orderOpt.isEmpty()) {
+                    Order syncd = new Order();
+                    syncd.setBookingId(pb.getBookingNumber());
+                    syncd.setUserEmail(pb.getCustomerEmail());
+                    syncd.setReceiverName(pb.getCustomerName());
+                    syncd.setReceiverPhone(pb.getCustomerPhone());
+                    syncd.setStartOtp(pb.getStartOtp());
+                    syncd.setDeliveryOtp(pb.getStartOtp());
+                    syncd.setStatus("searching");
+                    syncd.setServiceName(pb.getVehicleCategoryCode());
+                    syncd.setServiceType("PASSENGER");
+                    syncd.setPickupAddress(pb.getPickupAddress());
+                    syncd.setDropAddress(pb.getDropAddress());
+                    syncd.setPickupLat(pb.getPickupLatitude());
+                    syncd.setPickupLng(pb.getPickupLongitude());
+                    syncd.setDropLat(pb.getDropLatitude());
+                    syncd.setDropLng(pb.getDropLongitude());
+                    syncd.setCreatedAt(pb.getCreatedAt() != null ? pb.getCreatedAt() : java.time.LocalDateTime.now());
+                    orderOpt = Optional.of(orderRepository.save(syncd));
+                }
+            }
+        }
+
         if (orderOpt.isEmpty()) {
             Map<String, Object> notFound = new LinkedHashMap<>();
             notFound.put("success", false);
@@ -510,6 +551,28 @@ public class DriverAPIController {
                 try { acceptedDriverId = Long.parseLong(driverId.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
             }
             driverOfferService.onOrderAcceptedByDriver(saved.getBookingId(), acceptedDriverId);
+        }
+
+        if (passengerBookingRepository != null && saved.getBookingId() != null) {
+            try {
+                var pbOpt = passengerBookingRepository.findByBookingNumber(saved.getBookingId());
+                if (pbOpt.isEmpty()) {
+                    try { pbOpt = passengerBookingRepository.findById(Long.valueOf(saved.getBookingId())); } catch (NumberFormatException ignored) {}
+                }
+                pbOpt.ifPresent(pb -> {
+                    if (driver != null && driver.getId() != null) {
+                        pb.setDriverId(driver.getId());
+                    } else if (driverId != null) {
+                        try { pb.setDriverId(Long.parseLong(driverId.replaceAll("[^0-9]", ""))); } catch (Exception ignored) {}
+                    }
+                    if (driverName != null && !driverName.isBlank()) pb.setDriverName(driverName);
+                    if (driverPhone != null && !driverPhone.isBlank()) pb.setDriverPhone(driverPhone);
+                    if (driverVehicle != null && !driverVehicle.isBlank()) pb.setVehicleNumber(driverVehicle);
+                    pb.setDriverAssignedAt(now);
+                    pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.DRIVER_ASSIGNED);
+                    passengerBookingRepository.save(pb);
+                });
+            } catch (Exception ignored) {}
         }
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -633,7 +696,11 @@ public class DriverAPIController {
      */
     @RequestMapping(value = {
             "/driver/orders/{bookingId}/trip-status",
-            "/drivers/orders/{bookingId}/trip-status"
+            "/drivers/orders/{bookingId}/trip-status",
+            "/driver/passenger/bookings/{bookingId}/trip-status",
+            "/drivers/passenger/bookings/{bookingId}/trip-status",
+            "/driver/bookings/{bookingId}/trip-status",
+            "/drivers/bookings/{bookingId}/trip-status"
     }, method = { RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH })
     public ResponseEntity<?> updateTripStatus(
             HttpServletRequest request,
@@ -643,6 +710,41 @@ public class DriverAPIController {
         String driverIdStr = driver != null && driver.getId() != null ? driver.getId().toString() : null;
 
         Map<String, Object> result = tripStateMachineService.updateTripStatus(bookingId, payload, driverIdStr);
+        int statusCode = result.containsKey("statusCode") ? (int) result.get("statusCode") : 200;
+        return ResponseEntity.status(statusCode).body(result);
+    }
+
+    @RequestMapping(value = {
+            "/driver/orders/{bookingId}/arrived",
+            "/drivers/orders/{bookingId}/arrived",
+            "/driver/passenger/bookings/{bookingId}/arrived",
+            "/drivers/passenger/bookings/{bookingId}/arrived",
+            "/driver/bookings/{bookingId}/arrived",
+            "/drivers/bookings/{bookingId}/arrived"
+    }, method = { RequestMethod.PUT, RequestMethod.POST })
+    public ResponseEntity<?> driverArrivedAtPickup(
+            HttpServletRequest request,
+            @PathVariable String bookingId) {
+        Driver driver = getAuthenticatedDriver(request);
+        String driverIdStr = driver != null && driver.getId() != null ? driver.getId().toString() : null;
+        com.anushaporter.backend.dto.TripStatusUpdateRequest req = new com.anushaporter.backend.dto.TripStatusUpdateRequest();
+        req.setTargetStatus(com.anushaporter.backend.model.BookingStatus.DRIVER_ARRIVED);
+        req.setRawStatus("DRIVER_ARRIVED");
+        Map<String, Object> result = tripStateMachineService.updateTripStatus(bookingId, req, driverIdStr);
+
+        if (passengerBookingRepository != null) {
+            try {
+                var pbOpt = passengerBookingRepository.findByBookingNumber(bookingId);
+                if (pbOpt.isEmpty()) {
+                    try { pbOpt = passengerBookingRepository.findById(Long.valueOf(bookingId)); } catch (NumberFormatException ignored) {}
+                }
+                pbOpt.ifPresent(pb -> {
+                    pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.DRIVER_ARRIVED);
+                    passengerBookingRepository.save(pb);
+                });
+            } catch (Exception ignored) {}
+        }
+
         int statusCode = result.containsKey("statusCode") ? (int) result.get("statusCode") : 200;
         return ResponseEntity.status(statusCode).body(result);
     }
@@ -668,7 +770,13 @@ public class DriverAPIController {
             "/orders/{bookingId}/start-trip",
             "/driver/orders/{bookingId}/start-ride",
             "/drivers/orders/{bookingId}/start-ride",
-            "/orders/{bookingId}/start-ride"
+            "/orders/{bookingId}/start-ride",
+            "/driver/passenger/bookings/{bookingId}/start-trip",
+            "/drivers/passenger/bookings/{bookingId}/start-trip",
+            "/driver/passenger/bookings/{bookingId}/start-ride",
+            "/drivers/passenger/bookings/{bookingId}/start-ride",
+            "/driver/bookings/{bookingId}/start-trip",
+            "/drivers/bookings/{bookingId}/start-trip"
     })
     public ResponseEntity<?> startTrip(
             HttpServletRequest request,
@@ -681,6 +789,28 @@ public class DriverAPIController {
             try {
                 orderOpt = orderRepository.findById(Long.valueOf(bookingId));
             } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isEmpty() && passengerBookingRepository != null) {
+            var pbOpt = passengerBookingRepository.findByBookingNumber(bookingId);
+            if (pbOpt.isEmpty()) {
+                try {
+                    pbOpt = passengerBookingRepository.findById(Long.valueOf(bookingId));
+                } catch (NumberFormatException ignored) {}
+            }
+            if (pbOpt.isPresent()) {
+                var pb = pbOpt.get();
+                Order syncd = new Order();
+                syncd.setBookingId(pb.getBookingNumber());
+                syncd.setUserEmail(pb.getCustomerEmail());
+                syncd.setStartOtp(pb.getStartOtp());
+                syncd.setDeliveryOtp(pb.getStartOtp());
+                syncd.setStatus("accepted");
+                syncd.setServiceName(pb.getVehicleCategoryCode());
+                syncd.setServiceType("PASSENGER");
+                syncd.setCreatedAt(pb.getCreatedAt() != null ? pb.getCreatedAt() : java.time.LocalDateTime.now());
+                orderOpt = Optional.of(orderRepository.save(syncd));
+            }
         }
 
         if (orderOpt.isEmpty()) {
@@ -816,7 +946,13 @@ public class DriverAPIController {
             "/driver/orders/{bookingId}/confirm-payment",
             "/drivers/orders/{bookingId}/confirm-payment",
             "/driver/orders/{bookingId}/complete",
-            "/drivers/orders/{bookingId}/complete"
+            "/drivers/orders/{bookingId}/complete",
+            "/driver/passenger/bookings/{bookingId}/complete",
+            "/drivers/passenger/bookings/{bookingId}/complete",
+            "/driver/passenger/bookings/{bookingId}/confirm-payment",
+            "/drivers/passenger/bookings/{bookingId}/confirm-payment",
+            "/driver/bookings/{bookingId}/complete",
+            "/drivers/bookings/{bookingId}/complete"
     })
     public ResponseEntity<?> confirmPayment(
             HttpServletRequest request,
@@ -858,6 +994,21 @@ public class DriverAPIController {
 
         Map<String, Object> result = deliveryCompletionService.confirmPaymentAndComplete(
                 bookingId, paymentMethod, amount, idempotencyKey, driver);
+
+        if (passengerBookingRepository != null) {
+            try {
+                var pbOpt = passengerBookingRepository.findByBookingNumber(bookingId);
+                if (pbOpt.isEmpty()) {
+                    try { pbOpt = passengerBookingRepository.findById(Long.valueOf(bookingId)); } catch (NumberFormatException ignored) {}
+                }
+                pbOpt.ifPresent(pb -> {
+                    pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.TRIP_COMPLETED);
+                    pb.setTripCompletedAt(java.time.LocalDateTime.now());
+                    pb.setPaymentStatus("PAID");
+                    passengerBookingRepository.save(pb);
+                });
+            } catch (Exception ignored) {}
+        }
 
         int httpStatus = result.containsKey("httpStatus") ? (int) result.get("httpStatus") : 200;
         result.remove("httpStatus");
