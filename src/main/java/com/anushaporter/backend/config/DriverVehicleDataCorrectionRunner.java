@@ -50,6 +50,19 @@ public class DriverVehicleDataCorrectionRunner implements CommandLineRunner {
                     modified = true;
                 }
 
+                // Synchronize serviceType (OUR_SERVICES vs PASSENGER)
+                String sType = d.getServiceType();
+                if (sType == null || sType.isBlank() || "BOTH".equalsIgnoreCase(sType)) {
+                    String vStr = (d.getVehicleType() != null ? d.getVehicleType() : (d.getVehicle() != null ? d.getVehicle() : "")).toLowerCase();
+                    if (vStr.contains("cab") || vStr.contains("car") || vStr.contains("taxi") || vStr.contains("sedan")
+                            || vStr.contains("suv") || vStr.contains("biketaxi") || vStr.contains("autotaxi") || vStr.startsWith("pass")) {
+                        d.setServiceType("PASSENGER");
+                    } else {
+                        d.setServiceType("OUR_SERVICES");
+                    }
+                    modified = true;
+                }
+
                 if (modified) {
                     driverRepository.save(d);
                     patchedCount++;

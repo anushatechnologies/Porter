@@ -109,24 +109,30 @@ public class DriverEligibilityService {
             }
         }
 
-        // 8. Check service capability compatibility (Goods vs. Passenger)
+        // 8. Check service capability compatibility (Our Services/Goods vs. Passenger)
         String orderType = order != null && order.getServiceType() != null ? order.getServiceType().toUpperCase() : "GOODS";
-        if ("CAB".equals(requiredCategory)) {
+        if ("CAB".equals(requiredCategory) || "BIKE_TAXI".equals(requiredCategory) || "AUTO_TAXI".equals(requiredCategory)) {
             orderType = "PASSENGER";
         }
-        String driverService = driver.getServiceType() != null ? driver.getServiceType().toUpperCase() : "BOTH";
-        if ("CAB".equals(driverCategory)) {
+        if ("OUR_SERVICES".equals(orderType) || "OURSERVICES".equals(orderType)) {
+            orderType = "GOODS";
+        }
+
+        String driverService = driver.getServiceType() != null ? driver.getServiceType().toUpperCase() : "GOODS";
+        if ("OUR_SERVICES".equals(driverService) || "OURSERVICES".equals(driverService)) {
+            driverService = "GOODS";
+        } else if ("CAB".equals(driverCategory)) {
             driverService = "PASSENGER";
         } else if ("TATA_ACE".equals(driverCategory) || "PICKUP_8FT".equals(driverCategory) || "TATA_407".equals(driverCategory)) {
             driverService = "GOODS";
         }
 
         if ("PASSENGER".equals(orderType) && "GOODS".equals(driverService)) {
-            log.debug("Driver '{}' is goods-only, rejecting for passenger order", driver.getId());
+            log.debug("Driver '{}' is goods/our-services only, rejecting for passenger order", driver.getId());
             return false;
         }
         if ("GOODS".equals(orderType) && "PASSENGER".equals(driverService)) {
-            log.debug("Driver '{}' is passenger-only (Cab), rejecting for goods order", driver.getId());
+            log.debug("Driver '{}' is passenger-only, rejecting for goods/our-services order", driver.getId());
             return false;
         }
 

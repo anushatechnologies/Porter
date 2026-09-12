@@ -52,6 +52,9 @@ public class VehicleType {
 
     private Integer priority = 1; // Sort order (1, 2, 3...)
 
+    @Column(name = "service_type", length = 32)
+    private String serviceType = "OUR_SERVICES"; // "OUR_SERVICES" | "PASSENGER"
+
     // ── Getters & Setters ────────────────────────────────────────────────────
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -102,4 +105,37 @@ public class VehicleType {
 
     public Integer getPriority() { return priority; }
     public void setPriority(Integer priority) { this.priority = priority; }
+
+    public String getServiceType() {
+        if (serviceType != null && !serviceType.isBlank()) {
+            String s = serviceType.trim().toUpperCase();
+            if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
+                return "PASSENGER";
+            }
+            return "OUR_SERVICES";
+        }
+        return "OUR_SERVICES";
+    }
+
+    public void setServiceType(String serviceType) {
+        if (serviceType != null && !serviceType.isBlank()) {
+            String s = serviceType.trim().toUpperCase();
+            if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
+                this.serviceType = "PASSENGER";
+            } else {
+                this.serviceType = "OUR_SERVICES";
+            }
+        } else {
+            this.serviceType = "OUR_SERVICES";
+        }
+    }
+
+    @JsonProperty("serviceCategory")
+    public String getServiceCategory() {
+        return "PASSENGER".equalsIgnoreCase(getServiceType()) ? "Passenger Rides" : "Our Services";
+    }
+
+    public void setServiceCategory(String serviceCategory) {
+        setServiceType(serviceCategory);
+    }
 }

@@ -192,6 +192,9 @@ public class DriverAPIController {
         map.put("vehicle_type", vType);
         map.put("vehicleName", vType);
         map.put("serviceType", driver.getServiceType());
+        map.put("service_type", driver.getServiceType());
+        map.put("serviceCategory", "PASSENGER".equalsIgnoreCase(driver.getServiceType()) ? "Passenger Rides" : "Our Services");
+        map.put("service_category", "PASSENGER".equalsIgnoreCase(driver.getServiceType()) ? "Passenger Rides" : "Our Services");
         map.put("vehicleNumber", driver.getVehicleNumber() != null ? driver.getVehicleNumber() : "");
         map.put("rcNumber", driver.getRcNumber() != null ? driver.getRcNumber() : "");
         map.put("licenseNumber", driver.getLicenseNumber() != null ? driver.getLicenseNumber() : "");
@@ -1242,17 +1245,40 @@ public class DriverAPIController {
 
         String inputServiceType = text(payload, "serviceType");
         if (inputServiceType == null) inputServiceType = text(payload, "service_type");
+        if (inputServiceType == null) inputServiceType = text(payload, "serviceCategory");
+        if (inputServiceType == null) inputServiceType = text(payload, "service_category");
+
         if (inputServiceType != null && !inputServiceType.isBlank()) {
-            driver.setServiceType(inputServiceType.trim().toUpperCase());
-        } else if (resolvedVehicle != null) {
-            String vClean = resolvedVehicle.toLowerCase().replaceAll("[^a-z0-9]", "");
-            if (vClean.contains("cab") || vClean.contains("car") || vClean.contains("taxi") || vClean.contains("sedan") || vClean.contains("hatchback") || vClean.contains("suv") || vClean.equals("6")) {
+            String s = inputServiceType.trim().toUpperCase();
+            if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
                 driver.setServiceType("PASSENGER");
-            } else if (vClean.contains("2wheel") || vClean.contains("bike") || vClean.contains("scooter") || vClean.equals("1")
-                    || vClean.contains("3wheel") || vClean.contains("auto") || vClean.contains("rickshaw") || vClean.equals("2")) {
-                driver.setServiceType("BOTH");
             } else {
-                driver.setServiceType("GOODS");
+                driver.setServiceType("OUR_SERVICES");
+            }
+        } else {
+            // Check vehicleId from vehicleTypeRepository if available
+            if (vehicleId != null && !vehicleId.isBlank() && vehicleTypeRepository != null) {
+                VehicleType vt = vehicleTypeRepository.findById(vehicleId).orElse(null);
+                if (vt != null && vt.getServiceType() != null) {
+                    driver.setServiceType(vt.getServiceType());
+                }
+            }
+            if (driver.getServiceType() == null || driver.getServiceType().isBlank()) {
+                if (resolvedVehicle != null) {
+                    String vClean = resolvedVehicle.toLowerCase().replaceAll("[^a-z0-9]", "");
+                    if (vClean.contains("cab") || vClean.contains("car") || vClean.contains("taxi") || vClean.contains("sedan")
+                            || vClean.contains("hatchback") || vClean.contains("suv") || vClean.contains("biketaxi") || vClean.contains("autotaxi")
+                            || vClean.startsWith("pass") || vClean.equals("6")) {
+                        driver.setServiceType("PASSENGER");
+                    } else if (vClean.contains("2wheel") || vClean.contains("bike") || vClean.contains("scooter") || vClean.equals("1")
+                            || vClean.contains("3wheel") || vClean.contains("auto") || vClean.contains("rickshaw") || vClean.equals("2")) {
+                        driver.setServiceType("BOTH");
+                    } else {
+                        driver.setServiceType("OUR_SERVICES");
+                    }
+                } else {
+                    driver.setServiceType("OUR_SERVICES");
+                }
             }
         }
 
@@ -1385,6 +1411,9 @@ public class DriverAPIController {
         resp.put("vehicle", saved.getVehicle());
         resp.put("vehicleType", saved.getVehicleType());
         resp.put("serviceType", saved.getServiceType());
+        resp.put("service_type", saved.getServiceType());
+        resp.put("serviceCategory", "PASSENGER".equalsIgnoreCase(saved.getServiceType()) ? "Passenger Rides" : "Our Services");
+        resp.put("service_category", "PASSENGER".equalsIgnoreCase(saved.getServiceType()) ? "Passenger Rides" : "Our Services");
         resp.put("driver", saved);
 
         return ResponseEntity.ok(resp);
@@ -1466,6 +1495,11 @@ public class DriverAPIController {
         data.put("gender", genderVal);
         data.put("vehicle", driver.getVehicle());
         data.put("vehicleType", driver.getVehicleType());
+        data.put("vehicle_type", driver.getVehicleType());
+        data.put("serviceType", driver.getServiceType());
+        data.put("service_type", driver.getServiceType());
+        data.put("serviceCategory", "PASSENGER".equalsIgnoreCase(driver.getServiceType()) ? "Passenger Rides" : "Our Services");
+        data.put("service_category", "PASSENGER".equalsIgnoreCase(driver.getServiceType()) ? "Passenger Rides" : "Our Services");
         data.put("vehicleNumber", driver.getVehicleNumber());
         data.put("rcNumber", driver.getRcNumber());
         data.put("licenseNumber", driver.getLicenseNumber());

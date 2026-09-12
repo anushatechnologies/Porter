@@ -128,8 +128,10 @@ public class DriverController {
 
     /**
      * GET /api/drivers
+     * GET /api/drivers?serviceType=OUR_SERVICES
+     * GET /api/drivers?serviceType=PASSENGER
      * Returns formatted list of drivers for Admin Drivers roster & Live Driver GPS tracking map.
-     * Supports filtering by status and minimum wallet balance.
+     * Supports filtering by status, KYC, search term, and serviceType (OUR_SERVICES vs PASSENGER).
      */
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAll(
@@ -139,12 +141,27 @@ public class DriverController {
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "query", required = false) String query,
             @RequestParam(value = "minWallet", required = false) Double minWallet,
-            @RequestParam(value = "minBalance", required = false) Double minBalance
+            @RequestParam(value = "minBalance", required = false) Double minBalance,
+            @RequestParam(value = "serviceType", required = false) String serviceType,
+            @RequestParam(value = "service", required = false) String service
     ) {
         List<Driver> drivers = repository.findAll();
 
         Double filterMinWallet = minWallet != null ? minWallet : minBalance;
         String searchTerm = search != null ? search.trim().toLowerCase() : (q != null ? q.trim().toLowerCase() : (query != null ? query.trim().toLowerCase() : null));
+
+        String requestedService = serviceType != null && !serviceType.isBlank() ? serviceType : service;
+        String normalizedService = null;
+        if (requestedService != null && !requestedService.isBlank()) {
+            String s = requestedService.trim().toUpperCase();
+            if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
+                normalizedService = "PASSENGER";
+            } else if (s.contains("OUR") || s.contains("GOOD") || s.contains("TRUCK") || s.contains("LOGISTICS")) {
+                normalizedService = "OUR_SERVICES";
+            }
+        }
+
+        final String finalServiceFilter = normalizedService;
 
         List<Map<String, Object>> items = drivers.stream()
                 .filter(d -> {
@@ -158,6 +175,15 @@ public class DriverController {
                     if (kyc != null && !kyc.isBlank() && !"all".equalsIgnoreCase(kyc.trim())) {
                         if (d.getKyc() == null || !d.getKyc().equalsIgnoreCase(kyc.trim())) {
                             return false;
+                        }
+                    }
+                    // Service Type filter (Our Services vs Passenger)
+                    if (finalServiceFilter != null) {
+                        String rawS = d.getServiceType() != null ? d.getServiceType().toUpperCase() : "OUR_SERVICES";
+                        if ("PASSENGER".equals(finalServiceFilter)) {
+                            if (!"PASSENGER".equals(rawS)) return false;
+                        } else if ("OUR_SERVICES".equals(finalServiceFilter)) {
+                            if (!"OUR_SERVICES".equals(rawS) && !"GOODS".equals(rawS)) return false;
                         }
                     }
                     // Search term filter (matches Name, Phone, Email, Vehicle Plate, or ID)
@@ -195,6 +221,15 @@ public class DriverController {
             map.put("name", d.getName() != null ? d.getName() : "Unknown");
             map.put("email", d.getEmail() != null ? d.getEmail() : "");
             map.put("phone", d.getPhone() != null ? d.getPhone() : "");
+
+            String rawService = d.getServiceType() != null ? d.getServiceType().toUpperCase() : "OUR_SERVICES";
+            String cleanService = "PASSENGER".equals(rawService) ? "PASSENGER" : "OUR_SERVICES";
+            String serviceCategoryLabel = "PASSENGER".equals(cleanService) ? "Passenger Rides" : "Our Services";
+            map.put("serviceType", cleanService);
+            map.put("service_type", cleanService);
+            map.put("serviceCategory", serviceCategoryLabel);
+            map.put("service_category", serviceCategoryLabel);
+
             String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
             String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
             map.put("vehicle", v);
@@ -253,6 +288,32 @@ public class DriverController {
         }).collect(Collectors.toList());
 
         return ResponseEntity.ok(items);
+    }
+
+    /**
+     * Dedicated Admin endpoint: GET /api/admin/drivers/our-services
+     * Returns only drivers registered for Our Services (Goods Delivery / Freight / Trucks).
+     */
+    @GetMapping("/our-services")
+    public ResponseEntity<List<Map<String, Object>>> getOurServicesDrivers(
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "kyc", required = false) String kyc,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "q", required = false) String q) {
+        return getAll(status, kyc, search, q, null, null, null, "OUR_SERVICES", null);
+    }
+
+    /**
+     * Dedicated Admin endpoint: GET /api/admin/drivers/passengers
+     * Returns only drivers registered for Passenger Rides (Bike Taxi / Auto Taxi / Cabs).
+     */
+    @GetMapping("/passengers")
+    public ResponseEntity<List<Map<String, Object>>> getPassengerDrivers(
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "kyc", required = false) String kyc,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "q", required = false) String q) {
+        return getAll(status, kyc, search, q, null, null, null, "PASSENGER", null);
     }
 
     @PostMapping
@@ -435,6 +496,15 @@ public class DriverController {
             map.put("name", d.getName() != null ? d.getName() : "Unknown");
             map.put("email", d.getEmail() != null ? d.getEmail() : "");
             map.put("phone", d.getPhone() != null ? d.getPhone() : "");
+
+            String rawService = d.getServiceType() != null ? d.getServiceType().toUpperCase() : "OUR_SERVICES";
+            String cleanService = "PASSENGER".equals(rawService) ? "PASSENGER" : "OUR_SERVICES";
+            String serviceCategoryLabel = "PASSENGER".equals(cleanService) ? "Passenger Rides" : "Our Services";
+            map.put("serviceType", cleanService);
+            map.put("service_type", cleanService);
+            map.put("serviceCategory", serviceCategoryLabel);
+            map.put("service_category", serviceCategoryLabel);
+
             String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
             String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
             map.put("vehicle", v);
