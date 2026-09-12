@@ -236,9 +236,9 @@ public class Order {
     public void setPickupLongitude(Double lng) { if (lng != null) this.pickupLng = lng; }
     public void setDropLatitude(Double lat) { if (lat != null) this.dropLat = lat; }
     public void setDropLongitude(Double lng) { if (lng != null) this.dropLng = lng; }
-    public void setVehicleType(String type) { if ((this.serviceName == null || this.serviceName.isBlank()) && type != null) this.serviceName = type; }
-    public void setVehicleName(String name) { if ((this.serviceName == null || this.serviceName.isBlank()) && name != null) this.serviceName = name; }
-    public void setVehicle(String name) { if ((this.serviceName == null || this.serviceName.isBlank()) && name != null) this.serviceName = name; }
+    public void setVehicleType(String type) { if (type != null && !type.isBlank()) this.serviceName = type; }
+    public void setVehicleName(String name) { if (name != null && !name.isBlank()) this.serviceName = name; }
+    public void setVehicle(String name) { if (name != null && !name.isBlank()) this.serviceName = name; }
 
     public String getServiceType() {
         if (serviceType != null && !serviceType.isBlank()) {
@@ -296,5 +296,9 @@ public class Order {
 
     public void setStartOtp(String startOtp) {
         this.startOtp = startOtp;
+    }
+
+    public String getVehicleType() {
+        return serviceName;
     }
 }

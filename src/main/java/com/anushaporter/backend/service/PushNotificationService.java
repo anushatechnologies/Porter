@@ -210,6 +210,8 @@ public class PushNotificationService {
                             .putData("notificationType", "STOP_DRIVER_OFFER")
                             .putData("status", "ACCEPTED_BY_ANOTHER")
                             .putData("stopSound", "true")
+                            .putData("stopAudio", "true")
+                            .putData("stop_ringtone", "true")
                             .putData("action", "STOP_RINGTONE")
                             .build();
                     safeSendFirebase(push);
@@ -237,6 +239,8 @@ public class PushNotificationService {
                             .putData("notificationType", "STOP_DRIVER_OFFER")
                             .putData("status", "ACCEPTED_BY_YOU")
                             .putData("stopSound", "true")
+                            .putData("stopAudio", "true")
+                            .putData("stop_ringtone", "true")
                             .putData("action", "STOP_RINGTONE")
                             .build();
                     safeSendFirebase(push);
@@ -262,6 +266,8 @@ public class PushNotificationService {
                             .putData("notificationType", "STOP_DRIVER_OFFER")
                             .putData("status", "REJECTED_BY_YOU")
                             .putData("stopSound", "true")
+                            .putData("stopAudio", "true")
+                            .putData("stop_ringtone", "true")
                             .putData("action", "STOP_RINGTONE")
                             .build();
                     safeSendFirebase(push);
@@ -353,6 +359,8 @@ public class PushNotificationService {
         data.put("notificationType", "STOP_DRIVER_OFFER");
         data.put("status", status);
         data.put("stopSound", "true");
+        data.put("stopAudio", "true");
+        data.put("stop_ringtone", "true");
         data.put("action", "STOP_RINGTONE");
         payload.put("data", data);
 

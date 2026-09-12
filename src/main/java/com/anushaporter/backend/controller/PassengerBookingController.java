@@ -394,8 +394,22 @@ public class PassengerBookingController {
         response.put("paymentMode", b.getPaymentMethod() != null ? b.getPaymentMethod() : "CASH");
         response.put("paymentStatus", b.getPaymentStatus() != null ? b.getPaymentStatus() : "PENDING");
         response.put("createdAt", b.getCreatedAt());
-        response.put("driver", b.getDriver());
-        response.put("hasAssignedDriver", b.getDriver() != null || b.getDriverId() != null);
+        Map<String, Object> driverMap = null;
+        if (b.getDriverId() != null || (b.getDriverName() != null && !b.getDriverName().isBlank())) {
+            driverMap = new LinkedHashMap<>();
+            driverMap.put("id", b.getDriverId());
+            driverMap.put("driverId", b.getDriverId());
+            driverMap.put("name", b.getDriverName());
+            driverMap.put("phone", b.getDriverPhone());
+            driverMap.put("vehicleNumber", b.getVehicleNumber());
+            driverMap.put("vehicleModel", b.getVehicleModel());
+            driverMap.put("vehicleType", b.getVehicleModel() != null ? b.getVehicleModel() : b.getVehicleCategoryCode());
+            driverMap.put("serviceType", "PASSENGER");
+            driverMap.put("rating", 4.8);
+        }
+        response.put("driver", driverMap != null ? driverMap : b.getDriver());
+        response.put("assignedDriver", driverMap != null ? driverMap : b.getDriver());
+        response.put("hasAssignedDriver", driverMap != null || b.getDriver() != null || b.getDriverId() != null);
         response.put("trackable", b.getStatus() != null && !b.getStatus().isTerminal());
         response.put("booking", b);
         return response;

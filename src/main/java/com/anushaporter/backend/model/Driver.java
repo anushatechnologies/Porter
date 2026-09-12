@@ -44,6 +44,8 @@ public class Driver {
     private Integer registrationStep = 1;
 
     private String addressLine1;
+    @Column(name = "address_line_2")
+    private String addressLine2;
     private String city;
     private String state;
     private String pincode;
@@ -52,6 +54,19 @@ public class Driver {
     private String accountHolderName;
     private String accountNumber;
     private String ifscCode;
+    @Column(name = "upi_id")
+    private String upiId;
+
+    public String getAddressLine2() { return addressLine2; }
+    public void setAddressLine2(String addressLine2) { this.addressLine2 = addressLine2; }
+    public String getUpiId() { return upiId; }
+    public void setUpiId(String upiId) { this.upiId = upiId; }
+    public String getBankAccountNumber() { return accountNumber; }
+    public void setBankAccountNumber(String bankAccountNumber) { this.accountNumber = bankAccountNumber; }
+    public String getBankIfscCode() { return ifscCode; }
+    public void setBankIfscCode(String bankIfscCode) { this.ifscCode = bankIfscCode; }
+    public String getBankAccountName() { return accountHolderName; }
+    public void setBankAccountName(String bankAccountName) { this.accountHolderName = bankAccountName; }
 
     private String profilePhotoUri;
     private String aadhaarUri;

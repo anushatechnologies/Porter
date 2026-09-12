@@ -38,6 +38,12 @@ public class PassengerBookingService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AutoAssignmentService autoAssignmentService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DriverOfferService driverOfferService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private PushNotificationService pushNotificationService;
+
     @Transactional
     public PassengerBooking createBooking(PassengerBookingCreateRequest req) {
         String serviceCode = req.getServiceType() != null ? req.getServiceType().toUpperCase() : "ONE_WAY";
@@ -297,8 +303,22 @@ public class PassengerBookingService {
                     order.setStatus("cancelled");
                     order.setCancellationReason(reason);
                     orderRepository.save(order);
+
+                    if (pushNotificationService != null) {
+                        try {
+                            pushNotificationService.notifyOrderStatus(order, "cancelled");
+                        } catch (Exception ignored) {}
+                    }
                 });
             } catch (Exception ignored) {}
+        }
+
+        if (driverOfferService != null && updated.getBookingNumber() != null) {
+            try {
+                driverOfferService.onOrderCancelled(updated.getBookingNumber());
+            } catch (Exception e) {
+                log.warn("Failed to stop driver offers for cancelled passenger booking {}: {}", updated.getBookingNumber(), e.getMessage());
+            }
         }
 
         notificationService.sendEvent(

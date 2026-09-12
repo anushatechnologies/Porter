@@ -41,15 +41,15 @@ public class VehicleTypeController {
         if (vehicleTypeRepository.count() == 0) {
             List<VehicleType> defaults = Arrays.asList(
                     // ── Default Fleets ──────────────────────────────────────────────
-                    build("1", "2 Wheeler", "two_wheeler", "Best for goods delivery & 1-passenger bike taxi",
-                            "Load: Up to 20kg or 1 Passenger", 20, "Ideal for documents, food parcels & 1 passenger",
+                    build("1", "2 Wheeler", "two_wheeler", "Best for goods delivery & parcel",
+                            "Load: Up to 20kg", 20, "Ideal for documents, food parcels",
                             "bike", "https://poteranusha.s3.amazonaws.com/vehicles/bike.png",
-                            40.00, 1.0, 12.00, "BOTH", 1),
+                            40.00, 1.0, 12.00, "OUR_SERVICES", 1),
 
-                    build("2", "3 Wheeler / Auto", "auto_rickshaw", "Best for cargo load & passenger auto rides",
-                            "Load: Up to 500kg or 3 Passengers", 500, "5ft x 3.5ft x 3.5ft / 3 Passengers",
+                    build("2", "3 Wheeler / Auto", "auto_rickshaw", "Best for cargo load & shifting",
+                            "Load: Up to 500kg", 500, "5ft x 3.5ft x 3.5ft",
                             "rickshaw", "https://poteranusha.s3.amazonaws.com/vehicles/auto.png",
-                            120.00, 1.0, 20.00, "BOTH", 2),
+                            120.00, 1.0, 20.00, "OUR_SERVICES", 2),
 
                     build("3", "Tata Ace", "tata_ace", "Best for large boxes and business deliveries",
                             "Load: Up to 750kg", 750, "7ft x 4ft x 5ft",
@@ -90,6 +90,21 @@ public class VehicleTypeController {
                         "Comfortable cab for city & outstation passenger rides", "Load: 4 Passengers", 400, "Compact Sedan / Hatchback / SUV",
                         "car", "https://poteranusha.s3.amazonaws.com/vehicles/cab.png", 150.00, 2.0, 15.00, "PASSENGER", 6));
             }
+
+            // Migrate any legacy 'BOTH' vehicle types to strict tracks
+            try {
+                vehicleTypeRepository.findAll().forEach(vt -> {
+                    if ("BOTH".equalsIgnoreCase(vt.getServiceType())) {
+                        String typeKey = (vt.getType() != null ? vt.getType() : "").toLowerCase();
+                        if (typeKey.contains("cab") || typeKey.contains("taxi") || (vt.getId() != null && vt.getId().startsWith("pass_"))) {
+                            vt.setServiceType("PASSENGER");
+                        } else {
+                            vt.setServiceType("OUR_SERVICES");
+                        }
+                        vehicleTypeRepository.save(vt);
+                    }
+                });
+            } catch (Exception ignored) {}
         }
     }
 
@@ -150,13 +165,11 @@ public class VehicleTypeController {
                 .map(this::formatVehicleType)
                 .filter(m -> {
                     if (targetService == null) return true;
-                    @SuppressWarnings("unchecked")
-                    List<String> supported = (List<String>) m.get("supportedServiceTypes");
                     String st = (String) m.get("serviceType");
-                    if ("PASSENGER".equals(targetService)) {
-                        return "PASSENGER".equals(st) || "BOTH".equals(st) || (supported != null && supported.contains("PASSENGER"));
-                    } else if ("GOODS".equals(targetService)) {
-                        return "GOODS".equals(st) || "OUR_SERVICES".equals(st) || "BOTH".equals(st) || (supported != null && (supported.contains("GOODS") || supported.contains("OUR_SERVICES")));
+                    if ("PASSENGER".equalsIgnoreCase(targetService)) {
+                        return "PASSENGER".equalsIgnoreCase(st);
+                    } else if ("GOODS".equalsIgnoreCase(targetService) || "OUR_SERVICES".equalsIgnoreCase(targetService)) {
+                        return "OUR_SERVICES".equalsIgnoreCase(st) || "GOODS".equalsIgnoreCase(st);
                     }
                     return true;
                 })
@@ -402,20 +415,15 @@ public class VehicleTypeController {
         String sCategory;
         List<String> supported;
 
-        if ("PASSENGER".equals(rawS) || typeKey.contains("cab") || nameKey.contains("cab") || idKey.equals("6")
+        if ("PASSENGER".equalsIgnoreCase(rawS) || typeKey.contains("cab") || nameKey.contains("cab") || idKey.equals("6")
                 || typeKey.contains("bike_taxi") || typeKey.contains("auto_taxi") || idKey.startsWith("pass_")) {
             sType = "PASSENGER";
             sCategory = "Passenger Rides";
             supported = List.of("PASSENGER");
-        } else if ("BOTH".equals(rawS) || typeKey.contains("2wheel") || typeKey.contains("bike") || nameKey.contains("2 wheeler") || idKey.equals("1")
-                || typeKey.contains("auto") || typeKey.contains("rickshaw") || nameKey.contains("3 wheeler") || idKey.equals("2")) {
-            sType = "BOTH";
-            sCategory = "Both Services";
-            supported = List.of("GOODS", "PASSENGER", "OUR_SERVICES");
         } else {
-            sType = "GOODS";
+            sType = "OUR_SERVICES";
             sCategory = "Our Services";
-            supported = List.of("GOODS", "OUR_SERVICES");
+            supported = List.of("OUR_SERVICES", "GOODS");
         }
 
         map.put("serviceType", sType);

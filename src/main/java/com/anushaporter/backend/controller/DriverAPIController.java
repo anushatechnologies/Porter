@@ -67,6 +67,9 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.util.JwtUtil jwtUtil;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.config.handler.TelemetryWebSocketHandler telemetryWebSocketHandler;
+
     public static boolean isPlaceholderEmail(String email, String phone) {
         if (email == null || email.isBlank()) return true;
         String lower = email.trim().toLowerCase();
@@ -153,6 +156,10 @@ public class DriverAPIController {
                     .body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
         }
 
+        return ResponseEntity.ok(buildDriverProfileResponse(driver));
+    }
+
+    public Map<String, Object> buildDriverProfileResponse(Driver driver) {
         driver = driverAuthService.ensureFullyRegisteredStatus(driver);
         boolean isFullyRegistered = driver != null && driver.isFullyRegistered();
         int regStep = isFullyRegistered ? 5 : (driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
@@ -200,6 +207,15 @@ public class DriverAPIController {
         map.put("licenseNumber", driver.getLicenseNumber() != null ? driver.getLicenseNumber() : "");
         map.put("aadhaarNumber", driver.getAadhaarNumber() != null ? driver.getAadhaarNumber() : "");
         map.put("panNumber", driver.getPanNumber() != null ? driver.getPanNumber() : "");
+        map.put("addressLine1", driver.getAddressLine1() != null ? driver.getAddressLine1() : "");
+        map.put("addressLine2", driver.getAddressLine2() != null ? driver.getAddressLine2() : "");
+        map.put("city", driver.getCity() != null ? driver.getCity() : "");
+        map.put("state", driver.getState() != null ? driver.getState() : "");
+        map.put("pincode", driver.getPincode() != null ? driver.getPincode() : "");
+        map.put("bankAccountNumber", driver.getBankAccountNumber() != null ? driver.getBankAccountNumber() : "");
+        map.put("bankIfscCode", driver.getBankIfscCode() != null ? driver.getBankIfscCode() : "");
+        map.put("bankAccountName", driver.getBankAccountName() != null ? driver.getBankAccountName() : "");
+        map.put("upiId", driver.getUpiId() != null ? driver.getUpiId() : "");
         map.put("trips", driver.getTrips() != null ? driver.getTrips() : 0);
         map.put("latitude", driver.getLatitude());
         map.put("longitude", driver.getLongitude());
@@ -237,7 +253,140 @@ public class DriverAPIController {
         map.put("isOnlineOptionAvailable", true);
         map.put("is_online_option_available", true);
         map.put("eligibilityReason", "No minimum balance required. You can go online anytime.");
-        return ResponseEntity.ok(map);
+        return map;
+    }
+
+    /**
+     * PUT /api/drivers/me
+     * PUT /api/driver/me
+     * PUT /api/driver/profile
+     * PUT /api/drivers/profile
+     * POST /api/driver/profile/update
+     * Updates driver profile fields (name, email, phone, vehicle, bank, etc.)
+     */
+    @RequestMapping(value = {
+            "/drivers/me",
+            "/driver/me",
+            "/drivers/profile",
+            "/driver/profile",
+            "/drivers/me/profile",
+            "/driver/me/profile",
+            "/driver/profile/update",
+            "/drivers/profile/update"
+    }, method = { RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH })
+    public ResponseEntity<?> updateDriverProfile(
+            HttpServletRequest request,
+            @RequestBody(required = false) Map<String, Object> payload) {
+        Driver driver = getAuthenticatedDriver(request);
+        AppUser appUser = getAuthenticatedAppUser(request);
+        if (driver == null && appUser != null) {
+            String phone = appUser.getPhone();
+            if (phone != null && !phone.isBlank()) {
+                String cleanPhone = driverAuthService.normalizePhone(phone);
+                driver = driverRepository.findByPhone(cleanPhone).orElse(null);
+                if (driver == null) driver = driverRepository.findByPhone(phone).orElse(null);
+                if (driver == null) driver = driverRepository.findByPhone("+91" + cleanPhone).orElse(null);
+            }
+            if (driver == null && appUser.getEmail() != null && !appUser.getEmail().isBlank()) {
+                driver = driverRepository.findByEmailIgnoreCase(appUser.getEmail()).orElse(null);
+            }
+        }
+
+        if (driver == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
+        }
+
+        if (payload != null && !payload.isEmpty()) {
+            if (payload.get("name") != null && !String.valueOf(payload.get("name")).isBlank()) {
+                String name = String.valueOf(payload.get("name")).trim();
+                driver.setName(name);
+                if (appUser != null) appUser.setName(name);
+            }
+            if (payload.get("phone") != null && !String.valueOf(payload.get("phone")).isBlank()) {
+                driver.setPhone(String.valueOf(payload.get("phone")).trim());
+            }
+            if (payload.get("email") != null && !String.valueOf(payload.get("email")).isBlank()) {
+                String email = String.valueOf(payload.get("email")).trim();
+                if (!isPlaceholderEmail(email, driver.getPhone())) {
+                    driver.setEmail(email);
+                    if (appUser != null) appUser.setEmail(email);
+                }
+            }
+            if (payload.get("dob") != null && !String.valueOf(payload.get("dob")).isBlank()) {
+                driver.setDob(String.valueOf(payload.get("dob")).trim());
+            }
+            if (payload.get("gender") != null && !String.valueOf(payload.get("gender")).isBlank()) {
+                driver.setGender(String.valueOf(payload.get("gender")).trim());
+            }
+
+            // Vehicle updates
+            String newVehicle = text(payload, "vehicle");
+            String newVehicleType = text(payload, "vehicleType");
+            if (newVehicleType == null) newVehicleType = text(payload, "vehicle_type");
+            if (newVehicleType == null) newVehicleType = text(payload, "vehicleName");
+
+            String resolvedV = newVehicle != null ? newVehicle : newVehicleType;
+            if (resolvedV != null && !resolvedV.isBlank()) {
+                driver.setVehicle(resolvedV.trim());
+                driver.setVehicleType(resolvedV.trim());
+            }
+
+            // Service type
+            String inputServiceType = text(payload, "serviceType");
+            if (inputServiceType == null) inputServiceType = text(payload, "service_type");
+            if (inputServiceType == null) inputServiceType = text(payload, "serviceCategory");
+            if (inputServiceType != null && !inputServiceType.isBlank()) {
+                String s = inputServiceType.trim().toUpperCase();
+                if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
+                    driver.setServiceType("PASSENGER");
+                } else {
+                    driver.setServiceType("OUR_SERVICES");
+                }
+            } else if (resolvedV != null) {
+                String vClean = resolvedV.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (vClean.contains("cab") || vClean.contains("car") || vClean.contains("taxi") || vClean.contains("biketaxi") || vClean.contains("autotaxi") || vClean.startsWith("pass")) {
+                    driver.setServiceType("PASSENGER");
+                } else {
+                    driver.setServiceType("OUR_SERVICES");
+                }
+            }
+
+            if (text(payload, "vehicleNumber") != null) driver.setVehicleNumber(text(payload, "vehicleNumber").trim().toUpperCase());
+            if (text(payload, "rcNumber") != null) driver.setRcNumber(text(payload, "rcNumber").trim().toUpperCase());
+            if (text(payload, "licenseNumber") != null) driver.setLicenseNumber(text(payload, "licenseNumber").trim().toUpperCase());
+            if (text(payload, "aadhaarNumber") != null) driver.setAadhaarNumber(text(payload, "aadhaarNumber").trim());
+            if (text(payload, "panNumber") != null) driver.setPanNumber(text(payload, "panNumber").trim().toUpperCase());
+
+            // Address
+            if (text(payload, "addressLine1") != null) driver.setAddressLine1(text(payload, "addressLine1").trim());
+            if (text(payload, "addressLine2") != null) driver.setAddressLine2(text(payload, "addressLine2").trim());
+            if (text(payload, "city") != null) driver.setCity(text(payload, "city").trim());
+            if (text(payload, "state") != null) driver.setState(text(payload, "state").trim());
+            if (text(payload, "pincode") != null) driver.setPincode(text(payload, "pincode").trim());
+
+            // Bank & UPI
+            if (text(payload, "bankAccountNumber") != null) driver.setBankAccountNumber(text(payload, "bankAccountNumber").trim());
+            if (text(payload, "bankIfscCode") != null) driver.setBankIfscCode(text(payload, "bankIfscCode").trim().toUpperCase());
+            if (text(payload, "bankAccountName") != null) driver.setBankAccountName(text(payload, "bankAccountName").trim());
+            if (text(payload, "upiId") != null) driver.setUpiId(text(payload, "upiId").trim());
+
+            // Profile photo
+            String photoUri = text(payload, "profilePhotoUri");
+            if (photoUri == null) photoUri = text(payload, "photoUrl");
+            if (photoUri == null) photoUri = text(payload, "photo");
+            if (photoUri != null && !photoUri.isBlank()) {
+                driver.setProfilePhotoUri(photoUri.trim());
+                if (appUser != null) appUser.setProfilePhotoUri(photoUri.trim());
+            }
+
+            driver = driverRepository.save(driver);
+            if (appUser != null) appUserRepository.save(appUser);
+        }
+
+        Map<String, Object> resp = new LinkedHashMap<>(buildDriverProfileResponse(driver));
+        resp.put("message", "Driver profile updated successfully");
+        return ResponseEntity.ok(resp);
     }
 
     @PostMapping("/drivers/me/device-token")
@@ -665,7 +814,11 @@ public class DriverAPIController {
             "/driver/orders/{bookingId}/dismiss",
             "/drivers/orders/{bookingId}/dismiss",
             "/driver/offers/{bookingId}/dismiss",
-            "/drivers/offers/{bookingId}/dismiss"
+            "/drivers/offers/{bookingId}/dismiss",
+            "/driver/orders/{bookingId}/cancel",
+            "/drivers/orders/{bookingId}/cancel",
+            "/driver/offers/{bookingId}/cancel",
+            "/drivers/offers/{bookingId}/cancel"
     }, method = { RequestMethod.POST, RequestMethod.PUT, RequestMethod.GET })
     public ResponseEntity<?> rejectOrderByBookingId(
             HttpServletRequest request,
@@ -679,9 +832,15 @@ public class DriverAPIController {
             } catch (Exception ignored) {}
         }
         if (driverId == null) {
+            if (telemetryWebSocketHandler != null) {
+                try {
+                    telemetryWebSocketHandler.broadcastOfferDismiss(bookingId, "REJECTED_BY_DRIVER");
+                } catch (Exception ignored) {}
+            }
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "stopSound", true,
+                    "stopAudio", true,
                     "action", "STOP_RINGTONE",
                     "status", "REJECTED",
                     "message", "Offer dismissed."
@@ -1259,20 +1418,22 @@ public class DriverAPIController {
             // Check vehicleId from vehicleTypeRepository if available
             if (vehicleId != null && !vehicleId.isBlank() && vehicleTypeRepository != null) {
                 VehicleType vt = vehicleTypeRepository.findById(vehicleId).orElse(null);
-                if (vt != null && vt.getServiceType() != null) {
-                    driver.setServiceType(vt.getServiceType());
+                if (vt != null && vt.getServiceType() != null && !vt.getServiceType().isBlank()) {
+                    String vtService = vt.getServiceType().trim().toUpperCase();
+                    if (vtService.contains("PASSENGER")) {
+                        driver.setServiceType("PASSENGER");
+                    } else {
+                        driver.setServiceType("OUR_SERVICES");
+                    }
                 }
             }
-            if (driver.getServiceType() == null || driver.getServiceType().isBlank()) {
+            if (driver.getServiceType() == null || driver.getServiceType().isBlank() || "BOTH".equalsIgnoreCase(driver.getServiceType())) {
                 if (resolvedVehicle != null) {
                     String vClean = resolvedVehicle.toLowerCase().replaceAll("[^a-z0-9]", "");
                     if (vClean.contains("cab") || vClean.contains("car") || vClean.contains("taxi") || vClean.contains("sedan")
                             || vClean.contains("hatchback") || vClean.contains("suv") || vClean.contains("biketaxi") || vClean.contains("autotaxi")
                             || vClean.startsWith("pass") || vClean.equals("6")) {
                         driver.setServiceType("PASSENGER");
-                    } else if (vClean.contains("2wheel") || vClean.contains("bike") || vClean.contains("scooter") || vClean.equals("1")
-                            || vClean.contains("3wheel") || vClean.contains("auto") || vClean.contains("rickshaw") || vClean.equals("2")) {
-                        driver.setServiceType("BOTH");
                     } else {
                         driver.setServiceType("OUR_SERVICES");
                     }

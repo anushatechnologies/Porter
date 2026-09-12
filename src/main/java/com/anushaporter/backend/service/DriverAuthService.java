@@ -51,6 +51,22 @@ public class DriverAuthService {
     }
 
     /**
+     * Resolves authenticated driver directly from Authorization Bearer header string.
+     */
+    public Driver resolveAuthenticatedDriverFromHeader(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) return null;
+        String token = authHeader.substring(7).trim();
+        String subject = jwtUtil != null ? jwtUtil.extractIdentifierFromFirebaseOrJwt(token) : null;
+        if (subject == null && jwtUtil != null && jwtUtil.validateToken(token)) {
+            subject = jwtUtil.getUsernameFromToken(token);
+        }
+        if (subject == null || subject.trim().isEmpty()) {
+            return null;
+        }
+        return resolveDriverByIdentifier(subject.trim());
+    }
+
+    /**
      * Resolves driver from email, phone, ID, or user account identifier.
      */
     public Driver resolveDriverByIdentifier(String rawIdentifier) {

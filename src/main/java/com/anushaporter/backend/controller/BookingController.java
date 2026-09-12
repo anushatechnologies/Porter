@@ -46,6 +46,12 @@ public class BookingController {
     @Autowired(required = false)
     private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.DriverAuthService driverAuthService;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.DriverOfferRepository driverOfferRepository;
+
     /**
      * Recommend optimal vehicle type based on weight, dimensions, and category.
      * POST /api/vehicles/recommend
@@ -58,16 +64,53 @@ public class BookingController {
 
     /**
      * Trigger or retry auto-assignment for a booking.
+     * POST /api/bookings/{bookingId}/retry
+     * POST /api/orders/{bookingId}/retry
      * POST /api/bookings/{bookingId}/auto-assign
+     * POST /api/orders/{bookingId}/auto-assign
      */
-    @PostMapping("/api/bookings/{bookingId}/auto-assign")
+    @PostMapping({
+            "/api/bookings/{bookingId}/retry",
+            "/api/orders/{bookingId}/retry",
+            "/bookings/{bookingId}/retry",
+            "/orders/{bookingId}/retry",
+            "/api/bookings/{bookingId}/auto-assign",
+            "/api/orders/{bookingId}/auto-assign"
+    })
     public ResponseEntity<Map<String, Object>> triggerAutoAssignment(@PathVariable String bookingId) {
+        Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
+        if (orderOpt.isEmpty()) {
+            try { orderOpt = orderRepository.findById(Long.valueOf(bookingId)); } catch (NumberFormatException ignored) {}
+        }
+
+        if (orderOpt.isPresent()) {
+            Order order = orderOpt.get();
+            String currentStatus = order.getStatus() != null ? order.getStatus().toLowerCase() : "";
+            if (!"delivered".equals(currentStatus) && !"completed".equals(currentStatus) && !"cancelled".equals(currentStatus)) {
+                order.setDriverId(null);
+                order.setDriverName(null);
+                order.setDriverPhone(null);
+                order.setDriverVehicleNumber(null);
+                order.setStatus("searching");
+                order.setAcceptedAt(null);
+                order.setAssignmentDeadline(LocalDateTime.now().plusMinutes(3));
+                orderRepository.save(order);
+
+                if (driverOfferRepository != null) {
+                    try {
+                        driverOfferRepository.cancelAllPendingOffersForBooking(order.getBookingId(), LocalDateTime.now());
+                    } catch (Exception ignored) {}
+                }
+            }
+            bookingId = order.getBookingId();
+        }
+
         autoAssignmentService.startAutoAssignment(bookingId);
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "bookingId", bookingId,
                 "status", "SEARCHING",
-                "message", "Auto-assignment search initiated across radius tiers (3km, 5km, 10km, 15km)."
+                "message", "Auto-assignment search initiated across radius tiers for online matching driver partners."
         ));
     }
 
@@ -1105,17 +1148,50 @@ public class BookingController {
             return ResponseEntity.badRequest().body(response);
         }
 
-        String driverId = "DRV-" + (1000 + new Random().nextInt(9000));
-        String driverName = "Rajesh Kumar";
-        String driverPhone = "+91 98765 43210";
-        String driverVehicleNumber = "KA-01-AB-1234";
+        String driverId = null;
+        String driverName = null;
+        String driverPhone = null;
+        String driverVehicleNumber = null;
 
         if (payload != null) {
             if (payload.containsKey("driverId")) driverId = String.valueOf(payload.get("driverId"));
             if (payload.containsKey("driverName")) driverName = String.valueOf(payload.get("driverName"));
             if (payload.containsKey("driverPhone")) driverPhone = String.valueOf(payload.get("driverPhone"));
             if (payload.containsKey("vehicleNumber")) driverVehicleNumber = String.valueOf(payload.get("vehicleNumber"));
+            if (payload.containsKey("driverVehicleNumber")) driverVehicleNumber = String.valueOf(payload.get("driverVehicleNumber"));
         }
+
+        if (driverId == null || driverId.isBlank() || "DRV-DEFAULT".equalsIgnoreCase(driverId) || driverId.startsWith("DRV-")) {
+            response.put("success", false);
+            response.put("message", "A valid registered online driver ID is required.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        com.anushaporter.backend.model.Driver driverEntity = null;
+        try {
+            Long dId = Long.parseLong(driverId.replaceAll("[^0-9]", ""));
+            driverEntity = driverRepository.findById(dId).orElse(null);
+        } catch (Exception ignored) {}
+        if (driverEntity == null && driverPhone != null) {
+            driverEntity = driverRepository.findByPhone(driverPhone).orElse(null);
+        }
+
+        if (driverEntity == null) {
+            response.put("success", false);
+            response.put("message", "Driver not found in system.");
+            return ResponseEntity.status(404).body(response);
+        }
+
+        if (!"online".equalsIgnoreCase(driverEntity.getStatus()) && !"active".equalsIgnoreCase(driverEntity.getStatus())) {
+            response.put("success", false);
+            response.put("message", "Cannot assign driver: Driver is currently offline.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        driverId = driverEntity.getId().toString();
+        driverName = driverEntity.getName();
+        driverPhone = driverEntity.getPhone();
+        driverVehicleNumber = driverEntity.getVehicleNumber();
 
         order.setDriverId(driverId);
         order.setDriverName(driverName);
@@ -1141,7 +1217,7 @@ public class BookingController {
                 "driverId", driverId,
                 "driverName", driverName,
                 "driverPhone", driverPhone,
-                "vehicleNumber", driverVehicleNumber
+                "vehicleNumber", driverVehicleNumber != null ? driverVehicleNumber : ""
         ));
 
         return ResponseEntity.ok(response);
@@ -1179,10 +1255,11 @@ public class BookingController {
             return ResponseEntity.status(409).body(response);
         }
 
-        String driverId = "DRV-DEFAULT";
-        String driverName = "Driver Partner";
-        String driverPhone = "+919876543210";
-        String vehicleNumber = "KA-01-AB-1234";
+        com.anushaporter.backend.model.Driver authDriver = driverAuthService != null ? driverAuthService.resolveAuthenticatedDriverFromHeader(authHeader) : null;
+        String driverId = authDriver != null && authDriver.getId() != null ? authDriver.getId().toString() : null;
+        String driverName = authDriver != null ? authDriver.getName() : null;
+        String driverPhone = authDriver != null ? authDriver.getPhone() : null;
+        String vehicleNumber = authDriver != null ? authDriver.getVehicleNumber() : null;
 
         if (body != null) {
             if (body.get("driverId") != null) driverId = String.valueOf(body.get("driverId"));
@@ -1191,6 +1268,40 @@ public class BookingController {
             if (body.get("driverVehicleNumber") != null) vehicleNumber = String.valueOf(body.get("driverVehicleNumber"));
             else if (body.get("vehicleNumber") != null) vehicleNumber = String.valueOf(body.get("vehicleNumber"));
         }
+
+        if (driverId == null || driverId.isBlank() || "DRV-DEFAULT".equalsIgnoreCase(driverId) || driverId.startsWith("DRV-")) {
+            response.put("success", false);
+            response.put("message", "A valid registered driver token or driverId is required.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        com.anushaporter.backend.model.Driver driverEntity = authDriver;
+        if (driverEntity == null) {
+            try {
+                Long dId = Long.parseLong(driverId.replaceAll("[^0-9]", ""));
+                driverEntity = driverRepository.findById(dId).orElse(null);
+            } catch (Exception ignored) {}
+            if (driverEntity == null && driverPhone != null) {
+                driverEntity = driverRepository.findByPhone(driverPhone).orElse(null);
+            }
+        }
+
+        if (driverEntity == null) {
+            response.put("success", false);
+            response.put("message", "Driver record not found.");
+            return ResponseEntity.status(404).body(response);
+        }
+
+        if (!"online".equalsIgnoreCase(driverEntity.getStatus()) && !"active".equalsIgnoreCase(driverEntity.getStatus())) {
+            response.put("success", false);
+            response.put("message", "Cannot accept order: Driver is currently offline.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        driverId = driverEntity.getId().toString();
+        driverName = driverEntity.getName();
+        driverPhone = driverEntity.getPhone();
+        vehicleNumber = driverEntity.getVehicleNumber();
 
         order.setDriverId(driverId);
         order.setDriverName(driverName);
