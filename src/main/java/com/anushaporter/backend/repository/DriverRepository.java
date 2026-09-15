@@ -13,4 +13,5 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     Optional<Driver> findFirstByEmailIgnoreCaseOrderByIdDesc(String email);
     Optional<Driver> findByPhone(String phone);
     Optional<Driver> findFirstByPhoneOrderByIdDesc(String phone);
+    java.util.List<Driver> findAllByPhone(String phone);
 }

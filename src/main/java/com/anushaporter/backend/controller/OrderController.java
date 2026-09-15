@@ -243,7 +243,9 @@ public class OrderController {
                 Map<String, Object> conflict = new LinkedHashMap<>();
                 conflict.put("success", false);
                 conflict.put("statusCode", 409);
+                conflict.put("status", "TOO_LATE");
                 conflict.put("stopSound", true);
+                conflict.put("stopAudio", true);
                 conflict.put("action", "STOP_RINGTONE");
                 conflict.put("message", "This order has already been accepted by another driver partner.");
                 Map<String, Object> orderSummary = new LinkedHashMap<>();
@@ -276,7 +278,9 @@ public class OrderController {
                 Map<String, Object> conflict = new LinkedHashMap<>();
                 conflict.put("success", false);
                 conflict.put("statusCode", 409);
+                conflict.put("status", "TOO_LATE");
                 conflict.put("stopSound", true);
+                conflict.put("stopAudio", true);
                 conflict.put("action", "STOP_RINGTONE");
                 conflict.put("message", "This order has already been accepted by another driver partner.");
                 Map<String, Object> orderSummary = new LinkedHashMap<>();
@@ -638,7 +642,9 @@ public class OrderController {
             Map<String, Object> conflict = new LinkedHashMap<>();
             conflict.put("success", false);
             conflict.put("statusCode", 409);
+            conflict.put("status", "TOO_LATE");
             conflict.put("stopSound", true);
+            conflict.put("stopAudio", true);
             conflict.put("action", "STOP_RINGTONE");
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();
@@ -672,7 +678,9 @@ public class OrderController {
             Map<String, Object> conflict = new LinkedHashMap<>();
             conflict.put("success", false);
             conflict.put("statusCode", 409);
+            conflict.put("status", "TOO_LATE");
             conflict.put("stopSound", true);
+            conflict.put("stopAudio", true);
             conflict.put("action", "STOP_RINGTONE");
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();

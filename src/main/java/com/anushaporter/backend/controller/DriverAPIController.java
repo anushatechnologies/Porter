@@ -430,7 +430,7 @@ public class DriverAPIController {
                 "longitude", driver.getLongitude(), "heading", driver.getHeading() == null ? 0 : driver.getHeading()));
     }
 
-    @GetMapping("/drivers/me/orders/active")
+    @GetMapping({"/drivers/me/orders/active", "/driver/orders/active", "/drivers/orders/active", "/driver/active-order", "/drivers/active-order"})
     public ResponseEntity<?> getActiveOrder(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null) {
@@ -438,11 +438,20 @@ public class DriverAPIController {
         }
         List<String> activeStatuses = List.of("assigned", "accepted", "driver_assigned", "arriving_at_pickup",
                 "pickup_started", "picked_up", "transit", "in_transit");
-        List<Order> orders = orderRepository.findAllByDriverEmailAndStatusInOrderByCreatedAtDesc(driver.getEmail(),
-                activeStatuses);
-        if (orders.isEmpty()) {
-            Map<String, Object> emptyResponse = new HashMap<>();
+
+        String driverIdStr = driver.getId() != null ? driver.getId().toString() : "";
+        List<Order> orders = Collections.emptyList();
+        if (driver.getEmail() != null && !driver.getEmail().isBlank()) {
+            orders = orderRepository.findAllByDriverEmailAndStatusInOrderByCreatedAtDesc(driver.getEmail(), activeStatuses);
+        }
+        if ((orders == null || orders.isEmpty()) && !driverIdStr.isBlank()) {
+            orders = orderRepository.findAllByDriverIdAndStatusIn(driverIdStr, activeStatuses);
+        }
+
+        if (orders == null || orders.isEmpty()) {
+            Map<String, Object> emptyResponse = new LinkedHashMap<>();
             emptyResponse.put("success", true);
+            emptyResponse.put("hasActiveOrder", false);
             emptyResponse.put("order", null);
             return ResponseEntity.ok(emptyResponse);
         }
@@ -451,8 +460,9 @@ public class DriverAPIController {
         AppUser customer = appUserRepository.findFirstByEmailOrderByIdDesc(order.getUserEmail()).orElse(null);
         String customerName = customer != null ? customer.getName() : order.getReceiverName();
         String customerPhone = customer != null ? customer.getPhone() : order.getReceiverPhone();
-        Map<String, Object> result = new HashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
+        result.put("hasActiveOrder", true);
         result.put("orderId", order.getId());
         result.put("bookingId", order.getBookingId());
         result.put("status", order.getStatus());
@@ -619,6 +629,10 @@ public class DriverAPIController {
             Map<String, Object> conflict = new LinkedHashMap<>();
             conflict.put("success", false);
             conflict.put("statusCode", 409);
+            conflict.put("status", "TOO_LATE");
+            conflict.put("stopSound", true);
+            conflict.put("stopAudio", true);
+            conflict.put("action", "STOP_RINGTONE");
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();
             orderSummary.put("id", order.getId());
@@ -661,7 +675,9 @@ public class DriverAPIController {
             Map<String, Object> conflict = new LinkedHashMap<>();
             conflict.put("success", false);
             conflict.put("statusCode", 409);
+            conflict.put("status", "TOO_LATE");
             conflict.put("stopSound", true);
+            conflict.put("stopAudio", true);
             conflict.put("action", "STOP_RINGTONE");
             conflict.put("message", "This order has already been accepted by another driver partner.");
             Map<String, Object> orderSummary = new LinkedHashMap<>();

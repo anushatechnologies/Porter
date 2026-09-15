@@ -99,12 +99,14 @@ public class DriverController {
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("success", true);
+            response.put("hasActiveOrder", true);
             response.put("order", orderMap);
             return ResponseEntity.ok(response);
         }
 
         Map<String, Object> emptyResponse = new LinkedHashMap<>();
         emptyResponse.put("success", true);
+        emptyResponse.put("hasActiveOrder", false);
         emptyResponse.put("order", null);
         return ResponseEntity.ok(emptyResponse);
     }
@@ -140,12 +142,23 @@ public class DriverController {
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "query", required = false) String query,
+            @RequestParam(value = "phone", required = false) String phone,
             @RequestParam(value = "minWallet", required = false) Double minWallet,
             @RequestParam(value = "minBalance", required = false) Double minBalance,
             @RequestParam(value = "serviceType", required = false) String serviceType,
             @RequestParam(value = "service", required = false) String service
     ) {
-        List<Driver> drivers = repository.findAll();
+        List<Driver> drivers;
+        if (phone != null && !phone.isBlank()) {
+            String cleanPhone = phone.replaceAll("[^0-9]", "");
+            List<Driver> byPhone = repository.findAllByPhone(phone.trim());
+            if ((byPhone == null || byPhone.isEmpty()) && !cleanPhone.equals(phone.trim()) && !cleanPhone.isBlank()) {
+                byPhone = repository.findAllByPhone(cleanPhone);
+            }
+            drivers = byPhone != null ? byPhone : Collections.emptyList();
+        } else {
+            drivers = repository.findAll();
+        }
 
         Double filterMinWallet = minWallet != null ? minWallet : minBalance;
         String searchTerm = search != null ? search.trim().toLowerCase() : (q != null ? q.trim().toLowerCase() : (query != null ? query.trim().toLowerCase() : null));
@@ -189,7 +202,7 @@ public class DriverController {
                     // Search term filter (matches Name, Phone, Email, Vehicle Plate, or ID)
                     if (searchTerm != null && !searchTerm.isBlank()) {
                         String name = d.getName() != null ? d.getName().toLowerCase() : "";
-                        String phone = d.getPhone() != null ? d.getPhone().toLowerCase() : "";
+                        String drvPhone = d.getPhone() != null ? d.getPhone().toLowerCase() : "";
                         String email = d.getEmail() != null ? d.getEmail().toLowerCase() : "";
                         String vNum = d.getVehicleNumber() != null ? d.getVehicleNumber().toLowerCase() : "";
                         String vType = d.getVehicleType() != null ? d.getVehicleType().toLowerCase() : "";
@@ -197,7 +210,7 @@ public class DriverController {
                         String drvId = "drv-" + idStr;
 
                         if (!name.contains(searchTerm)
-                                && !phone.contains(searchTerm)
+                                && !drvPhone.contains(searchTerm)
                                 && !email.contains(searchTerm)
                                 && !vNum.contains(searchTerm)
                                 && !vType.contains(searchTerm)
@@ -300,7 +313,7 @@ public class DriverController {
             @RequestParam(value = "kyc", required = false) String kyc,
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "q", required = false) String q) {
-        return getAll(status, kyc, search, q, null, null, null, "OUR_SERVICES", null);
+        return getAll(status, kyc, search, q, null, null, null, null, "OUR_SERVICES", null);
     }
 
     /**
@@ -313,7 +326,7 @@ public class DriverController {
             @RequestParam(value = "kyc", required = false) String kyc,
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "q", required = false) String q) {
-        return getAll(status, kyc, search, q, null, null, null, "PASSENGER", null);
+        return getAll(status, kyc, search, q, null, null, null, null, "PASSENGER", null);
     }
 
     @PostMapping
