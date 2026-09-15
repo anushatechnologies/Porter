@@ -389,19 +389,44 @@ public class DriverAPIController {
         return ResponseEntity.ok(resp);
     }
 
-    @PostMapping("/drivers/me/device-token")
+    @PostMapping({ "/drivers/me/device-token", "/driver/me/device-token", "/drivers/device-token", "/driver/device-token",
+            "/drivers/fcm-token", "/driver/fcm-token", "/drivers/me/fcm-token", "/driver/me/fcm-token" })
     public ResponseEntity<?> registerDeviceToken(HttpServletRequest request, @RequestBody Map<String, String> payload) {
         AppUser appUser = getAuthenticatedAppUser(request);
         Driver driver = getAuthenticatedDriver(request);
-        if (appUser == null || driver == null) {
+        if (appUser == null && driver != null) {
+            if (driver.getEmail() != null && !driver.getEmail().isBlank()) {
+                appUser = appUserRepository.findFirstByEmailOrderByIdDesc(driver.getEmail()).orElse(null);
+            }
+            if (appUser == null && driver.getPhone() != null && !driver.getPhone().isBlank()) {
+                String cleanPhone = driverAuthService.normalizePhone(driver.getPhone());
+                appUser = appUserRepository.findFirstByPhoneOrderByIdDesc(cleanPhone).orElse(null);
+                if (appUser == null) appUser = appUserRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone()).orElse(null);
+            }
+        }
+        if (driver == null && appUser != null) {
+            String phone = appUser.getPhone();
+            if (phone != null && !phone.isBlank()) {
+                driver = driverRepository.findByPhone(driverAuthService.normalizePhone(phone)).orElse(null);
+            }
+            if (driver == null && appUser.getEmail() != null && !appUser.getEmail().isBlank()) {
+                driver = driverRepository.findByEmailIgnoreCase(appUser.getEmail()).orElse(null);
+            }
+        }
+        if (appUser == null && driver == null) {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver profile not found"));
         }
         String fcmToken = payload.get("fcmToken");
+        if (fcmToken == null || fcmToken.isBlank()) fcmToken = payload.get("token");
+        if (fcmToken == null || fcmToken.isBlank()) fcmToken = payload.get("deviceToken");
+        if (fcmToken == null || fcmToken.isBlank()) fcmToken = payload.get("pushToken");
         if (fcmToken == null || fcmToken.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "fcmToken is required"));
         }
-        appUser.setFcmToken(fcmToken.trim());
-        appUserRepository.save(appUser);
+        if (appUser != null) {
+            appUser.setFcmToken(fcmToken.trim());
+            appUserRepository.save(appUser);
+        }
         return ResponseEntity.ok(Map.of("success", true, "message", "Device token registered"));
     }
 
@@ -747,20 +772,36 @@ public class DriverAPIController {
      * List active incoming offers for the authenticated driver partner.
      * GET /api/driver/offers or GET /api/drivers/offers
      */
-    @GetMapping({ "/driver/offers", "/drivers/offers" })
+    @GetMapping({ "/driver/offers", "/drivers/offers", "/driver/offers/active", "/drivers/offers/active",
+            "/driver/orders/offers", "/drivers/orders/offers" })
     public ResponseEntity<?> getDriverOffers(HttpServletRequest request) {
         Driver driver = getAuthenticatedDriver(request);
         if (driver == null || driver.getId() == null) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized or Driver profile not found"));
+            AppUser appUser = getAuthenticatedAppUser(request);
+            if (appUser != null && appUser.getPhone() != null) {
+                driver = driverRepository.findByPhone(driverAuthService.normalizePhone(appUser.getPhone())).orElse(null);
+            }
+        }
+        if (driver == null || driver.getId() == null) {
+            return ResponseEntity.status(401).body(Map.of(
+                    "success", false,
+                    "message", "Unauthorized or Driver profile not found",
+                    "offers", List.of(),
+                    "availableOrders", List.of(),
+                    "orders", List.of(),
+                    "data", List.of()));
         }
 
         List<com.anushaporter.backend.dto.DriverOfferResponse> offers = driverOfferService.getActiveOffersForDriver(driver.getId());
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "driverId", driver.getId(),
-                "count", offers.size(),
-                "offers", offers
-        ));
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("driverId", driver.getId());
+        resp.put("count", offers.size());
+        resp.put("offers", offers);
+        resp.put("availableOrders", offers);
+        resp.put("orders", offers);
+        resp.put("data", offers);
+        return ResponseEntity.ok(resp);
     }
 
     /**
@@ -1242,7 +1283,12 @@ public class DriverAPIController {
 
     // B. Submit Registration / Save & Next
     @PostMapping({ "/drivers/register", "/driver/register", "/drivers/register/step", "/driver/register/step",
-            "/drivers/register/save-and-next", "/driver/register/save-and-next" })
+            "/drivers/register/save-and-next", "/driver/register/save-and-next",
+            "/drivers/registration/submit", "/driver/registration/submit",
+            "/drivers/registration/save-and-next", "/driver/registration/save-and-next",
+            "/drivers/registration/step", "/driver/registration/step",
+            "/drivers/registration", "/driver/registration",
+            "/drivers/register/submit", "/driver/register/submit" })
     public ResponseEntity<?> registerDriver(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
         AppUser appUser = getAuthenticatedAppUser(request);
         if (appUser == null) {
@@ -1535,7 +1581,8 @@ public class DriverAPIController {
             boolean isFinalSubmit = Boolean.TRUE.equals(payload.get("submit"))
                     || Boolean.TRUE.equals(payload.get("isFinalSubmit"))
                     || "submit".equalsIgnoreCase(String.valueOf(payload.get("action")))
-                    || (stepParam != null && stepParam >= 4);
+                    || (stepParam != null && stepParam >= 4)
+                    || (uri != null && uri.endsWith("/submit"));
             if (isFinalSubmit || (!isSaveAndNext && (driver.getKyc() == null || !"draft".equalsIgnoreCase(text(payload, "kyc"))))) {
                 // Auto-approve driver registration; no need of admin approval
                 driver.setKyc("approved");
@@ -1585,7 +1632,8 @@ public class DriverAPIController {
     }
 
     // C. Get Registration Progress / Draft
-    @GetMapping({ "/drivers/register/progress", "/driver/register/progress", "/drivers/register/draft", "/driver/register/draft" })
+    @GetMapping({ "/drivers/register/progress", "/driver/register/progress", "/drivers/register/draft", "/driver/register/draft",
+            "/drivers/registration/progress", "/driver/registration/progress", "/drivers/registration/draft", "/driver/registration/draft" })
     public ResponseEntity<?> getRegistrationProgress(HttpServletRequest request) {
         AppUser appUser = getAuthenticatedAppUser(request);
         if (appUser == null) {
@@ -1850,7 +1898,9 @@ public class DriverAPIController {
                 "success", true,
                 "count", response.size(),
                 "orders", response,
-                "availableOrders", response));
+                "availableOrders", response,
+                "offers", response,
+                "data", response));
     }
 
     // Driver Earnings Overview

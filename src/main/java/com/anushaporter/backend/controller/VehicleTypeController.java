@@ -91,6 +91,20 @@ public class VehicleTypeController {
                         "car", "https://poteranusha.s3.amazonaws.com/vehicles/cab.png", 150.00, 2.0, 15.00, "PASSENGER", 6));
             }
 
+            // Seed pass_bike (Bike Taxi) if missing
+            if (vehicleTypeRepository.findById("pass_bike").isEmpty() && vehicleTypeRepository.findByType("bike_taxi").isEmpty()) {
+                vehicleTypeRepository.save(build("pass_bike", "Bike Taxi (Passenger)", "bike_taxi",
+                        "Quick & affordable 1-passenger bike ride", "1 Passenger", 80, "1 Helmet Provided",
+                        "bike", "https://poteranusha.s3.amazonaws.com/vehicles/bike.png", 30.00, 1.0, 10.00, "PASSENGER", 7));
+            }
+
+            // Seed pass_auto (Auto Taxi) if missing
+            if (vehicleTypeRepository.findById("pass_auto").isEmpty() && vehicleTypeRepository.findByType("auto_taxi").isEmpty()) {
+                vehicleTypeRepository.save(build("pass_auto", "Auto Taxi (Passenger)", "auto_taxi",
+                        "Convenient city auto ride for up to 3 passengers", "3 Passengers", 250, "Up to 3 Passengers",
+                        "rickshaw", "https://poteranusha.s3.amazonaws.com/vehicles/auto.png", 50.00, 1.5, 15.00, "PASSENGER", 8));
+            }
+
             // Migrate any legacy 'BOTH' vehicle types to strict tracks
             try {
                 vehicleTypeRepository.findAll().forEach(vt -> {
