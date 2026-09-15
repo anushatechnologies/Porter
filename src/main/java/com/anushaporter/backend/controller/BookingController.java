@@ -4,6 +4,7 @@ import com.anushaporter.backend.model.Order;
 import com.anushaporter.backend.repository.OrderRepository;
 import com.anushaporter.backend.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -52,6 +53,9 @@ public class BookingController {
     @Autowired(required = false)
     private com.anushaporter.backend.repository.DriverOfferRepository driverOfferRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.AppUserRepository appUserRepository;
+
     /**
      * Recommend optimal vehicle type based on weight, dimensions, and category.
      * POST /api/vehicles/recommend
@@ -69,14 +73,18 @@ public class BookingController {
      * POST /api/bookings/{bookingId}/auto-assign
      * POST /api/orders/{bookingId}/auto-assign
      */
-    @PostMapping({
+    @RequestMapping(value = {
             "/api/bookings/{bookingId}/retry",
             "/api/orders/{bookingId}/retry",
             "/bookings/{bookingId}/retry",
             "/orders/{bookingId}/retry",
             "/api/bookings/{bookingId}/auto-assign",
-            "/api/orders/{bookingId}/auto-assign"
-    })
+            "/api/orders/{bookingId}/auto-assign",
+            "/api/bookings/{bookingId}/retry-search",
+            "/api/orders/{bookingId}/retry-search",
+            "/bookings/{bookingId}/retry-search",
+            "/orders/{bookingId}/retry-search"
+    }, method = {RequestMethod.POST, RequestMethod.GET})
     public ResponseEntity<Map<String, Object>> triggerAutoAssignment(@PathVariable String bookingId) {
         Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
         if (orderOpt.isEmpty()) {
@@ -579,7 +587,7 @@ public class BookingController {
      */
     @GetMapping("/api/bookings/{bookingId}")
     public ResponseEntity<Map<String, Object>> getBookingDetail(
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable String bookingId) {
 
         Map<String, Object> response = new HashMap<>();
@@ -1128,9 +1136,25 @@ public class BookingController {
      */
     @PostMapping("/api/bookings/{bookingId}/assign")
     public ResponseEntity<?> assignBookingDriver(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable String bookingId,
             @RequestBody(required = false) Map<String, Object> payload) {
         Map<String, Object> response = new HashMap<>();
+
+        com.anushaporter.backend.model.AppUser admin = resolveAdminUser(authHeader);
+        if (admin == null) {
+            String callerId = extractEmail(authHeader);
+            if (callerId == null) {
+                response.put("success", false);
+                response.put("error", "Unauthorized");
+                response.put("message", "Authentication required. Only administrators can assign drivers directly.");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+            response.put("success", false);
+            response.put("error", "Forbidden");
+            response.put("message", "Access denied. Only administrators can assign drivers directly.");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
 
         Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
         if (orderOpt.isEmpty()) {
@@ -1234,6 +1258,21 @@ public class BookingController {
             @RequestBody(required = false) Map<String, Object> body) {
 
         Map<String, Object> response = new LinkedHashMap<>();
+
+        com.anushaporter.backend.model.AppUser admin = resolveAdminUser(authHeader);
+        if (admin == null) {
+            String callerId = extractEmail(authHeader);
+            if (callerId == null) {
+                response.put("success", false);
+                response.put("error", "Unauthorized");
+                response.put("message", "Authentication required. Only administrators can assign drivers directly.");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+            response.put("success", false);
+            response.put("error", "Forbidden");
+            response.put("message", "Access denied. Only administrators can assign drivers directly.");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
 
         Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
         if (orderOpt.isEmpty()) {
@@ -1653,9 +1692,10 @@ public class BookingController {
         return stage;
     }
 
-    @GetMapping("/api/bookings/{bookingId}/invoice")
-    public ResponseEntity<Map<String, Object>> getInvoice(@RequestHeader("Authorization") String authHeader,
-                                                          @PathVariable String bookingId) {
+    @GetMapping({"/api/bookings/{bookingId}/invoice", "/api/orders/{bookingId}/invoice"})
+    public ResponseEntity<Map<String, Object>> getInvoice(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String bookingId) {
         Map<String, Object> response = new HashMap<>();
         if (extractEmail(authHeader) == null) {
             response.put("success", false); response.put("message", "Unauthorized");
@@ -1773,6 +1813,33 @@ public class BookingController {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private com.anushaporter.backend.model.AppUser resolveAdminUser(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return null;
+        }
+        try {
+            String token = authHeader.substring(7).trim();
+            String id = jwtUtil.extractIdentifierFromFirebaseOrJwt(token);
+            if (id == null || id.isBlank()) {
+                id = jwtUtil.getUsernameFromToken(token);
+            }
+            if (id == null || id.isBlank() || appUserRepository == null) {
+                return null;
+            }
+            Optional<com.anushaporter.backend.model.AppUser> userOpt = appUserRepository.findFirstByEmailOrderByIdDesc(id);
+            if (userOpt.isEmpty()) {
+                userOpt = appUserRepository.findFirstByPhoneOrderByIdDesc(id);
+            }
+            if (userOpt.isPresent()) {
+                com.anushaporter.backend.model.AppUser u = userOpt.get();
+                if ("admin".equalsIgnoreCase(u.getRole())) {
+                    return u;
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
 }

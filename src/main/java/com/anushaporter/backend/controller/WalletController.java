@@ -26,7 +26,7 @@ public class WalletController {
      */
     @GetMapping("/api/wallet")
     public ResponseEntity<Map<String, Object>> getWallet(
-            @RequestHeader("Authorization") String authHeader) {
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
         Map<String, Object> response = new HashMap<>();
         String email = extractEmail(authHeader);
@@ -70,7 +70,7 @@ public class WalletController {
      */
     @PostMapping("/api/wallet/topup")
     public ResponseEntity<Map<String, Object>> topUp(
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestBody Map<String, Object> body) {
 
         Map<String, Object> response = new HashMap<>();

@@ -516,31 +516,19 @@ public class DriverAPIController {
             @RequestBody(required = false) Map<String, Object> payload) {
         Driver driver = getAuthenticatedDriver(request);
 
-        String driverId = driver != null && driver.getId() != null ? driver.getId().toString()
-                : (payload != null && payload.get("driverId") != null ? String.valueOf(payload.get("driverId")) : null);
-        String driverName = driver != null ? driver.getName()
-                : (payload != null && payload.get("driverName") != null ? String.valueOf(payload.get("driverName"))
-                        : null);
-        String driverEmail = driver != null ? driver.getEmail()
-                : (payload != null && payload.get("driverEmail") != null ? String.valueOf(payload.get("driverEmail"))
-                        : null);
-        String driverPhone = driver != null ? driver.getPhone()
-                : (payload != null && payload.get("driverPhone") != null ? String.valueOf(payload.get("driverPhone"))
-                        : null);
-        String driverVehicle = driver != null ? driver.getVehicleNumber()
-                : (payload != null && payload.get("driverVehicleNumber") != null
-                        ? String.valueOf(payload.get("driverVehicleNumber"))
-                        : (payload != null && payload.get("vehicleNumber") != null
-                                ? String.valueOf(payload.get("vehicleNumber"))
-                                : null));
-
-        if (driver == null && driverId == null && driverEmail == null) {
+        if (driver == null) {
             Map<String, Object> unauth = new LinkedHashMap<>();
             unauth.put("success", false);
             unauth.put("statusCode", 401);
-            unauth.put("message", "Driver profile not found or unauthorized");
+            unauth.put("message", "Driver authentication required to accept bookings.");
             return ResponseEntity.status(401).body(unauth);
         }
+
+        String driverId = driver.getId() != null ? driver.getId().toString() : null;
+        String driverName = driver.getName();
+        String driverEmail = driver.getEmail();
+        String driverPhone = driver.getPhone();
+        String driverVehicle = driver.getVehicleNumber();
 
         Optional<Order> orderOpt = orderRepository.findByBookingId(bookingId);
         if (orderOpt.isEmpty()) {

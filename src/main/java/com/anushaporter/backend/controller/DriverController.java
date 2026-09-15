@@ -17,7 +17,7 @@ import com.anushaporter.backend.model.Vehicle;
 import com.anushaporter.backend.repository.VehicleRepository;
 
 @RestController
-@RequestMapping({"/api/drivers", "/api/admin/drivers"})
+@RequestMapping("/api/drivers")
 public class DriverController {
     @Autowired
     private DriverRepository repository;

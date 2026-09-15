@@ -70,7 +70,7 @@ public class SupportTicketController {
      */
     @GetMapping("/api/support/tickets")
     public ResponseEntity<Map<String, Object>> getTickets(
-            @RequestHeader("Authorization") String authHeader) {
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
         Map<String, Object> response = new HashMap<>();
         String email = extractEmail(authHeader);

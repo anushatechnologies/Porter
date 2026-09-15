@@ -5,6 +5,7 @@ import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.repository.OrderRepository;
 import com.anushaporter.backend.repository.AppUserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,6 +27,12 @@ public class AdminAPIController {
 
     @Autowired(required = false)
     private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.NotificationRepository notificationRepository;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.S3ImageService s3ImageService;
 
     @GetMapping("/customers")
     public ResponseEntity<?> getCustomers() {
@@ -478,6 +485,118 @@ public class AdminAPIController {
 
         return ResponseEntity
                 .ok(Map.of("success", true, "driverId", driver.getId().toString(), "kycStatus", driver.getKyc()));
+    }
+
+    @PostMapping("/drivers/{id}/verify")
+    public ResponseEntity<Map<String, Object>> verifyDriver(@PathVariable Long id) {
+        return driverRepository.findById(id).map(driver -> {
+            driver.setKyc("verified");
+
+            if (notificationRepository != null) {
+                com.anushaporter.backend.model.Notification notif = new com.anushaporter.backend.model.Notification();
+                notif.setTitle("Account Approved!");
+                notif.setMessage("Congratulations! Your partner account has been approved. You can now log in and accept orders.");
+                notif.setAudience("driver");
+                notif.setTarget(driver.getEmail());
+                notif.setReadStatus(false);
+                notificationRepository.save(notif);
+            }
+
+            Driver savedDriver = driverRepository.save(driver);
+            return ResponseEntity.ok(Map.of("success", (Object) true, "driver", (Object) savedDriver));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping({"/drivers/{id}/reject", "/drivers/reject/{id}"})
+    public ResponseEntity<?> rejectDriver(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> payload) {
+        return driverRepository.findById(id).map(driver -> {
+            driver.setKyc("rejected");
+            driver.setVerificationStatus("REJECTED_REQUIRES_REUPLOAD");
+
+            String rejectionReason = null;
+            String rejectedDocsString = null;
+            String notes = null;
+
+            if (payload != null) {
+                rejectionReason = payload.get("rejectionReason") != null ? payload.get("rejectionReason").toString()
+                        : (payload.get("reason") != null ? payload.get("reason").toString() : null);
+                notes = payload.get("notes") != null ? payload.get("notes").toString() : null;
+
+                Object rejectedDocsObj = payload.get("rejectedDocuments");
+                if (rejectedDocsObj instanceof List) {
+                    List<?> list = (List<?>) rejectedDocsObj;
+                    rejectedDocsString = list.stream().map(Object::toString).collect(Collectors.joining(","));
+                } else if (rejectedDocsObj != null) {
+                    rejectedDocsString = rejectedDocsObj.toString();
+                }
+            }
+
+            if (rejectionReason != null && !rejectionReason.isBlank()) {
+                driver.setRejectionReason(rejectionReason);
+            }
+            if (rejectedDocsString != null && !rejectedDocsString.isBlank()) {
+                driver.setRejectedDocuments(rejectedDocsString);
+            }
+            if (notes != null && !notes.isBlank()) {
+                driver.setRejectionNotes(notes);
+            }
+
+            if (notificationRepository != null) {
+                com.anushaporter.backend.model.Notification notif = new com.anushaporter.backend.model.Notification();
+                notif.setTitle("Verification Requires Document Re-upload");
+                String docInfo = (rejectedDocsString != null && !rejectedDocsString.isBlank()) ? " [" + rejectedDocsString + "]" : "";
+                notif.setMessage("Your verification requires document re-upload" + docInfo + ". Open the driver app to re-upload.");
+                notif.setAudience("driver");
+                notif.setTarget(driver.getEmail());
+                notif.setReadStatus(false);
+                notificationRepository.save(notif);
+            }
+
+            Driver savedDriver = driverRepository.save(driver);
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("success", true);
+            resp.put("message", "Driver verification rejected with re-upload requirement");
+            resp.put("verificationStatus", savedDriver.getVerificationStatus());
+            resp.put("rejectionReason", savedDriver.getRejectionReason());
+            resp.put("rejectedDocuments", savedDriver.getRejectedDocuments());
+            resp.put("driver", savedDriver);
+            return ResponseEntity.ok(resp);
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping({"/drivers/{id:[0-9]+}", "/drivers/{id:DRV-[0-9]+}"})
+    public ResponseEntity<?> deleteDriver(@PathVariable String id) {
+        Long driverId = null;
+        String cleanId = id != null ? id.trim() : "";
+        if (cleanId.toUpperCase().startsWith("DRV-")) {
+            cleanId = cleanId.substring(4).trim();
+        }
+        try {
+            driverId = Long.parseLong(cleanId);
+        } catch (NumberFormatException ignored) {}
+
+        Optional<Driver> driverOpt = driverId != null ? driverRepository.findById(driverId) : Optional.empty();
+
+        return driverOpt.<ResponseEntity<?>>map(driver -> {
+            if (s3ImageService != null) {
+                try { s3ImageService.deleteImage(driver.getProfilePhotoUri()); } catch (Exception ignored) {}
+                try { s3ImageService.deleteImage(driver.getAadhaarUri()); } catch (Exception ignored) {}
+                try { s3ImageService.deleteImage(driver.getLicenseUri()); } catch (Exception ignored) {}
+                try { s3ImageService.deleteImage(driver.getRcUri()); } catch (Exception ignored) {}
+                try { s3ImageService.deleteImage(driver.getBankPassbookUri()); } catch (Exception ignored) {}
+            }
+
+            Long deletedId = driver.getId();
+            driverRepository.delete(driver);
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Driver profile removed successfully",
+                    "id", deletedId,
+                    "driverId", deletedId.toString()
+            ));
+        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + id)));
     }
 
     /**
