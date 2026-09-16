@@ -248,4 +248,81 @@ public class VehicleMatchingAndServiceableAreaIntegrationTest {
                 .andExpect(jsonPath("$.message", containsString("Porter service is not currently available")))
                 .andExpect(jsonPath("$.approvedAreas", notNullValue()));
     }
+
+    @Test
+    public void testDriverProfileUpdate_VehicleChangeAndAvailableOrdersFiltering() throws Exception {
+        // Create user & driver with 2 Wheeler
+        String phone = "9100000099";
+        com.anushaporter.backend.model.AppUser driverUser = new com.anushaporter.backend.model.AppUser();
+        driverUser.setPhone(phone);
+        driverUser.setName("Switching Driver");
+        driverUser.setRole("Driver");
+        appUserRepository.save(driverUser);
+        String token = "Bearer " + jwtUtil.generateToken(phone);
+
+        Driver driver = new Driver();
+        driver.setName("Switching Driver");
+        driver.setPhone(phone);
+        driver.setStatus("online");
+        driver.setVehicleType("2 Wheeler");
+        driver.setVehicle("2 Wheeler");
+        driver.setServiceType("OUR_SERVICES");
+        driver.setKyc("approved");
+        driver = driverRepository.save(driver);
+
+        // Place 2 orders: 1 for 2 Wheeler and 1 for 3 Wheeler
+        Order order2W = new Order();
+        order2W.setBookingId("ORD-SW-2W");
+        order2W.setServiceName("2 Wheeler");
+        order2W.setStatus("searching");
+        order2W.setPickupAddress("Hitech City");
+        order2W.setDropAddress("Madhapur");
+        order2W.setCreatedAt(java.time.LocalDateTime.now());
+        driverEligibilityService = webApplicationContext.getBean(DriverEligibilityService.class);
+        com.anushaporter.backend.repository.OrderRepository orderRepo = webApplicationContext.getBean(com.anushaporter.backend.repository.OrderRepository.class);
+        orderRepo.save(order2W);
+
+        Order order3W = new Order();
+        order3W.setBookingId("ORD-SW-3W");
+        order3W.setServiceName("3 Wheeler / Auto");
+        order3W.setStatus("searching");
+        order3W.setPickupAddress("Gachibowli");
+        order3W.setDropAddress("Kondapur");
+        order3W.setCreatedAt(java.time.LocalDateTime.now());
+        orderRepo.save(order3W);
+
+        // 1. Initial State: Driver is 2 Wheeler -> available orders must contain ONLY 2 Wheeler order
+        mockMvc.perform(get("/api/driver/orders/available")
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.count", is(1)))
+                .andExpect(jsonPath("$.orders[0].bookingId", is("ORD-SW-2W")));
+
+        // 2. Driver edits profile and updates vehicle to 3 Wheeler
+        Map<String, Object> updatePayload = Map.of(
+                "vehicleType", "3 Wheeler / Auto",
+                "vehicle", "3 Wheeler / Auto",
+                "serviceType", "OUR_SERVICES"
+        );
+
+        mockMvc.perform(put("/api/driver/profile")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updatePayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        // 3. After Update: Driver is 3 Wheeler -> available orders must now contain ONLY 3 Wheeler order!
+        mockMvc.perform(get("/api/driver/orders/available")
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.count", is(1)))
+                .andExpect(jsonPath("$.orders[0].bookingId", is("ORD-SW-3W")));
+
+        // Clean up orders
+        orderRepo.delete(order2W);
+        orderRepo.delete(order3W);
+    }
 }

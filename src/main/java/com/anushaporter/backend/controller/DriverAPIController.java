@@ -58,6 +58,9 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.DriverOfferService driverOfferService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.DriverEligibilityService driverEligibilityService;
+
     @Autowired
     private com.anushaporter.backend.service.TripStateMachineService tripStateMachineService;
 
@@ -321,10 +324,29 @@ public class DriverAPIController {
             }
 
             // Vehicle updates
+            String oldTrack = (driverEligibilityService != null && driver.getServiceType() != null)
+                    ? driverEligibilityService.resolveDriverTrack(driver) : driver.getServiceType();
+            String oldCategory = (driverEligibilityService != null && driver.getVehicleType() != null)
+                    ? driverEligibilityService.normalizeVehicleCategory(driver.getVehicleType(), oldTrack) : "";
+
             String newVehicle = text(payload, "vehicle");
             String newVehicleType = text(payload, "vehicleType");
             if (newVehicleType == null) newVehicleType = text(payload, "vehicle_type");
             if (newVehicleType == null) newVehicleType = text(payload, "vehicleName");
+            String vehicleId = text(payload, "vehicleId");
+
+            if (vehicleId != null && !vehicleId.isBlank() && vehicleTypeRepository != null) {
+                VehicleType vt = vehicleTypeRepository.findById(vehicleId).orElse(null);
+                if (vt != null) {
+                    if (newVehicle == null && newVehicleType == null) {
+                        newVehicle = vt.getName();
+                        newVehicleType = vt.getName();
+                    }
+                    if (vt.getServiceType() != null && !vt.getServiceType().isBlank()) {
+                        driver.setServiceType(vt.getServiceType().trim().toUpperCase());
+                    }
+                }
+            }
 
             String resolvedV = newVehicle != null ? newVehicle : newVehicleType;
             if (resolvedV != null && !resolvedV.isBlank()) {
@@ -349,6 +371,17 @@ public class DriverAPIController {
                     driver.setServiceType("PASSENGER");
                 } else {
                     driver.setServiceType("OUR_SERVICES");
+                }
+            }
+
+            String newTrack = (driverEligibilityService != null)
+                    ? driverEligibilityService.resolveDriverTrack(driver) : driver.getServiceType();
+            String newCategory = (driverEligibilityService != null)
+                    ? driverEligibilityService.normalizeVehicleCategory(driver.getVehicleType(), newTrack) : "";
+
+            if (!oldCategory.equals(newCategory) || (oldTrack != null && !oldTrack.equalsIgnoreCase(newTrack))) {
+                if (driverOfferService != null && driver.getId() != null) {
+                    driverOfferService.cancelActiveOffersForDriver(driver.getId());
                 }
             }
 
@@ -1865,14 +1898,40 @@ public class DriverAPIController {
     // Available rides pool for nearby drivers
     @GetMapping({ "/driver/orders/available", "/drivers/orders/available" })
     public ResponseEntity<?> getAvailableOrders(
+            HttpServletRequest request,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false, defaultValue = "10") Double radiusKm) {
+
+        Driver driver = getAuthenticatedDriver(request);
+        if (driver == null || driver.getId() == null) {
+            AppUser appUser = getAuthenticatedAppUser(request);
+            if (appUser != null && appUser.getPhone() != null) {
+                driver = driverRepository.findByPhone(driverAuthService.normalizePhone(appUser.getPhone())).orElse(null);
+            }
+        }
+
+        final Driver currentDriver = driver;
+        String driverTrack = (currentDriver != null && driverEligibilityService != null)
+                ? driverEligibilityService.resolveDriverTrack(currentDriver)
+                : (currentDriver != null ? currentDriver.getServiceType() : "OUR_SERVICES");
+        String driverCategory = (currentDriver != null && driverEligibilityService != null)
+                ? driverEligibilityService.normalizeVehicleCategory(currentDriver.getVehicleType(), driverTrack)
+                : "UNKNOWN";
+
+        java.time.LocalDateTime cutoff = java.time.LocalDateTime.now().minusHours(4);
 
         List<Order> availableOrders = orderRepository.findAll().stream()
                 .filter(o -> o.getStatus() == null || "searching".equalsIgnoreCase(o.getStatus())
                         || "pending".equalsIgnoreCase(o.getStatus()))
                 .filter(o -> o.getDriverId() == null || o.getDriverId().isEmpty())
+                .filter(o -> o.getCreatedAt() == null || o.getCreatedAt().isAfter(cutoff))
+                .filter(o -> {
+                    if (currentDriver == null || driverEligibilityService == null) return true;
+                    String orderTrack = driverEligibilityService.resolveOrderTrack(o);
+                    String orderCategory = driverEligibilityService.normalizeVehicleCategory(o.getServiceName(), orderTrack);
+                    return driverTrack.equalsIgnoreCase(orderTrack) && driverCategory.equalsIgnoreCase(orderCategory);
+                })
                 .collect(Collectors.toList());
 
         List<Map<String, Object>> response = availableOrders.stream().map(o -> {

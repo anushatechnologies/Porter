@@ -191,7 +191,32 @@ public class DriverOfferService {
         LocalDateTime now = LocalDateTime.now();
         List<DriverOffer> activeOffers = driverOfferRepository.findActiveOffersForDriver(driverId, now);
 
-        return activeOffers.stream().map(offer -> {
+        Driver driver = driverRepository.findById(driverId).orElse(null);
+        String driverTrack = (driver != null && driverEligibilityService != null)
+                ? driverEligibilityService.resolveDriverTrack(driver) : "OUR_SERVICES";
+        String driverCategory = (driver != null && driverEligibilityService != null)
+                ? driverEligibilityService.normalizeVehicleCategory(driver.getVehicleType(), driverTrack) : "UNKNOWN";
+
+        return activeOffers.stream()
+                .filter(offer -> {
+                    if (driver == null || driverEligibilityService == null) return true;
+                    if (offer.getBookingId() == null) return true;
+                    Optional<Order> oOpt = orderRepository.findByBookingId(offer.getBookingId());
+                    if (oOpt.isEmpty()) return true;
+                    Order o = oOpt.get();
+                    String orderTrack = driverEligibilityService.resolveOrderTrack(o);
+                    String orderCategory = driverEligibilityService.normalizeVehicleCategory(o.getServiceName(), orderTrack);
+                    boolean matches = driverTrack.equals(orderTrack) && driverCategory.equals(orderCategory);
+                    if (!matches) {
+                        try {
+                            offer.setStatus(DriverOfferStatus.CANCELLED);
+                            offer.setRespondedAt(now);
+                            driverOfferRepository.save(offer);
+                        } catch (Exception ignored) {}
+                    }
+                    return matches;
+                })
+                .map(offer -> {
             DriverOfferResponse dto = new DriverOfferResponse();
             dto.setOfferId(offer.getId());
             dto.setBookingId(offer.getBookingId());
@@ -228,11 +253,11 @@ public class DriverOfferService {
                     dto.setPassengerCount(o.getPassengerCount());
                     dto.setStartOtp(o.getStartOtp());
 
-                    String vehCat = driverEligibilityService != null ? driverEligibilityService.normalizeVehicleCategory(o.getServiceName()) : "UNKNOWN";
+                    String vehCat = driverEligibilityService != null ? driverEligibilityService.normalizeVehicleCategory(o.getServiceName(), sType) : "UNKNOWN";
                     if ("PASSENGER".equalsIgnoreCase(sType)) {
-                        if ("TWO_WHEELER".equals(vehCat)) {
+                        if ("PASSENGER_BIKE_TAXI".equals(vehCat)) {
                             dto.setServiceLabel("Passenger Ride (1 Rider)");
-                        } else if ("THREE_WHEELER".equals(vehCat)) {
+                        } else if ("PASSENGER_AUTO_TAXI".equals(vehCat)) {
                             dto.setServiceLabel("Passenger Ride (Auto Rickshaw)");
                         } else if ("CAB".equals(vehCat)) {
                             dto.setServiceLabel("Passenger Ride (Cab)");
@@ -254,6 +279,15 @@ public class DriverOfferService {
 
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    public void cancelActiveOffersForDriver(Long driverId) {
+        if (driverId == null) return;
+        try {
+            driverOfferRepository.cancelAllPendingOffersForDriver(driverId, LocalDateTime.now());
+        } catch (Exception e) {
+            log.warn("Failed to cancel active offers for driver {}: {}", driverId, e.getMessage());
+        }
     }
 
     @Transactional

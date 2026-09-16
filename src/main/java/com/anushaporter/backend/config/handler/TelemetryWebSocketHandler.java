@@ -25,8 +25,8 @@ public class TelemetryWebSocketHandler extends TextWebSocketHandler {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public TelemetryWebSocketHandler() {
-        // Broadcast periodic driver telemetry to connected admin sessions and subscribed passenger apps
-        executorService.scheduleAtFixedRate(this::broadcastTelemetry, 3, 3, TimeUnit.SECONDS);
+        // Periodic dummy telemetry broadcast disabled to prevent continuous fake GPS stream.
+        // Live GPS telemetry is broadcast when real drivers send location updates.
     }
 
     @Override

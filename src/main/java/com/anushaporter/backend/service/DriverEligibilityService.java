@@ -104,12 +104,10 @@ public class DriverEligibilityService {
         String requiredCategory = normalizeVehicleCategory(orderVehicleRaw, orderTrack);
         String driverCategory = normalizeVehicleCategory(driverVehicleRaw, driverTrack);
 
-        if (!"UNKNOWN".equals(requiredCategory) && !"UNKNOWN".equals(driverCategory)) {
-            if (!requiredCategory.equals(driverCategory)) {
-                log.debug("Driver '{}' category '{}' does not match required order category '{}'",
-                        driver.getId(), driverCategory, requiredCategory);
-                return false;
-            }
+        if ("UNKNOWN".equals(requiredCategory) || "UNKNOWN".equals(driverCategory) || !requiredCategory.equals(driverCategory)) {
+            log.debug("Driver '{}' category '{}' does not strictly match required order category '{}'",
+                    driver.getId(), driverCategory, requiredCategory);
+            return false;
         }
 
         return true;
@@ -124,8 +122,11 @@ public class DriverEligibilityService {
         if (sType.contains("PASSENGER") || sType.contains("CAB") || sType.contains("RIDE")) {
             return "PASSENGER";
         }
+        if (sType.contains("OUR_SERVICES") || sType.contains("GOODS") || sType.contains("DELIVERY")) {
+            return "OUR_SERVICES";
+        }
         String sName = (order.getServiceName() != null ? order.getServiceName() : "").toLowerCase().replaceAll("[^a-z0-9]", "");
-        if (sName.contains("cab") || sName.contains("biketaxi") || sName.contains("autotaxi") || sName.startsWith("pass") || sName.equals("6")) {
+        if (sName.contains("cab") || sName.contains("biketaxi") || sName.contains("autotaxi") || sName.startsWith("pass") || sName.equals("6") || sName.equals("passbike") || sName.equals("passauto")) {
             return "PASSENGER";
         }
         return "OUR_SERVICES";
@@ -140,6 +141,9 @@ public class DriverEligibilityService {
         if (sType.contains("PASSENGER") || sType.contains("CAB") || sType.contains("RIDE")) {
             return "PASSENGER";
         }
+        if (sType.contains("OUR_SERVICES") || sType.contains("GOODS") || sType.contains("DELIVERY")) {
+            return "OUR_SERVICES";
+        }
         String vStr = (driver.getVehicleType() != null ? driver.getVehicleType() : (driver.getVehicle() != null ? driver.getVehicle() : "")).toLowerCase().replaceAll("[^a-z0-9]", "");
         if (vStr.contains("cab") || vStr.contains("biketaxi") || vStr.contains("autotaxi") || vStr.startsWith("pass") || vStr.equals("6") || vStr.equals("passbike") || vStr.equals("passauto")) {
             return "PASSENGER";
@@ -150,7 +154,7 @@ public class DriverEligibilityService {
     /**
      * Normalizes diverse vehicle labels and IDs to canonical track-aware categories:
      * PASSENGER: PASSENGER_BIKE_TAXI, PASSENGER_AUTO_TAXI, CAB
-     * OUR_SERVICES: GOODS_TWO_WHEELER, GOODS_THREE_WHEELER, TATA_ACE, PICKUP_8FT, TATA_407
+     * OUR_SERVICES: TWO_WHEELER, THREE_WHEELER, TATA_ACE, PICKUP_8FT, TATA_407
      */
     public String normalizeVehicleCategory(String raw, String track) {
         if (raw == null || raw.trim().isEmpty()) {
@@ -177,7 +181,7 @@ public class DriverEligibilityService {
                 return "TWO_WHEELER";
             }
             if (s.contains("3wheel") || s.contains("threewheel") || s.contains("auto") || s.contains("rickshaw")
-                    || s.contains("cng") || s.equals("2")) {
+                    || s.contains("cng") || s.contains("loader") || s.equals("2")) {
                 return "THREE_WHEELER";
             }
             if (s.contains("tataace") || s.contains("ace") || s.contains("chotahathi") || s.equals("3")) {

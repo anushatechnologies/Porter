@@ -48,4 +48,9 @@ public interface DriverOfferRepository extends JpaRepository<DriverOffer, Long> 
     @Transactional
     @Query("UPDATE DriverOffer o SET o.status = 'CANCELLED', o.respondedAt = :now WHERE o.bookingId = :bookingId AND o.status = 'OFFERED'")
     int cancelAllPendingOffersForBooking(@Param("bookingId") String bookingId, @Param("now") LocalDateTime now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("UPDATE DriverOffer o SET o.status = 'CANCELLED', o.respondedAt = :now WHERE o.driverId = :driverId AND o.status = 'OFFERED'")
+    int cancelAllPendingOffersForDriver(@Param("driverId") Long driverId, @Param("now") LocalDateTime now);
 }
