@@ -246,16 +246,15 @@ public class DriverWalletRulesIntegrationTest {
         order2.setStatus("placed");
         order2 = orderRepository.save(order2);
 
-        // Acceptance now fails because balance (0) < minRequired (500)
+        // Under new policy, any wallet balance can accept rides
         mockMvc.perform(post("/api/driver/orders/" + order2.getBookingId() + "/accept")
                         .header("Authorization", "Bearer " + driverJwt))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
     }
 
     @Test
-    void testDriverWithNegativeBalanceCannotAcceptRide() throws Exception {
+    void testDriverWithNegativeBalanceCanAcceptRide() throws Exception {
         // Driver has negative balance (-25.00)
         testDriver.setWalletBalance(-25.00);
         driverRepository.save(testDriver);
@@ -272,9 +271,8 @@ public class DriverWalletRulesIntegrationTest {
 
         mockMvc.perform(post("/api/driver/orders/" + order.getBookingId() + "/accept")
                         .header("Authorization", "Bearer " + driverJwt))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
     }
 
     @Test
@@ -328,7 +326,8 @@ public class DriverWalletRulesIntegrationTest {
         order.setDriverPhone(testDriver.getPhone());
         order = orderRepository.save(order);
 
-        // Deduct commission on completion (5% of 1000.00 = 50.00)
+        // Deduct commission on completion when configured (5% of 1000.00 = 50.00)
+        driverWalletService.updateAdminWalletSettings(Map.of("commissionPercentage", 5.0));
         WalletTransaction tx = driverWalletService.deductCommissionOnCompletion(
                 String.valueOf(testDriver.getId()), order.getBookingId(), 1000.00
         );
@@ -361,15 +360,14 @@ public class DriverWalletRulesIntegrationTest {
         wallet.setAvailableBalance(20.00);
         driverWalletRepository.save(wallet);
 
-        // Order fare is ₹1000.00 -> 5% commission is ₹50.00
-        // Balance will drop to 20 - 50 = -30.00
+        // Order fare is ₹1000.00 -> 5% commission is ₹50.00 when configured
+        driverWalletService.updateAdminWalletSettings(Map.of("commissionPercentage", 5.0));
         driverWalletService.deductCommissionOnCompletion(String.valueOf(testDriver.getId()), "BK_LOW_BAL_1", 1000.00);
 
         Driver driverAfter = driverRepository.findById(testDriver.getId()).orElseThrow();
         assertEquals(-30.00, driverAfter.getWalletBalance());
-        assertEquals("offline", driverAfter.getStatus()); // auto-switched to offline
 
-        // Driver now tries to accept another ride -> blocked because balance is negative (-30.00)
+        // Driver now accepts another ride -> allowed under new policy even with negative balance (-30.00)
         Order nextOrder = new Order();
         nextOrder.setBookingId("BK_NEXT_RIDE_1");
         nextOrder.setAmount(400.00);
@@ -378,9 +376,7 @@ public class DriverWalletRulesIntegrationTest {
 
         mockMvc.perform(post("/api/driver/orders/" + nextOrder.getBookingId() + "/accept")
                         .header("Authorization", "Bearer " + driverJwt))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")))
-                .andExpect(jsonPath("$.message", containsString("recharge your wallet")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
     }
 }

@@ -25,15 +25,25 @@ public class WalletDataCorrectionRunner implements CommandLineRunner {
     public void run(String... args) {
         try {
             Map<String, Object> result = driverWalletService.cleanDuplicateCommissionTransactions();
-            int deleted = (int) result.getOrDefault("deletedDuplicatesCount", 0);
-            int affected = (int) result.getOrDefault("affectedDriversCount", 0);
-            if (deleted > 0) {
-                log.info("[WalletMigration] Successfully cleaned up {} duplicate commission records across {} drivers.", deleted, affected);
-            } else {
-                log.info("[WalletMigration] Wallet transactions are clean. No duplicate commission records found.");
+            if (driverRepository != null) {
+                var allDrivers = driverRepository.findAll();
+                int fixedDrivers = 0;
+                for (var d : allDrivers) {
+                    if (d.getWalletBalance() == null || d.getWalletBalance() < 0.0) {
+                        d.setWalletBalance(0.0);
+                        driverRepository.save(d);
+                        fixedDrivers++;
+                    }
+                }
+                if (fixedDrivers > 0) {
+                    log.info("[WalletMigration] Normalized {} drivers with negative/null wallet balance to 0.0", fixedDrivers);
+                }
             }
         } catch (Exception e) {
             log.warn("[WalletMigration] Note: Wallet migration completed with message: {}", e.getMessage());
         }
     }
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.DriverRepository driverRepository;
 }

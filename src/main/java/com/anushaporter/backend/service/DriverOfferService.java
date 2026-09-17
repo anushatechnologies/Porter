@@ -457,19 +457,7 @@ public class DriverOfferService {
             return response;
         }
 
-        if (driverWalletService != null) {
-            double minRequired = driverWalletService.getMinRequiredBalance();
-            Double walletBalance = driver.getWalletBalance();
-            if (minRequired > 0.0 && (walletBalance == null || walletBalance < minRequired)) {
-                response.put("success", false);
-                response.put("status", "INSUFFICIENT_WALLET_BALANCE");
-                response.put("error", "INSUFFICIENT_WALLET_BALANCE");
-                response.put("stopSound", true);
-                response.put("action", "STOP_RINGTONE");
-                response.put("message", "Driver wallet balance must be at least ₹" + minRequired + " to accept rides. Please recharge your wallet.");
-                return response;
-            }
-        }
+        // Wallet balance policy: Any wallet balance is eligible to accept offers. Wallet code preserved.
 
         String driverIdStr = driver.getId().toString();
         String driverName = driver.getName() != null ? driver.getName() : "Driver";

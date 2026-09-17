@@ -55,17 +55,8 @@ public class DriverEligibilityService {
             return false;
         }
 
-        // 4. Check wallet balance (must satisfy minRequiredBalance, 0 allowed if min is 0, negative blocked)
-        if (driverWalletService != null) {
-            if (!driverWalletService.canDriverAcceptRide(driver)) {
-                return false;
-            }
-        } else {
-            Double wallet = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
-            if (wallet < 0.0) {
-                return false;
-            }
-        }
+        // 4. Wallet balance policy: Any wallet balance (0, negative, or positive) is allowed to accept rides
+        // Wallet code is preserved, but does not block ride eligibility.
 
         // 5. GPS coordinates (fallback if null so active driver is not excluded)
         if (driver.getLatitude() == null || driver.getLongitude() == null) {

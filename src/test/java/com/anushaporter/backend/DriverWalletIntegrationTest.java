@@ -263,6 +263,7 @@ public class DriverWalletIntegrationTest {
 
     @Test
     void testDeductCommissionIdempotency() {
+        driverWalletService.updateAdminWalletSettings(Map.of("commissionPercentage", 5.0));
         // First deduction for order ORD-100 (500 fare * 5% = 25 commission)
         driverWalletService.deductCommissionOnCompletion(String.valueOf(testDriver.getId()), "ORD-100", 500.00);
 

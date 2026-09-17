@@ -162,7 +162,7 @@ public class DriverWalletRechargeIntegrationTest {
                 .andExpect(jsonPath("$.wallet.commissionPercentage", is(5.0)))
                 .andExpect(jsonPath("$.wallet.minRequiredBalance", is(100.0)))
                 .andExpect(jsonPath("$.wallet.isEligible", is(true)))
-                .andExpect(jsonPath("$.wallet.eligibilityReason", is("Sufficient balance")));
+                .andExpect(jsonPath("$.wallet.eligibilityReason", is("Eligible to go online and accept rides.")));
     }
 
     @Test
@@ -274,9 +274,9 @@ public class DriverWalletRechargeIntegrationTest {
         // Set min required balance = 600.0
         driverWalletService.updateAdminWalletSettings(java.util.Map.of("minRequiredBalance", 600.0));
 
-        // Driver currently has 500 balance, which is < 600.0
-        assertFalse(driverWalletService.isDriverEligibleForRides(String.valueOf(testDriver.getId())));
-        assertEquals("Insufficient balance. Recharge wallet to accept rides.",
+        // Any balance is eligible under new policy
+        assertTrue(driverWalletService.isDriverEligibleForRides(String.valueOf(testDriver.getId())));
+        assertEquals("Eligible to go online and accept rides.",
                 driverWalletService.getEligibilityReason(String.valueOf(testDriver.getId())));
     }
 
@@ -334,7 +334,8 @@ public class DriverWalletRechargeIntegrationTest {
         assertEquals("assigned", updatedOrder.getStatus());
         assertEquals(String.valueOf(testDriver.getId()), updatedOrder.getDriverId());
 
-        // 2. Complete Order - Deduct 5% Commission (500 * 0.05 = 25.00)
+        // 2. Complete Order - Deduct 5% Commission when configured
+        driverWalletService.updateAdminWalletSettings(java.util.Map.of("commissionPercentage", 5.0));
         driverWalletService.deductCommissionOnCompletion(String.valueOf(testDriver.getId()), order.getBookingId(), 500.00);
 
         Driver driverAfterCompletion = driverRepository.findById(testDriver.getId()).orElseThrow();
@@ -348,11 +349,11 @@ public class DriverWalletRechargeIntegrationTest {
         assertEquals(-25.00, commTx.getAmount());
         assertEquals(500.00, commTx.getBalanceBefore());
         assertEquals(475.00, commTx.getBalanceAfter());
-        assertEquals("5% Platform Commission Cut on Ride Completion", commTx.getDescription());
+        assertEquals("Platform Commission Cut on Ride Completion", commTx.getDescription());
     }
 
     @Test
-    void testAssignOrderFailsWhenWalletBalanceZero() throws Exception {
+    void testAssignOrderSucceedsWhenWalletBalanceZero() throws Exception {
         // Set driver balance to 0.00
         testDriver.setWalletBalance(0.00);
         driverRepository.save(testDriver);
@@ -371,13 +372,11 @@ public class DriverWalletRechargeIntegrationTest {
                 .header("Authorization", "Bearer " + adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(String.format("{\n" +
-                        "  \"driverId\": \"%s\",\n" +
-                        "  \"commissionRate\": 0.05\n" +
+                        "  \"driverId\": \"%s\"\n" +
                         "}", testDriver.getId())))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")))
-                .andExpect(jsonPath("$.message", containsString("Driver wallet balance is ₹0")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.status", is("assigned")));
     }
 
     @Test

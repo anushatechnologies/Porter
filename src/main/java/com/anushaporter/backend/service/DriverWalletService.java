@@ -49,7 +49,7 @@ public class DriverWalletService {
     @Autowired(required = false)
     private AppUserRepository appUserRepository;
 
-    private static final double DEFAULT_COMMISSION_PERCENTAGE = 5.0; // 5% Platform Commission
+    private static final double DEFAULT_COMMISSION_PERCENTAGE = 0.0; // Platform Commission disabled (0%)
     private static final double DEFAULT_MIN_REQUIRED_BALANCE = 0.0; // Admin set platform minimum balance to 0
     private static final double DEFAULT_MIN_RECHARGE_AMOUNT = 1000.0;
 
@@ -354,45 +354,21 @@ public class DriverWalletService {
     }
 
     public boolean canDriverAcceptRide(Driver driver) {
-        if (driver == null) return false;
-        double balance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
-        if (driver.getId() != null) {
-            DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
-            if (wallet != null && wallet.getAvailableBalance() != null && driver.getWalletBalance() == null) {
-                balance = wallet.getAvailableBalance();
-            }
-        }
-        double minRequired = getMinRequiredBalance();
-        return minRequired <= 0.0 ? balance >= 0.0 : balance >= minRequired;
+        return driver != null;
     }
 
     public boolean canDriverAcceptRide(String driverIdStr) {
         Driver driver = findDriverEntity(driverIdStr);
-        return canDriverAcceptRide(driver);
+        return driver != null;
     }
 
     public boolean isDriverEligibleForRides(String driverId) {
         Driver driver = findDriverEntity(driverId);
-        double minRequired = getMinRequiredBalance();
-        if (driver != null && driver.getWalletBalance() != null) {
-            return minRequired <= 0.0 ? driver.getWalletBalance() >= 0.0 : driver.getWalletBalance() >= minRequired;
-        }
-        DriverWallet wallet = getWallet(driverId);
-        double bal = (wallet != null && wallet.getAvailableBalance() != null) ? wallet.getAvailableBalance() : 0.0;
-        return minRequired <= 0.0 ? bal >= 0.0 : bal >= minRequired;
+        return driver != null;
     }
 
     public String getEligibilityReason(String driverId) {
-        double minRequired = getMinRequiredBalance();
-        boolean eligible = isDriverEligibleForRides(driverId);
-        if (minRequired <= 0.0) {
-            return eligible
-                    ? "No minimum balance required. Eligible to go online and accept rides."
-                    : "Negative wallet balance. Please recharge wallet to accept rides.";
-        }
-        return eligible
-                ? "Sufficient balance"
-                : "Insufficient balance. Recharge wallet to accept rides.";
+        return "Eligible to go online and accept rides.";
     }
 
     /**
@@ -506,12 +482,6 @@ public class DriverWalletService {
                 ? driver.getWalletBalance()
                 : (wallet.getAvailableBalance() != null ? wallet.getAvailableBalance() : 0.0);
 
-        // Check if wallet_balance is below minimum required
-        double minRequired = getMinRequiredBalance();
-        if (minRequired > 0.0 && walletBalance < minRequired) {
-            throw new IllegalStateException("Driver wallet balance is below the platform minimum required of ₹" + minRequired + ". Driver must recharge before taking orders.");
-        }
-
         String orderIdStr = order.getBookingId() != null ? order.getBookingId() : String.valueOf(order.getId());
 
         // Update Order
@@ -544,16 +514,19 @@ public class DriverWalletService {
     }
 
     /**
-     * Deducts 5% Commission Cut on Order Completion / Confirm Payment:
-     * 1. Calculate 5% Commission Cut: commission = order.total_amount * 0.05
-     * 2. Deduct 5% from Driver's Wallet: wallet_balance = wallet_balance - commission
-     * 3. Log the Transaction in wallet_transactions with type = 'COMMISSION_DEDUCTION'
-     * 4. If balance <= 0, automatically switch driver to offline
+     * Deducts Commission Cut on Order Completion if configured (> 0%):
+     * If commission is 0%, no deductions are made and driver wallet remains untouched.
      */
     @Transactional
     public WalletTransaction deductCommissionOnCompletion(String driverIdStr, String orderId, double totalAmount) {
         Driver driver = findDriverEntity(driverIdStr);
         if (driver == null || totalAmount <= 0) {
+            return null;
+        }
+
+        double commissionRate = getCommissionPercentage() / 100.0;
+        if (commissionRate <= 0.0) {
+            // Platform commission disabled (0%) - keep driver wallet completely untouched
             return null;
         }
 
@@ -567,9 +540,10 @@ public class DriverWalletService {
         }
 
         DriverWallet wallet = getWallet(String.valueOf(driver.getId()));
-        double commissionRate = getCommissionPercentage() / 100.0;
-        if (commissionRate <= 0) commissionRate = 0.05;
         double commission = Math.round(totalAmount * commissionRate * 100.0) / 100.0;
+        if (commission <= 0.0) {
+            return null;
+        }
 
         double balanceBefore = (driver.getWalletBalance() != null && driver.getWalletBalance() != 0.0)
                 ? driver.getWalletBalance()
@@ -579,9 +553,6 @@ public class DriverWalletService {
         double balanceAfter = Math.round((balanceBefore - commission) * 100.0) / 100.0;
 
         driver.setWalletBalance(balanceAfter);
-        if (balanceAfter < 0.0) {
-            driver.setStatus("offline");
-        }
         driverRepository.save(driver);
 
         // Sync DriverWallet
@@ -604,20 +575,9 @@ public class DriverWalletService {
         commTx.setBalanceBefore(balanceBefore);
         commTx.setBalanceAfter(balanceAfter);
         commTx.setStatus("SUCCESS");
-        commTx.setDescription("5% Platform Commission Cut on Ride Completion");
+        commTx.setDescription("Platform Commission Cut on Ride Completion");
         commTx.setCreatedAt(LocalDateTime.now());
         WalletTransaction savedTx = walletTransactionRepository.save(commTx);
-
-        // Check if Driver Balance < Minimum Required and Auto-Offline Trigger
-        Map<String, Object> settings = getAdminWalletSettings();
-        boolean autoOffline = Boolean.TRUE.equals(settings.get("autoOfflineWhenBalanceInsufficient"));
-
-        if (autoOffline && balanceAfter < 0.0) {
-            try {
-                driver.setStatus("offline");
-                driverRepository.save(driver);
-            } catch (Exception ignored) {}
-        }
 
         return savedTx;
     }

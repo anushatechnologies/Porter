@@ -594,18 +594,7 @@ public class DriverController {
 
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
 
-        if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
-            // No minimum balance required to go online!
-            // Drivers with zero amount on wallet can go online freely.
-            double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
-            if (walletBalance < 0.0) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "success", false,
-                        "error", "NEGATIVE_WALLET_BALANCE",
-                        "message", String.format("Your wallet balance is negative (₹%.0f). Please clear outstanding balance to go online.", walletBalance)
-                ));
-            }
-        }
+        // Any wallet balance is allowed to go online freely. Wallet code preserved.
 
         driver.setStatus(newStatus);
         Driver saved = repository.save(driver);
@@ -643,18 +632,7 @@ public class DriverController {
 
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
 
-        if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
-            // No minimum balance required to go online!
-            // Drivers with zero amount on wallet can go online freely.
-            double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
-            if (walletBalance < 0.0) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "success", false,
-                        "error", "NEGATIVE_WALLET_BALANCE",
-                        "message", String.format("Your wallet balance is negative (₹%.0f). Please clear outstanding balance to go online.", walletBalance)
-                ));
-            }
-        }
+        // Any wallet balance is allowed to go online freely. Wallet code preserved.
 
         driver.setStatus(newStatus);
         Driver saved = repository.save(driver);

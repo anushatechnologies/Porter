@@ -108,10 +108,10 @@ public class DriverWalletFlowIntegrationTest {
                 .header("Authorization", "Bearer " + jwtToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\": \"online\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
 
-        // 2. Zero-wallet driver CANNOT be assigned an order
+        // 2. Zero-wallet driver CAN be assigned an order under new policy
         testDriver.setWalletBalance(0.0);
         testDriver = driverRepository.save(testDriver);
         Order order = new Order();
@@ -124,9 +124,8 @@ public class DriverWalletFlowIntegrationTest {
                 .header("Authorization", "Bearer " + jwtToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"driverId\": \"" + testDriver.getId() + "\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("INSUFFICIENT_WALLET_BALANCE")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
 
         // 3. Admin recharges driver wallet with ₹1.00 -> driver auto-switches to "online"
         Map<String, Object> rechargeRes = driverWalletService.rechargeDriverWalletDirect(
@@ -147,8 +146,8 @@ public class DriverWalletFlowIntegrationTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.status", is("assigned")));
 
-        // 5. Order completed -> 5% commission deducted (470.82 * 0.05 = 23.54)
-        // Wallet: 1.00 - 23.54 = -22.54 -> balance <= 0 -> driver auto-switched to "offline"
+        // 5. Order completed -> 5% commission deducted when configured (470.82 * 0.05 = 23.54)
+        driverWalletService.updateAdminWalletSettings(Map.of("commissionPercentage", 5.0));
         WalletTransaction txn = driverWalletService.deductCommissionOnCompletion(
                 String.valueOf(testDriver.getId()), order.getBookingId(), order.getAmount()
         );
@@ -160,7 +159,6 @@ public class DriverWalletFlowIntegrationTest {
 
         Driver postOrderDriver = driverRepository.findById(testDriver.getId()).orElseThrow();
         assertEquals(-22.54, postOrderDriver.getWalletBalance(), 0.01);
-        assertEquals("offline", postOrderDriver.getStatus(), "Driver should be set to offline when wallet <= 0");
 
         // Verify only 1 COMMISSION_DEDUCTION and 1 RECHARGE transaction exist (NO ORDER_EARNING transaction)
         List<WalletTransaction> allTxns = walletTransactionRepository.findAll();
@@ -168,13 +166,13 @@ public class DriverWalletFlowIntegrationTest {
         boolean hasOrderEarning = allTxns.stream().anyMatch(t -> "ORDER_EARNING".equalsIgnoreCase(t.getTransactionType()));
         assertFalse(hasOrderEarning, "Should NOT contain ORDER_EARNING in wallet transactions");
 
-        // 6. Driver tries to go online with negative balance -> rejected
+        // 6. Driver can go online even with negative balance under new policy
         mockMvc.perform(put("/api/drivers/me/status")
                 .header("Authorization", "Bearer " + jwtToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\": \"online\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error", is("NEGATIVE_WALLET_BALANCE")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
 
         // 7. Driver recharges ₹100 -> New balance = -22.54 + 100 = 77.46 > 0 -> driver auto-switches to "online"
         driverWalletService.rechargeDriverWalletDirect(

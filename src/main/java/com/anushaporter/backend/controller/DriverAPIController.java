@@ -675,17 +675,7 @@ public class DriverAPIController {
             return ResponseEntity.ok(idempotentSuccess);
         }
 
-        // Check that driver's wallet balance is sufficient
-        Driver targetDriver = driver != null ? driver : (driverId != null ? driverWalletService.findDriverEntity(driverId) : null);
-        if (targetDriver != null && !driverWalletService.canDriverAcceptRide(targetDriver)) {
-            double minRequired = driverWalletService.getMinRequiredBalance();
-            Map<String, Object> err = new LinkedHashMap<>();
-            err.put("success", false);
-            err.put("statusCode", 400);
-            err.put("error", "INSUFFICIENT_WALLET_BALANCE");
-            err.put("message", "Driver wallet balance must be at least ₹" + minRequired + " to accept rides. Please recharge your wallet.");
-            return ResponseEntity.badRequest().body(err);
-        }
+        // Wallet balance policy: Any driver wallet balance is allowed to accept orders. Wallet code preserved.
 
         // If order is not in a claimable status and not accepted by this driver -> 409
         // Conflict
@@ -1808,18 +1798,7 @@ public class DriverAPIController {
 
         String newStatus = driverAuthService.normalizeStatus(rawStatus);
 
-        if ("online".equalsIgnoreCase(newStatus) || "active".equalsIgnoreCase(newStatus)) {
-            // No minimum balance required to go online!
-            // Drivers with zero amount on wallet can go online freely.
-            double walletBalance = driver.getWalletBalance() != null ? driver.getWalletBalance() : 0.0;
-            if (walletBalance < 0.0) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "success", false,
-                        "error", "NEGATIVE_WALLET_BALANCE",
-                        "message", String.format("Your wallet balance is negative (₹%.0f). Please clear outstanding balance to go online.", walletBalance)
-                ));
-            }
-        }
+        // Any wallet balance is allowed to go online freely. Wallet code preserved.
 
         driver.setStatus(newStatus);
         Driver saved = driverRepository.save(driver);

@@ -281,8 +281,8 @@ public class DriverStatusIntegrationTest {
     }
 
     @Test
-    void testNegativeWalletBalanceBlockedFromGoingOnline() throws Exception {
-        // Negative balance (-50.0) is blocked from going online
+    void testNegativeWalletBalanceAllowedToGoOnline() throws Exception {
+        // Any wallet balance (even negative) is allowed to go online freely
         testDriver.setWalletBalance(-50.0);
         testDriver.setStatus("offline");
         driverRepository.save(testDriver);
@@ -291,11 +291,11 @@ public class DriverStatusIntegrationTest {
                 .header("Authorization", "Bearer " + jwtToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\": \"online\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error", is("NEGATIVE_WALLET_BALANCE")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.status", is("online")));
 
         Driver inDb = driverRepository.findById(testDriver.getId()).orElseThrow();
-        assertEquals("offline", inDb.getStatus());
+        assertEquals("online", inDb.getStatus());
     }
 }
