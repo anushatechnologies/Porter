@@ -325,4 +325,94 @@ public class VehicleMatchingAndServiceableAreaIntegrationTest {
         orderRepo.delete(order2W);
         orderRepo.delete(order3W);
     }
+
+    @Test
+    public void testAvailableOrders_DistanceFiltering_RejectionExclusion_AndStaleAutoExpiration() throws Exception {
+        com.anushaporter.backend.repository.OrderRepository orderRepo = webApplicationContext.getBean(com.anushaporter.backend.repository.OrderRepository.class);
+
+        String phone = "9199887766";
+        com.anushaporter.backend.model.AppUser driverUser = new com.anushaporter.backend.model.AppUser();
+        driverUser.setPhone(phone);
+        driverUser.setName("Distance Driver");
+        driverUser.setRole("Driver");
+        appUserRepository.save(driverUser);
+        String token = "Bearer " + jwtUtil.generateToken(phone);
+
+        Driver driver = new Driver();
+        driver.setName("Distance Driver");
+        driver.setPhone(phone);
+        driver.setStatus("online");
+        driver.setVehicleType("Truck");
+        driver.setVehicle("Truck");
+        driver.setServiceType("OUR_SERVICES");
+        driver.setLatitude(17.4483);
+        driver.setLongitude(78.3915);
+        driver.setKyc("approved");
+        driver = driverRepository.save(driver);
+
+        // 1. Nearby Order (3 km away in Hitech City)
+        Order nearbyOrder = new Order();
+        nearbyOrder.setBookingId("ORD-NEARBY-101");
+        nearbyOrder.setServiceName("Truck");
+        nearbyOrder.setStatus("searching");
+        nearbyOrder.setPickupLat(17.4500);
+        nearbyOrder.setPickupLng(78.3900);
+        nearbyOrder.setCreatedAt(java.time.LocalDateTime.now());
+        orderRepo.save(nearbyOrder);
+
+        // 2. Far Away Order (Prakasam / Vinukonda ~ 150 km away)
+        Order farOrder = new Order();
+        farOrder.setBookingId("ORD-FARAWAY-102");
+        farOrder.setServiceName("Truck");
+        farOrder.setStatus("searching");
+        farOrder.setPickupLat(15.8300);
+        farOrder.setPickupLng(79.7400);
+        farOrder.setCreatedAt(java.time.LocalDateTime.now());
+        orderRepo.save(farOrder);
+
+        // Verify: Distance filter allows nearby order and EXCLUDES far away order!
+        mockMvc.perform(get("/api/driver/orders/available?lat=17.4483&lng=78.3915&radiusKm=10")
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.orders[?(@.bookingId == 'ORD-NEARBY-101')]", hasSize(1)))
+                .andExpect(jsonPath("$.orders[?(@.bookingId == 'ORD-FARAWAY-102')]", hasSize(0)));
+
+        // 3. Driver rejects the nearby order
+        mockMvc.perform(post("/api/driver/orders/" + nearbyOrder.getBookingId() + "/reject")
+                        .header("Authorization", token))
+                .andExpect(status().isOk());
+
+        // Verify: Now nearby order is also EXCLUDED from available orders because it was rejected!
+        mockMvc.perform(get("/api/driver/orders/available?lat=17.4483&lng=78.3915&radiusKm=10")
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders[?(@.bookingId == 'ORD-NEARBY-101')]", hasSize(0)));
+
+        // 4. Stale order test (created 30 minutes ago)
+        Order staleOrder = new Order();
+        staleOrder.setBookingId("ORD-STALE-103");
+        staleOrder.setServiceName("Truck");
+        staleOrder.setStatus("searching");
+        staleOrder.setPickupLat(17.4490);
+        staleOrder.setPickupLng(78.3910);
+        staleOrder.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(30));
+        orderRepo.save(staleOrder);
+
+        // Verify: Stale order is auto-expired and not returned
+        mockMvc.perform(get("/api/driver/orders/available?lat=17.4483&lng=78.3915&radiusKm=10")
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders[?(@.bookingId == 'ORD-STALE-103')]", hasSize(0)));
+
+        // Check in DB that stale order was updated to AUTO_ASSIGN_FAILED
+        Order updatedStale = orderRepo.findByBookingId("ORD-STALE-103").orElse(null);
+        assertNotNull(updatedStale);
+        assertEquals(com.anushaporter.backend.model.BookingStatus.AUTO_ASSIGN_FAILED.name(), updatedStale.getStatus());
+
+        // Cleanup
+        orderRepo.delete(nearbyOrder);
+        orderRepo.delete(farOrder);
+        orderRepo.delete(staleOrder);
+    }
 }

@@ -199,22 +199,88 @@ public class DriverOfferService {
 
         return activeOffers.stream()
                 .filter(offer -> {
-                    if (driver == null || driverEligibilityService == null) return true;
-                    if (offer.getBookingId() == null) return true;
+                    if (offer.getBookingId() == null) return false;
+                    if (offer.getStatus() == DriverOfferStatus.REJECTED) return false;
+
+                    // Auto-expire offers if expiresAt passed or if null expiresAt is older than 60s
+                    if (offer.getExpiresAt() != null && offer.getExpiresAt().isBefore(now)) {
+                        try {
+                            offer.setStatus(DriverOfferStatus.EXPIRED);
+                            offer.setRespondedAt(now);
+                            driverOfferRepository.save(offer);
+                        } catch (Exception ignored) {}
+                        return false;
+                    }
+                    if (offer.getExpiresAt() == null && offer.getOfferedAt() != null && offer.getOfferedAt().isBefore(now.minusSeconds(60))) {
+                        try {
+                            offer.setStatus(DriverOfferStatus.EXPIRED);
+                            offer.setRespondedAt(now);
+                            driverOfferRepository.save(offer);
+                        } catch (Exception ignored) {}
+                        return false;
+                    }
+
                     Optional<Order> oOpt = orderRepository.findByBookingId(offer.getBookingId());
-                    if (oOpt.isEmpty()) return true;
+                    if (oOpt.isEmpty()) return false;
                     Order o = oOpt.get();
-                    String orderTrack = driverEligibilityService.resolveOrderTrack(o);
-                    String orderCategory = driverEligibilityService.normalizeVehicleCategory(o.getServiceName(), orderTrack);
-                    boolean matches = driverTrack.equals(orderTrack) && driverCategory.equals(orderCategory);
-                    if (!matches) {
+
+                    // Check if underlying order is still active (searching/pending)
+                    String oStatus = o.getStatus() != null ? o.getStatus().trim().toLowerCase() : "";
+                    boolean isOrderActive = oStatus.equals("searching") || oStatus.equals("pending") || oStatus.equals("created");
+                    if (!isOrderActive || (o.getDriverId() != null && !o.getDriverId().isBlank() && !o.getDriverId().equals(String.valueOf(driverId)))) {
                         try {
                             offer.setStatus(DriverOfferStatus.CANCELLED);
                             offer.setRespondedAt(now);
                             driverOfferRepository.save(offer);
                         } catch (Exception ignored) {}
+                        return false;
                     }
-                    return matches;
+
+                    // Auto-expire stale orders older than 15 minutes or past deadline
+                    boolean isStale = (o.getCreatedAt() != null && o.getCreatedAt().isBefore(now.minusMinutes(15)))
+                            || (o.getAssignmentDeadline() != null && o.getAssignmentDeadline().isBefore(now));
+                    if (isStale) {
+                        try {
+                            o.setStatus(BookingStatus.AUTO_ASSIGN_FAILED.name());
+                            orderRepository.save(o);
+                            offer.setStatus(DriverOfferStatus.CANCELLED);
+                            offer.setRespondedAt(now);
+                            driverOfferRepository.save(offer);
+                        } catch (Exception ignored) {}
+                        return false;
+                    }
+
+                    // Strict vehicle and service track match
+                    if (driver != null && driverEligibilityService != null) {
+                        String orderTrack = driverEligibilityService.resolveOrderTrack(o);
+                        String orderCategory = driverEligibilityService.normalizeVehicleCategory(o.getServiceName(), orderTrack);
+                        boolean matches = driverTrack.equals(orderTrack) && driverCategory.equals(orderCategory);
+                        if (!matches) {
+                            try {
+                                offer.setStatus(DriverOfferStatus.CANCELLED);
+                                offer.setRespondedAt(now);
+                                driverOfferRepository.save(offer);
+                            } catch (Exception ignored) {}
+                            return false;
+                        }
+                    }
+
+                    // Exclude far-away orders if driver coordinates and pickup coordinates exist
+                    if (driver != null && driver.getLatitude() != null && driver.getLongitude() != null
+                            && o.getPickupLat() != null && o.getPickupLng() != null && driverRankingService != null) {
+                        double dist = driverRankingService.calculateHaversineDistanceKm(
+                                driver.getLatitude(), driver.getLongitude(), o.getPickupLat(), o.getPickupLng());
+                        if (dist > 25.0) { // Max outer tier is 20-25 km
+                            try {
+                                offer.setStatus(DriverOfferStatus.CANCELLED);
+                                offer.setRespondedAt(now);
+                                driverOfferRepository.save(offer);
+                            } catch (Exception ignored) {}
+                            return false;
+                        }
+                    }
+
+                    return true;
                 })
                 .map(offer -> {
             DriverOfferResponse dto = new DriverOfferResponse();

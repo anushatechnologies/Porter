@@ -58,8 +58,14 @@ public class DriverAPIController {
     @Autowired
     private com.anushaporter.backend.service.DriverOfferService driverOfferService;
 
+    @Autowired
+    private com.anushaporter.backend.repository.DriverOfferRepository driverOfferRepository;
+
     @Autowired(required = false)
     private com.anushaporter.backend.service.DriverEligibilityService driverEligibilityService;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.DriverRankingService driverRankingService;
 
     @Autowired
     private com.anushaporter.backend.service.TripStateMachineService tripStateMachineService;
@@ -1912,6 +1918,24 @@ public class DriverAPIController {
         }
 
         final Driver currentDriver = driver;
+
+        // If driver already has an ongoing active order, they should not receive new available orders
+        if (currentDriver != null && currentDriver.getId() != null) {
+            List<Order> activeOrders = orderRepository.findAllByDriverIdAndStatusIn(
+                    currentDriver.getId().toString(),
+                    List.of("assigned", "accepted", "driver_assigned", "arriving_at_pickup", "pickup_started", "picked_up", "transit", "in_transit", "ASSIGNED", "ACCEPTED")
+            );
+            if (activeOrders != null && !activeOrders.isEmpty()) {
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "count", 0,
+                        "orders", List.of(),
+                        "availableOrders", List.of(),
+                        "offers", List.of(),
+                        "data", List.of()));
+            }
+        }
+
         String driverTrack = (currentDriver != null && driverEligibilityService != null)
                 ? driverEligibilityService.resolveDriverTrack(currentDriver)
                 : (currentDriver != null ? currentDriver.getServiceType() : "OUR_SERVICES");
@@ -1919,18 +1943,61 @@ public class DriverAPIController {
                 ? driverEligibilityService.normalizeVehicleCategory(currentDriver.getVehicleType(), driverTrack)
                 : "UNKNOWN";
 
-        java.time.LocalDateTime cutoff = java.time.LocalDateTime.now().minusHours(4);
+        // Exclude bookings already rejected by this driver
+        final Set<String> rejectedBookingIds = (currentDriver != null && currentDriver.getId() != null)
+                ? driverOfferRepository.findByDriverIdAndStatusIn(currentDriver.getId(), List.of(com.anushaporter.backend.model.DriverOfferStatus.REJECTED))
+                        .stream().map(com.anushaporter.backend.model.DriverOffer::getBookingId).filter(Objects::nonNull).collect(Collectors.toSet())
+                : Collections.emptySet();
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.LocalDateTime staleCutoff = now.minusMinutes(15);
+
+        final Double driverLat = lat != null ? lat : (currentDriver != null ? currentDriver.getLatitude() : null);
+        final Double driverLng = lng != null ? lng : (currentDriver != null ? currentDriver.getLongitude() : null);
+        final double maxRadius = (radiusKm != null && radiusKm > 0) ? radiusKm : 10.0;
 
         List<Order> availableOrders = orderRepository.findAll().stream()
                 .filter(o -> o.getStatus() == null || "searching".equalsIgnoreCase(o.getStatus())
-                        || "pending".equalsIgnoreCase(o.getStatus()))
+                        || "pending".equalsIgnoreCase(o.getStatus()) || "created".equalsIgnoreCase(o.getStatus()))
                 .filter(o -> o.getDriverId() == null || o.getDriverId().isEmpty())
-                .filter(o -> o.getCreatedAt() == null || o.getCreatedAt().isAfter(cutoff))
+                .filter(o -> o.getBookingId() == null || !rejectedBookingIds.contains(o.getBookingId()))
+                .filter(o -> {
+                    // Auto-expire stale orders older than 15 minutes or past deadline
+                    boolean isStale = (o.getCreatedAt() != null && o.getCreatedAt().isBefore(staleCutoff))
+                            || (o.getAssignmentDeadline() != null && o.getAssignmentDeadline().isBefore(now));
+                    if (isStale) {
+                        try {
+                            o.setStatus(com.anushaporter.backend.model.BookingStatus.AUTO_ASSIGN_FAILED.name());
+                            orderRepository.save(o);
+                            driverOfferRepository.cancelAllPendingOffersForBooking(o.getBookingId(), now);
+                        } catch (Exception ignored) {}
+                        return false;
+                    }
+                    return true;
+                })
                 .filter(o -> {
                     if (currentDriver == null || driverEligibilityService == null) return true;
                     String orderTrack = driverEligibilityService.resolveOrderTrack(o);
                     String orderCategory = driverEligibilityService.normalizeVehicleCategory(o.getServiceName(), orderTrack);
                     return driverTrack.equalsIgnoreCase(orderTrack) && driverCategory.equalsIgnoreCase(orderCategory);
+                })
+                .filter(o -> {
+                    // Distance filtering: if driver location and pickup coordinates are both known, filter strictly by maxRadius
+                    if (driverLat != null && driverLng != null && o.getPickupLat() != null && o.getPickupLng() != null && driverRankingService != null) {
+                        double dist = driverRankingService.calculateHaversineDistanceKm(driverLat, driverLng, o.getPickupLat(), o.getPickupLng());
+                        return dist <= maxRadius;
+                    }
+                    return true;
+                })
+                .sorted((o1, o2) -> {
+                    if (driverLat != null && driverLng != null && driverRankingService != null
+                            && o1.getPickupLat() != null && o1.getPickupLng() != null
+                            && o2.getPickupLat() != null && o2.getPickupLng() != null) {
+                        double d1 = driverRankingService.calculateHaversineDistanceKm(driverLat, driverLng, o1.getPickupLat(), o1.getPickupLng());
+                        double d2 = driverRankingService.calculateHaversineDistanceKm(driverLat, driverLng, o2.getPickupLat(), o2.getPickupLng());
+                        return Double.compare(d1, d2);
+                    }
+                    return 0;
                 })
                 .collect(Collectors.toList());
 
@@ -1948,6 +2015,12 @@ public class DriverAPIController {
             map.put("amount", o.getAmount() != null ? o.getAmount() : 250.0);
             map.put("fare", o.getAmount() != null ? o.getAmount() : 250.0);
             map.put("distanceKm", o.getDistanceKm() != null ? o.getDistanceKm() : 5.0);
+
+            if (driverLat != null && driverLng != null && o.getPickupLat() != null && o.getPickupLng() != null && driverRankingService != null) {
+                double pickupDist = driverRankingService.calculateHaversineDistanceKm(driverLat, driverLng, o.getPickupLat(), o.getPickupLng());
+                map.put("pickupDistanceKm", pickupDist);
+            }
+
             map.put("status", "available");
             map.put("createdAt", o.getCreatedAt());
             return map;
