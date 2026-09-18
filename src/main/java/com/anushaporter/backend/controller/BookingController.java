@@ -582,6 +582,86 @@ public class BookingController {
     }
 
     /**
+     * Get the latest active booking for the user to support app state restoration.
+     * GET /api/bookings/active or GET /api/customer/bookings/active
+     */
+    @GetMapping({"/api/bookings/active", "/api/customer/bookings/active", "/api/orders/active"})
+    public ResponseEntity<Map<String, Object>> getActiveBooking(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestParam(required = false) String phone) {
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        try {
+            String email = extractEmail(authHeader);
+            String userPhone = phone;
+
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7).trim();
+                String id = jwtUtil.extractIdentifierFromFirebaseOrJwt(token);
+                if (id != null && !id.isBlank() && !id.contains("@")) {
+                    String clean = id.replaceAll("\\D+", "");
+                    if (clean.length() > 10) clean = clean.substring(clean.length() - 10);
+                    if (!clean.isEmpty() && userPhone == null) userPhone = clean;
+                }
+            }
+
+            if (email == null && userPhone != null) {
+                email = userPhone + "@customer.porter.in";
+            }
+
+            List<Order> activeOrders = new ArrayList<>();
+            List<String> activeStatuses = List.of(
+                    "searching", "pending", "created", "accepted", "assigned",
+                    "driver_assigned", "driver_accepted", "arriving", "arrived",
+                    "on_the_way", "in_transit", "trip_started", "pickup_started"
+            );
+
+            for (String st : activeStatuses) {
+                if (email != null) {
+                    activeOrders.addAll(orderRepository.findByUserEmailAndStatusOrderByCreatedAtDesc(email, st));
+                }
+                if (userPhone != null && email != null && !email.startsWith(userPhone)) {
+                    String phoneEmail = userPhone + "@customer.porter.in";
+                    activeOrders.addAll(orderRepository.findByUserEmailAndStatusOrderByCreatedAtDesc(phoneEmail, st));
+                }
+            }
+
+            if (activeOrders.isEmpty()) {
+                response.put("success", true);
+                response.put("hasActiveBooking", false);
+                response.put("booking", null);
+                return ResponseEntity.ok(response);
+            }
+
+            // Pick the newest active booking
+            activeOrders.sort((a, b) -> {
+                LocalDateTime tA = a.getCreatedAt() != null ? a.getCreatedAt() : LocalDateTime.MIN;
+                LocalDateTime tB = b.getCreatedAt() != null ? b.getCreatedAt() : LocalDateTime.MIN;
+                return tB.compareTo(tA);
+            });
+
+            Order topOrder = activeOrders.get(0);
+            String bId = topOrder.getBookingId() != null ? topOrder.getBookingId() : String.valueOf(topOrder.getId());
+
+            ResponseEntity<Map<String, Object>> trackingResp = getLiveTracking(authHeader, bId);
+            Map<String, Object> trackingData = trackingResp != null ? trackingResp.getBody() : Collections.emptyMap();
+
+            response.put("success", true);
+            response.put("hasActiveBooking", true);
+            response.put("bookingId", bId);
+            response.put("status", topOrder.getStatus());
+            response.put("booking", trackingData);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("hasActiveBooking", false);
+            response.put("message", "Error checking active booking: " + e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
      * Get booking detail with driver info and fare breakdown.
      * GET /api/bookings/{bookingId}
      */
@@ -912,6 +992,10 @@ public class BookingController {
                 }
             }
 
+            boolean wasSearching = "searching".equalsIgnoreCase(order.getStatus())
+                    || "pending".equalsIgnoreCase(order.getStatus())
+                    || "created".equalsIgnoreCase(order.getStatus());
+
             order.setCancellationReason(reason);
             order.setStatus("cancelled");
             order.setDriverId(null);
@@ -929,21 +1013,48 @@ public class BookingController {
             }
 
             double refundAmount = order.getAmount() != null && order.getAmount() > 0
-                    ? Math.min(500.0, order.getAmount())
+                    ? order.getAmount()
                     : 500.0;
+            double cancellationFee = wasSearching ? 0.0 : 50.0;
 
             response.put("success", true);
             response.put("status", "cancelled");
             response.put("canCancel", false);
             response.put("isCancellable", false);
             response.put("refundAmount", refundAmount);
-            response.put("message", "Booking cancelled successfully. Advance refund initiated.");
+            response.put("cancellationFee", cancellationFee);
+            response.put("cancellationReason", reason);
+            response.put("cancelledBy", cancelledBy);
+            response.put("message", wasSearching
+                    ? "Driver search cancelled. Full refund initiated."
+                    : "Booking cancelled successfully. Advance refund initiated.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);
             response.put("message", "Failed to cancel booking: " + e.getMessage());
             return ResponseEntity.status(500).body(response);
         }
+    }
+
+    /**
+     * Get authoritative customer cancellation reasons.
+     * GET /api/bookings/cancellation-reasons or GET /api/customer/cancellation-reasons
+     */
+    @GetMapping({"/api/bookings/cancellation-reasons", "/api/customer/cancellation-reasons", "/api/orders/cancellation-reasons"})
+    public ResponseEntity<Map<String, Object>> getCancellationReasons() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        List<Map<String, Object>> reasons = List.of(
+                Map.of("id", "driver_taking_long", "title", "Driver is taking too long", "requiresText", false),
+                Map.of("id", "found_another_vehicle", "title", "I found another vehicle", "requiresText", false),
+                Map.of("id", "booking_by_mistake", "title", "Booking by mistake", "requiresText", false),
+                Map.of("id", "change_of_plans", "title", "Change of plans", "requiresText", false),
+                Map.of("id", "driver_requested_cancellation", "title", "Driver requested cancellation", "requiresText", false),
+                Map.of("id", "price_issue", "title", "Price issue", "requiresText", false),
+                Map.of("id", "other", "title", "Other", "requiresText", true)
+        );
+        response.put("success", true);
+        response.put("reasons", reasons);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping({

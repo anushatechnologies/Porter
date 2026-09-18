@@ -184,6 +184,7 @@ public class AuthController {
         response.put("otp", "123456");
         response.put("phone", phone);
         response.put("expiresIn", 300);
+        response.put("resendCooldown", 30);
 
         return ResponseEntity.ok(response);
     }
@@ -204,6 +205,7 @@ public class AuthController {
         response.put("message", "OTP resent successfully.");
         response.put("otp", "123456");
         response.put("expiresIn", 300);
+        response.put("resendCooldown", 30);
 
         return ResponseEntity.ok(response);
     }
