@@ -187,14 +187,21 @@ jobs:
             # 1. Authenticate with ECR
             echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-            # 2. Stop and remove old backend container
-            echo "🧹 Cleaning up old container..."
+            # 2. Stop and remove old backend container & free disk space
+            echo "🧹 Cleaning up old containers and freeing disk space..."
             docker stop anusha-backend 2>/dev/null || true
             docker rm anusha-backend 2>/dev/null || true
             docker stop backend-app 2>/dev/null || true
             docker rm backend-app 2>/dev/null || true
-            docker container prune -f 2>/dev/null || true
-            docker image prune -f 2>/dev/null || true
+
+            # Prune all unused docker images, build cache, and stopped containers (not just dangling ones)
+            docker system prune -a -f --volumes=false 2>/dev/null || true
+
+            # Reclaim system journal logs and package cache if permissions allow
+            sudo journalctl --vacuum-size=50M 2>/dev/null || true
+            sudo apt-get clean 2>/dev/null || true
+
+            echo "📊 Available disk space after cleanup:"
             df -h /
             echo "✅ Disk cleanup done"
 

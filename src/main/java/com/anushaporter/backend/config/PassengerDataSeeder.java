@@ -142,7 +142,7 @@ public class PassengerDataSeeder implements CommandLineRunner {
                             .driverAllowance(BigDecimal.ZERO)
                             .displayOrder(2)
                             .active(true)
-                            .imageUrl("https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400&q=80")
+                            .imageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png")
                             .build(),
                     PassengerVehicleCategory.builder()
                             .categoryCode("SEDAN")
@@ -222,6 +222,12 @@ public class PassengerDataSeeder implements CommandLineRunner {
             if (auto.getDisplayOrder() == null || auto.getDisplayOrder() == 0) {
                 auto.setDisplayOrder(1);
                 categoryRepository.save(auto);
+            }
+        });
+        categoryRepository.findByCategoryCode("HATCHBACK").ifPresent(hatchback -> {
+            if (hatchback.getImageUrl() == null || hatchback.getImageUrl().contains("unsplash.com")) {
+                hatchback.setImageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png");
+                categoryRepository.save(hatchback);
             }
         });
     }
