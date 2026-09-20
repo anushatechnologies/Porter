@@ -53,7 +53,53 @@ public class VehicleType {
     private Integer priority = 1; // Sort order (1, 2, 3...)
 
     @Column(name = "service_type", length = 32)
-    private String serviceType = "OUR_SERVICES"; // "OUR_SERVICES" | "PASSENGER"
+    private String serviceType = "OUR_SERVICES"; // "OUR_SERVICES" | "PASSENGER" | "BOTH"
+
+    // ── Extended Business & Fleet Governance Fields ─────────────────────────
+    @Column(name = "display_name")
+    private String displayName; // e.g. "Maruti Dzire, Toyota Etios or similar"
+
+    @Column(name = "max_passengers")
+    private Integer maxPassengers; // 1, 3, 4, 6
+
+    @Column(name = "max_luggage")
+    private Integer maxLuggage; // 1, 2, 3, 4 pieces
+
+    @Column(name = "per_minute_rate")
+    private Double perMinuteRate = 0.0; // Waiting/duration fare per min
+
+    @Column(name = "driver_allowance")
+    private Double driverAllowance = 0.0; // Outstation/night daily allowance
+
+    @Column(name = "helper_rate")
+    private Double helperRate = 0.0; // Helper / labor rate per worker
+
+    @Column(name = "volume")
+    private Double volume; // Cargo volume in cft / m3
+
+    @Column(name = "min_fare")
+    private Double minFare; // Minimum floor fare
+
+    @Column(name = "max_fare")
+    private Double maxFare; // Maximum ceiling fare
+
+    @Column(name = "min_distance")
+    private Double minDistance = 1.0; // Minimum dispatch distance
+
+    @Column(name = "max_distance")
+    private Double maxDistance = 500.0; // Maximum dispatch boundary
+
+    @Column(name = "commission_percentage")
+    private Double commissionPercentage = 15.0; // Platform commission %
+
+    @Column(name = "gst_percentage")
+    private Double gstPercentage = 5.0; // GST %
+
+    @Column(name = "customer_app_visible")
+    private Boolean customerAppVisible = true; // Show in customer booking app
+
+    @Column(name = "available_cities", length = 500)
+    private String availableCities = "ALL"; // e.g. "ALL" or "Hyderabad,Secunderabad"
 
     // ── Getters & Setters ────────────────────────────────────────────────────
     public String getId() { return id; }
@@ -109,6 +155,9 @@ public class VehicleType {
     public String getServiceType() {
         if (serviceType != null && !serviceType.isBlank()) {
             String s = serviceType.trim().toUpperCase();
+            if (s.contains("BOTH") || s.contains("ALL")) {
+                return "BOTH";
+            }
             if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
                 return "PASSENGER";
             }
@@ -120,7 +169,9 @@ public class VehicleType {
     public void setServiceType(String serviceType) {
         if (serviceType != null && !serviceType.isBlank()) {
             String s = serviceType.trim().toUpperCase();
-            if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
+            if (s.contains("BOTH") || s.contains("ALL")) {
+                this.serviceType = "BOTH";
+            } else if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
                 this.serviceType = "PASSENGER";
             } else {
                 this.serviceType = "OUR_SERVICES";
@@ -132,10 +183,57 @@ public class VehicleType {
 
     @JsonProperty("serviceCategory")
     public String getServiceCategory() {
-        return "PASSENGER".equalsIgnoreCase(getServiceType()) ? "Passenger Rides" : "Our Services";
+        String st = getServiceType();
+        if ("BOTH".equalsIgnoreCase(st)) return "Both (Passenger & Courier)";
+        return "PASSENGER".equalsIgnoreCase(st) ? "Passenger Rides" : "Our Services";
     }
 
     public void setServiceCategory(String serviceCategory) {
         setServiceType(serviceCategory);
     }
+
+    public String getDisplayName() { return displayName; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
+
+    public Integer getMaxPassengers() { return maxPassengers; }
+    public void setMaxPassengers(Integer maxPassengers) { this.maxPassengers = maxPassengers; }
+
+    public Integer getMaxLuggage() { return maxLuggage; }
+    public void setMaxLuggage(Integer maxLuggage) { this.maxLuggage = maxLuggage; }
+
+    public Double getPerMinuteRate() { return perMinuteRate; }
+    public void setPerMinuteRate(Double perMinuteRate) { this.perMinuteRate = perMinuteRate; }
+
+    public Double getDriverAllowance() { return driverAllowance; }
+    public void setDriverAllowance(Double driverAllowance) { this.driverAllowance = driverAllowance; }
+
+    public Double getHelperRate() { return helperRate; }
+    public void setHelperRate(Double helperRate) { this.helperRate = helperRate; }
+
+    public Double getVolume() { return volume; }
+    public void setVolume(Double volume) { this.volume = volume; }
+
+    public Double getMinFare() { return minFare; }
+    public void setMinFare(Double minFare) { this.minFare = minFare; }
+
+    public Double getMaxFare() { return maxFare; }
+    public void setMaxFare(Double maxFare) { this.maxFare = maxFare; }
+
+    public Double getMinDistance() { return minDistance; }
+    public void setMinDistance(Double minDistance) { this.minDistance = minDistance; }
+
+    public Double getMaxDistance() { return maxDistance; }
+    public void setMaxDistance(Double maxDistance) { this.maxDistance = maxDistance; }
+
+    public Double getCommissionPercentage() { return commissionPercentage; }
+    public void setCommissionPercentage(Double commissionPercentage) { this.commissionPercentage = commissionPercentage; }
+
+    public Double getGstPercentage() { return gstPercentage; }
+    public void setGstPercentage(Double gstPercentage) { this.gstPercentage = gstPercentage; }
+
+    public Boolean getCustomerAppVisible() { return customerAppVisible; }
+    public void setCustomerAppVisible(Boolean customerAppVisible) { this.customerAppVisible = customerAppVisible; }
+
+    public String getAvailableCities() { return availableCities; }
+    public void setAvailableCities(String availableCities) { this.availableCities = availableCities; }
 }

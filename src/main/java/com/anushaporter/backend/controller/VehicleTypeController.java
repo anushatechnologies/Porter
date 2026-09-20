@@ -106,19 +106,10 @@ public class VehicleTypeController {
                         "rickshaw", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/auto.png", 50.00, 1.5, 15.00, "PASSENGER", 8));
             }
 
-            // Migrate any legacy 'BOTH' vehicle types & heal legacy S3 image URLs
+            // Heal legacy S3 image URLs
             try {
                 vehicleTypeRepository.findAll().forEach(vt -> {
                     boolean changed = false;
-                    if ("BOTH".equalsIgnoreCase(vt.getServiceType())) {
-                        String typeKey = (vt.getType() != null ? vt.getType() : "").toLowerCase();
-                        if (typeKey.contains("cab") || typeKey.contains("taxi") || (vt.getId() != null && vt.getId().startsWith("pass_"))) {
-                            vt.setServiceType("PASSENGER");
-                        } else {
-                            vt.setServiceType("OUR_SERVICES");
-                        }
-                        changed = true;
-                    }
                     if (vt.getImageUrl() != null && vt.getImageUrl().contains("poteranusha.s3.amazonaws.com")) {
                         vt.setImageUrl(vt.getImageUrl().replace("poteranusha.s3.amazonaws.com", "poteranusha.s3.ap-south-2.amazonaws.com"));
                         changed = true;
@@ -189,6 +180,8 @@ public class VehicleTypeController {
                 normalizedService = "PASSENGER";
             } else if (s.contains("OUR") || s.contains("GOOD") || s.contains("TRUCK") || s.contains("LOGISTICS")) {
                 normalizedService = "GOODS";
+            } else if (s.contains("BOTH") || s.contains("ALL")) {
+                normalizedService = "ALL";
             }
         }
 
@@ -200,12 +193,12 @@ public class VehicleTypeController {
         List<Map<String, Object>> vehicles = list.stream()
                 .map(this::formatVehicleType)
                 .filter(m -> {
-                    if (targetService == null) return true;
+                    if (targetService == null || "ALL".equalsIgnoreCase(targetService)) return true;
                     String st = (String) m.get("serviceType");
                     if ("PASSENGER".equalsIgnoreCase(targetService)) {
-                        return "PASSENGER".equalsIgnoreCase(st);
+                        return "PASSENGER".equalsIgnoreCase(st) || "BOTH".equalsIgnoreCase(st);
                     } else if ("GOODS".equalsIgnoreCase(targetService) || "OUR_SERVICES".equalsIgnoreCase(targetService)) {
-                        return "OUR_SERVICES".equalsIgnoreCase(st) || "GOODS".equalsIgnoreCase(st);
+                        return "OUR_SERVICES".equalsIgnoreCase(st) || "GOODS".equalsIgnoreCase(st) || "BOTH".equalsIgnoreCase(st);
                     }
                     return true;
                 })
@@ -215,7 +208,7 @@ public class VehicleTypeController {
         response.put("success", true);
         response.put("serviceType", normalizedService != null ? ("GOODS".equals(normalizedService) ? "OUR_SERVICES" : normalizedService) : "ALL");
         response.put("serviceCategory", normalizedService != null
-                ? ("PASSENGER".equals(normalizedService) ? "Passenger Rides" : "Our Services")
+                ? ("PASSENGER".equals(normalizedService) ? "Passenger Rides" : ("GOODS".equals(normalizedService) ? "Our Services" : "All Services"))
                 : "All Services");
         response.put("vehicles", vehicles);
         response.put("count", vehicles.size());
@@ -307,7 +300,10 @@ public class VehicleTypeController {
      * Toggle or update active / inactive status.
      */
     @PatchMapping("/{id}/status")
-    public ResponseEntity<?> updateStatus(@PathVariable String id, @RequestBody(required = false) Map<String, Object> body) {
+    public ResponseEntity<?> updateStatus(
+            @PathVariable String id,
+            @RequestParam(required = false) String status,
+            @RequestBody(required = false) Map<String, Object> body) {
         Optional<VehicleType> opt = vehicleTypeRepository.findById(id);
         if (opt.isEmpty()) {
             opt = vehicleTypeRepository.findByType(id);
@@ -320,8 +316,15 @@ public class VehicleTypeController {
         }
 
         VehicleType v = opt.get();
-        if (body != null && body.containsKey("status")) {
-            v.setStatus(String.valueOf(body.get("status")).trim().toLowerCase());
+        String targetStatus = null;
+        if (status != null && !status.isBlank()) {
+            targetStatus = status.trim().toLowerCase();
+        } else if (body != null && body.containsKey("status") && body.get("status") != null) {
+            targetStatus = String.valueOf(body.get("status")).trim().toLowerCase();
+        }
+
+        if (targetStatus != null) {
+            v.setStatus(targetStatus);
         } else {
             v.setStatus("active".equalsIgnoreCase(v.getStatus()) ? "inactive" : "active");
         }
@@ -421,12 +424,111 @@ public class VehicleTypeController {
         } else if (body.get("serviceCategory") != null) {
             v.setServiceType(String.valueOf(body.get("serviceCategory")).trim());
         }
+
+        // Extended Governance Fields
+        if (body.get("displayName") != null) {
+            v.setDisplayName(String.valueOf(body.get("displayName")).trim());
+        } else if (body.get("display_name") != null) {
+            v.setDisplayName(String.valueOf(body.get("display_name")).trim());
+        }
+
+        if (body.get("maxPassengers") != null) {
+            v.setMaxPassengers(parseInteger(body.get("maxPassengers")));
+        } else if (body.get("max_passengers") != null) {
+            v.setMaxPassengers(parseInteger(body.get("max_passengers")));
+        }
+
+        if (body.get("maxLuggage") != null) {
+            v.setMaxLuggage(parseInteger(body.get("maxLuggage")));
+        } else if (body.get("max_luggage") != null) {
+            v.setMaxLuggage(parseInteger(body.get("max_luggage")));
+        }
+
+        if (body.get("perMinuteRate") != null) {
+            v.setPerMinuteRate(parseDouble(body.get("perMinuteRate")));
+        } else if (body.get("per_minute_rate") != null) {
+            v.setPerMinuteRate(parseDouble(body.get("per_minute_rate")));
+        } else if (body.get("perMinute") != null) {
+            v.setPerMinuteRate(parseDouble(body.get("perMinute")));
+        } else if (body.get("per_minute") != null) {
+            v.setPerMinuteRate(parseDouble(body.get("per_minute")));
+        }
+
+        if (body.get("driverAllowance") != null) {
+            v.setDriverAllowance(parseDouble(body.get("driverAllowance")));
+        } else if (body.get("driver_allowance") != null) {
+            v.setDriverAllowance(parseDouble(body.get("driver_allowance")));
+        }
+
+        if (body.get("helperRate") != null) {
+            v.setHelperRate(parseDouble(body.get("helperRate")));
+        } else if (body.get("helper_rate") != null) {
+            v.setHelperRate(parseDouble(body.get("helper_rate")));
+        }
+
+        if (body.get("volume") != null) {
+            v.setVolume(parseDouble(body.get("volume")));
+        }
+
+        if (body.get("minFare") != null) {
+            v.setMinFare(parseDouble(body.get("minFare")));
+        } else if (body.get("min_fare") != null) {
+            v.setMinFare(parseDouble(body.get("min_fare")));
+        }
+
+        if (body.get("maxFare") != null) {
+            v.setMaxFare(parseDouble(body.get("maxFare")));
+        } else if (body.get("max_fare") != null) {
+            v.setMaxFare(parseDouble(body.get("max_fare")));
+        }
+
+        if (body.get("minDistance") != null) {
+            v.setMinDistance(parseDouble(body.get("minDistance")));
+        } else if (body.get("min_distance") != null) {
+            v.setMinDistance(parseDouble(body.get("min_distance")));
+        }
+
+        if (body.get("maxDistance") != null) {
+            v.setMaxDistance(parseDouble(body.get("maxDistance")));
+        } else if (body.get("max_distance") != null) {
+            v.setMaxDistance(parseDouble(body.get("max_distance")));
+        }
+
+        if (body.get("commissionPercentage") != null) {
+            v.setCommissionPercentage(parseDouble(body.get("commissionPercentage")));
+        } else if (body.get("commission_percentage") != null) {
+            v.setCommissionPercentage(parseDouble(body.get("commission_percentage")));
+        } else if (body.get("commission") != null) {
+            v.setCommissionPercentage(parseDouble(body.get("commission")));
+        }
+
+        if (body.get("gstPercentage") != null) {
+            v.setGstPercentage(parseDouble(body.get("gstPercentage")));
+        } else if (body.get("gst_percentage") != null) {
+            v.setGstPercentage(parseDouble(body.get("gst_percentage")));
+        } else if (body.get("gst") != null) {
+            v.setGstPercentage(parseDouble(body.get("gst")));
+        }
+
+        if (body.get("customerAppVisible") != null) {
+            v.setCustomerAppVisible(parseBoolean(body.get("customerAppVisible")));
+        } else if (body.get("customer_app_visible") != null) {
+            v.setCustomerAppVisible(parseBoolean(body.get("customer_app_visible")));
+        }
+
+        if (body.get("availableCities") != null) {
+            v.setAvailableCities(String.valueOf(body.get("availableCities")).trim());
+        } else if (body.get("available_cities") != null) {
+            v.setAvailableCities(String.valueOf(body.get("available_cities")).trim());
+        }
     }
 
     private Map<String, Object> formatVehicleType(VehicleType v) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", v.getId());
         map.put("name", v.getName() != null ? v.getName() : "");
+        map.put("displayName", v.getDisplayName() != null ? v.getDisplayName() : (v.getName() != null ? v.getName() : ""));
+        map.put("display_name", v.getDisplayName() != null ? v.getDisplayName() : (v.getName() != null ? v.getName() : ""));
         map.put("type", v.getType() != null ? v.getType() : "");
         map.put("typeCode", v.getType() != null ? v.getType() : "");
         map.put("type_code", v.getType() != null ? v.getType() : "");
@@ -455,11 +557,44 @@ public class VehicleTypeController {
         map.put("status", v.getStatus() != null ? v.getStatus() : "active");
         map.put("priority", v.getPriority() != null ? v.getPriority() : 1);
 
+        // Extended Governance Fields
+        map.put("maxPassengers", v.getMaxPassengers());
+        map.put("max_passengers", v.getMaxPassengers());
+        map.put("maxLuggage", v.getMaxLuggage());
+        map.put("max_luggage", v.getMaxLuggage());
+        map.put("perMinuteRate", v.getPerMinuteRate() != null ? v.getPerMinuteRate() : 0.0);
+        map.put("per_minute_rate", v.getPerMinuteRate() != null ? v.getPerMinuteRate() : 0.0);
+        map.put("driverAllowance", v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0);
+        map.put("driver_allowance", v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0);
+        map.put("helperRate", v.getHelperRate() != null ? v.getHelperRate() : 0.0);
+        map.put("helper_rate", v.getHelperRate() != null ? v.getHelperRate() : 0.0);
+        map.put("volume", v.getVolume());
+        map.put("minFare", v.getMinFare() != null ? v.getMinFare() : v.getBaseFare());
+        map.put("min_fare", v.getMinFare() != null ? v.getMinFare() : v.getBaseFare());
+        map.put("maxFare", v.getMaxFare());
+        map.put("max_fare", v.getMaxFare());
+        map.put("minDistance", v.getMinDistance() != null ? v.getMinDistance() : 1.0);
+        map.put("min_distance", v.getMinDistance() != null ? v.getMinDistance() : 1.0);
+        map.put("maxDistance", v.getMaxDistance() != null ? v.getMaxDistance() : 500.0);
+        map.put("max_distance", v.getMaxDistance() != null ? v.getMaxDistance() : 500.0);
+        map.put("commissionPercentage", v.getCommissionPercentage() != null ? v.getCommissionPercentage() : 15.0);
+        map.put("commission_percentage", v.getCommissionPercentage() != null ? v.getCommissionPercentage() : 15.0);
+        map.put("gstPercentage", v.getGstPercentage() != null ? v.getGstPercentage() : 5.0);
+        map.put("gst_percentage", v.getGstPercentage() != null ? v.getGstPercentage() : 5.0);
+        map.put("customerAppVisible", v.getCustomerAppVisible() != null ? v.getCustomerAppVisible() : true);
+        map.put("customer_app_visible", v.getCustomerAppVisible() != null ? v.getCustomerAppVisible() : true);
+        map.put("availableCities", v.getAvailableCities() != null ? v.getAvailableCities() : "ALL");
+        map.put("available_cities", v.getAvailableCities() != null ? v.getAvailableCities() : "ALL");
+
         String sType;
         String sCategory;
         List<String> supported;
 
-        if ("PASSENGER".equalsIgnoreCase(rawS) || typeKey.contains("cab") || nameKey.contains("cab") || idKey.equals("6")
+        if ("BOTH".equalsIgnoreCase(rawS)) {
+            sType = "BOTH";
+            sCategory = "Both (Passenger & Courier)";
+            supported = List.of("OUR_SERVICES", "GOODS", "PASSENGER");
+        } else if ("PASSENGER".equalsIgnoreCase(rawS) || typeKey.contains("cab") || nameKey.contains("cab") || idKey.equals("6")
                 || typeKey.contains("bike_taxi") || typeKey.contains("auto_taxi") || idKey.startsWith("pass_")) {
             sType = "PASSENGER";
             sCategory = "Passenger Rides";
@@ -496,6 +631,13 @@ public class VehicleTypeController {
         } catch (Exception e) {
             return 0.0;
         }
+    }
+
+    private Boolean parseBoolean(Object val) {
+        if (val == null) return null;
+        if (val instanceof Boolean) return (Boolean) val;
+        String s = String.valueOf(val).trim().toLowerCase();
+        return "true".equals(s) || "1".equals(s) || "yes".equals(s);
     }
 
     public static String resolveDefaultVehicleImageUrl(String typeKey, String nameKey, String idKey) {
