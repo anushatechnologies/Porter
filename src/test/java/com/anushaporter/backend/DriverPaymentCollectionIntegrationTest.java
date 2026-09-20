@@ -69,6 +69,9 @@ public class DriverPaymentCollectionIntegrationTest {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private com.anushaporter.backend.service.DriverWalletService driverWalletService;
+
     private Driver assignedDriver;
     private Driver otherDriver;
     private String assignedDriverToken;
@@ -162,6 +165,7 @@ public class DriverPaymentCollectionIntegrationTest {
 
     @Test
     void testConfirmPaymentSuccessCash() throws Exception {
+        driverWalletService.updateAdminWalletSettings(java.util.Map.of("commissionPercentage", 5.0));
         // Step 1: Verify OTP
         testOrder.setOtpVerified(true);
         testOrder.setStatus("payment_confirmation_pending");
