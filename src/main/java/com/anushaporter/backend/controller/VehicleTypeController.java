@@ -3,6 +3,7 @@ package com.anushaporter.backend.controller;
 import com.anushaporter.backend.model.VehicleType;
 import com.anushaporter.backend.repository.VehicleTypeRepository;
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -148,16 +149,23 @@ public class VehicleTypeController {
 
     /**
      * GET /api/vehicle-types
+     * GET /api/vehicle-types/active
      * GET /api/vehicle-types?status=active
      * GET /api/vehicle-types?status=active&serviceType=OUR_SERVICES
      * GET /api/vehicle-types?status=active&serviceType=PASSENGER
      * GET /api/admin/vehicle-types
      */
-    @GetMapping
+    @GetMapping({"", "/active"})
     public ResponseEntity<Map<String, Object>> getVehicleTypes(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String serviceType,
-            @RequestParam(required = false) String service) {
+            @RequestParam(required = false) String service,
+            HttpServletRequest request) {
+
+        String effectiveStatus = status;
+        if (request != null && request.getRequestURI() != null && request.getRequestURI().endsWith("/active")) {
+            effectiveStatus = "active";
+        }
 
         String requestedService = serviceType != null && !serviceType.isBlank() ? serviceType : service;
         String normalizedService = null;
@@ -170,7 +178,7 @@ public class VehicleTypeController {
             }
         }
 
-        List<VehicleType> list = "active".equalsIgnoreCase(status)
+        List<VehicleType> list = "active".equalsIgnoreCase(effectiveStatus)
                 ? vehicleTypeRepository.findByStatusOrderByPriorityAsc("active")
                 : vehicleTypeRepository.findAllByOrderByPriorityAsc();
 
