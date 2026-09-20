@@ -24,6 +24,12 @@ public class DriverVehicleDataCorrectionRunner implements CommandLineRunner {
     @Autowired
     private DriverRepository driverRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.VehicleTypeRepository vehicleTypeRepository;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PricingVehicleRepository pricingVehicleRepository;
+
     @Override
     public void run(String... args) {
         try {
@@ -73,6 +79,33 @@ public class DriverVehicleDataCorrectionRunner implements CommandLineRunner {
                 log.info("[DriverVehicleMigration] Successfully patched {} existing driver record(s) with synchronized vehicle fields.", patchedCount);
             } else {
                 log.info("[DriverVehicleMigration] Driver vehicle records are consistent. No uninitialized vehicle fields found.");
+            }
+
+            // Patch empty or broken imageUrl in VehicleType table
+            if (vehicleTypeRepository != null) {
+                var vTypes = vehicleTypeRepository.findAll();
+                for (var vt : vTypes) {
+                    String img = vt.getImageUrl();
+                    if (img == null || img.trim().isEmpty() || img.endsWith("/vehicles/bike.png") || img.endsWith("/vehicles/auto.png") || img.contains("s3.amazonaws.com/vehicles/")) {
+                        String corrected = com.anushaporter.backend.controller.VehicleTypeController.resolveDefaultVehicleImageUrl(vt.getType(), vt.getName(), vt.getId());
+                        vt.setImageUrl(corrected);
+                        vehicleTypeRepository.save(vt);
+                        log.info("[DriverVehicleMigration] Updated vehicle type '{}' ({}) with image URL: {}", vt.getId(), vt.getName(), corrected);
+                    }
+                }
+            }
+
+            // Patch empty or broken imageUrl in PricingVehicle table
+            if (pricingVehicleRepository != null) {
+                var pVehicles = pricingVehicleRepository.findAll();
+                for (var pv : pVehicles) {
+                    String img = pv.getImageUrl();
+                    if (img == null || img.trim().isEmpty() || img.endsWith("/vehicles/bike.png") || img.endsWith("/vehicles/auto.png") || img.contains("s3.amazonaws.com/vehicles/")) {
+                        String corrected = com.anushaporter.backend.controller.VehicleTypeController.resolveDefaultVehicleImageUrl(pv.getVehicleId(), pv.getName(), pv.getId() != null ? String.valueOf(pv.getId()) : "");
+                        pv.setImageUrl(corrected);
+                        pricingVehicleRepository.save(pv);
+                    }
+                }
             }
         } catch (Exception e) {
             log.warn("[DriverVehicleMigration] Note: Driver vehicle data migration completed with message: {}", e.getMessage());

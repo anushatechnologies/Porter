@@ -78,8 +78,11 @@ public class VehicleController {
                 map.put("capacity",    v.getCapacity() != null ? v.getCapacity() : "");
                 map.put("capacityKg",  v.getCapacityKg() != null ? v.getCapacityKg() : 20);
                 map.put("dimensions",  v.getDimensions() != null ? v.getDimensions() : "");
-                map.put("iconName",    v.getIconName() != null ? v.getIconName() : "bike");
-                map.put("imageUrl",    v.getImageUrl() != null ? v.getImageUrl() : "");
+                String img = v.getImageUrl() != null ? v.getImageUrl().trim() : "";
+                if (img.isEmpty() || img.endsWith("/vehicles/bike.png") || img.endsWith("/vehicles/auto.png")) {
+                    img = VehicleTypeController.resolveDefaultVehicleImageUrl(v.getType(), v.getName(), v.getId());
+                }
+                map.put("imageUrl",    img);
                 map.put("baseFare",    v.getBaseFare() != null ? v.getBaseFare() : 40.0);
                 map.put("baseKm",      v.getBaseKm() != null ? v.getBaseKm() : 1.0);
                 map.put("perKmRate",   v.getPerKmRate() != null ? v.getPerKmRate() : 12.0);
@@ -137,8 +140,11 @@ public class VehicleController {
             map.put("volume", pv != null && pv.getVolume() != null ? pv.getVolume() : 1.0);
             map.put("status", pv != null && pv.getStatus() != null ? pv.getStatus() : true);
             map.put("priority", pv != null && pv.getPriority() != null ? pv.getPriority() : 1);
-            map.put("icon", pv != null && pv.getIcon() != null ? pv.getIcon() : "");
-            map.put("imageUrl", pv != null && pv.getImageUrl() != null ? pv.getImageUrl() : "");
+            String img = pv != null && pv.getImageUrl() != null ? pv.getImageUrl().trim() : "";
+            if (img.isEmpty() || img.endsWith("/vehicles/bike.png") || img.endsWith("/vehicles/auto.png")) {
+                img = VehicleTypeController.resolveDefaultVehicleImageUrl(v.getType(), v.getModel(), v.getId() != null ? String.valueOf(v.getId()) : "");
+            }
+            map.put("imageUrl", img);
 
             if (pv != null && pv.getVehicleId() != null) {
                 matchedPricingIds.add(pv.getVehicleId().toLowerCase());
@@ -173,8 +179,11 @@ public class VehicleController {
                 map.put("volume", pv.getVolume() != null ? pv.getVolume() : 1.0);
                 map.put("status", pv.getStatus() != null ? pv.getStatus() : true);
                 map.put("priority", pv.getPriority() != null ? pv.getPriority() : 1);
-                map.put("icon", pv.getIcon() != null ? pv.getIcon() : "");
-                map.put("imageUrl", pv.getImageUrl() != null ? pv.getImageUrl() : "");
+                String pImg = pv.getImageUrl() != null ? pv.getImageUrl().trim() : "";
+                if (pImg.isEmpty() || pImg.endsWith("/vehicles/bike.png") || pImg.endsWith("/vehicles/auto.png")) {
+                    pImg = VehicleTypeController.resolveDefaultVehicleImageUrl(pv.getVehicleId(), pv.getName(), pv.getId() != null ? String.valueOf(pv.getId()) : "");
+                }
+                map.put("imageUrl", pImg);
 
                 items.add(map);
             }

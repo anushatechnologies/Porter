@@ -445,8 +445,8 @@ public class VehicleTypeController {
         if (rawImageUrl.contains("poteranusha.s3.amazonaws.com")) {
             rawImageUrl = rawImageUrl.replace("poteranusha.s3.amazonaws.com", "poteranusha.s3.ap-south-2.amazonaws.com");
         }
-        if (rawImageUrl.isEmpty() && (typeKey.contains("cab") || idKey.equals("6"))) {
-            rawImageUrl = "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png";
+        if (rawImageUrl.isEmpty() || rawImageUrl.endsWith("/vehicles/bike.png") || rawImageUrl.endsWith("/vehicles/auto.png")) {
+            rawImageUrl = resolveDefaultVehicleImageUrl(typeKey, nameKey, idKey);
         }
         map.put("imageUrl", rawImageUrl);
         map.put("baseFare", v.getBaseFare() != null ? v.getBaseFare() : 40.0);
@@ -497,4 +497,26 @@ public class VehicleTypeController {
             return 0.0;
         }
     }
+
+    public static String resolveDefaultVehicleImageUrl(String typeKey, String nameKey, String idKey) {
+        String t = (typeKey != null ? typeKey : "").toLowerCase();
+        String n = (nameKey != null ? nameKey : "").toLowerCase();
+        String id = (idKey != null ? idKey : "").toLowerCase();
+
+        if (t.contains("cab") || id.equals("6") || t.contains("car") || t.contains("hatchback") || n.contains("cab") || n.contains("car") || n.contains("hatchback")) {
+            return "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png";
+        } else if (t.contains("bike") || t.contains("scooter") || n.contains("bike") || n.contains("scooter") || id.contains("bike") || id.contains("scooter")) {
+            return "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=400&q=80";
+        } else if (t.contains("auto") || t.contains("rickshaw") || n.contains("auto") || id.contains("auto")) {
+            return "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400&q=80";
+        } else if (t.contains("tata") || t.contains("ace") || t.contains("mini") || n.contains("tata") || n.contains("mini") || id.contains("tata") || id.contains("mini")) {
+            return "https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=400&q=80";
+        } else if (t.contains("pickup") || n.contains("pickup") || id.contains("pickup")) {
+            return "https://images.unsplash.com/photo-1559297434-fae8a1916a79?w=400&q=80";
+        } else if (t.contains("407") || t.contains("truck") || t.contains("heavy") || t.contains("lpt") || n.contains("407") || n.contains("truck") || n.contains("lpt")) {
+            return "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=400&q=80";
+        }
+        return "https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=400&q=80";
+    }
 }
+
