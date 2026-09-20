@@ -83,6 +83,20 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Sync Vehicle Assets to S3
+        run: |
+          BUCKET="${S3_BUCKET_NAME:-poteranusha}"
+          echo "Syncing vehicle assets to S3 bucket: $BUCKET in region ${{ secrets.AWS_REGION }}..."
+          if [ -d "src/main/resources/static/vehicles" ]; then
+            aws s3 cp src/main/resources/static/vehicles/ "s3://$BUCKET/vehicles/" --recursive --content-type "image/png" --acl public-read || \
+            aws s3 cp src/main/resources/static/vehicles/ "s3://$BUCKET/vehicles/" --recursive --content-type "image/png"
+            echo "✅ Successfully synced vehicle assets to s3://$BUCKET/vehicles/"
+          else
+            echo "⚠️ Vehicle assets directory not found."
+          fi
+        env:
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2

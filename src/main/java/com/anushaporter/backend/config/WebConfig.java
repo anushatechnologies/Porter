@@ -59,7 +59,8 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/vehicle-types/**",
                         "/api/driver/vehicles/**",
                         "/api/drivers/vehicles/**",
-                        "/uploads/**");
+                        "/uploads/**",
+                        "/vehicles/**");
     }
 
     @Override
@@ -79,11 +80,21 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + normalizedDir)
                 .setCachePeriod(3600);
+
+        // Map the public web path '/vehicles/**' to static resources and disk fallback
+        registry.addResourceHandler("/vehicles/**")
+                .addResourceLocations("classpath:/static/vehicles/", "file:" + normalizedDir + "vehicles/")
+                .setCachePeriod(3600);
     }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/uploads/**")
+                .allowedOrigins("*")
+                .allowedMethods("GET")
+                .maxAge(3600);
+
+        registry.addMapping("/vehicles/**")
                 .allowedOrigins("*")
                 .allowedMethods("GET")
                 .maxAge(3600);

@@ -44,42 +44,42 @@ public class VehicleTypeController {
                     // ── Default Fleets ──────────────────────────────────────────────
                     build("1", "2 Wheeler", "two_wheeler", "Best for goods delivery & parcel",
                             "Load: Up to 20kg", 20, "Ideal for documents, food parcels",
-                            "bike", "https://poteranusha.s3.amazonaws.com/vehicles/bike.png",
+                            "bike", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/bike.png",
                             40.00, 1.0, 12.00, "OUR_SERVICES", 1),
 
                     build("2", "3 Wheeler / Auto", "auto_rickshaw", "Best for cargo load & shifting",
                             "Load: Up to 500kg", 500, "5ft x 3.5ft x 3.5ft",
-                            "rickshaw", "https://poteranusha.s3.amazonaws.com/vehicles/auto.png",
+                            "rickshaw", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/auto.png",
                             120.00, 1.0, 20.00, "OUR_SERVICES", 2),
 
                     build("3", "Tata Ace", "tata_ace", "Best for large boxes and business deliveries",
                             "Load: Up to 750kg", 750, "7ft x 4ft x 5ft",
-                            "truck-delivery", "https://poteranusha.s3.amazonaws.com/vehicles/tata_ace.png",
+                            "truck-delivery", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/tata_ace.png",
                             250.00, 1.0, 30.00, "OUR_SERVICES", 3),
 
                     build("4", "Pickup 8ft", "pickup_8ft", "Heavy duty transport for bulky goods",
                             "Load: Up to 1200kg", 1200, "8ft x 4.8ft x 5ft",
-                            "pickup", "https://poteranusha.s3.amazonaws.com/vehicles/pickup.png",
+                            "pickup", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/pickup.png",
                             350.00, 1.0, 35.00, "OUR_SERVICES", 4),
 
                     build("5", "Tata 407", "tata_407", "Commercial heavy goods and shifting transport",
                             "Load: Up to 2500kg", 2500, "10ft x 6ft x 6ft",
-                            "truck", "https://poteranusha.s3.amazonaws.com/vehicles/truck.png",
+                            "truck", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/truck.png",
                             600.00, 1.0, 50.00, "OUR_SERVICES", 5),
 
                     build("6", "Cab", "cab", "Comfortable cab for city & outstation passenger rides",
                             "Load: 4 Passengers", 400, "Compact Sedan / Hatchback / SUV",
-                            "car", "https://poteranusha.s3.amazonaws.com/vehicles/cab.png",
+                            "car", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png",
                             150.00, 2.0, 15.00, "PASSENGER", 6),
 
                     build("pass_bike", "Bike Taxi (Passenger)", "bike_taxi", "Quick & affordable 1-passenger bike ride",
                             "1 Passenger", 80, "1 Helmet Provided",
-                            "bike", "https://poteranusha.s3.amazonaws.com/vehicles/bike.png",
+                            "bike", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/bike.png",
                             30.00, 1.0, 10.00, "PASSENGER", 7),
 
                     build("pass_auto", "Auto Taxi (Passenger)", "auto_taxi", "Convenient city auto ride for up to 3 passengers",
                             "3 Passengers", 250, "Up to 3 Passengers",
-                            "rickshaw", "https://poteranusha.s3.amazonaws.com/vehicles/auto.png",
+                            "rickshaw", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/auto.png",
                             50.00, 1.5, 15.00, "PASSENGER", 8)
             );
             vehicleTypeRepository.saveAll(defaults);
@@ -89,26 +89,27 @@ public class VehicleTypeController {
             if (vehicleTypeRepository.findById("6").isEmpty() && vehicleTypeRepository.findByType("cab").isEmpty()) {
                 vehicleTypeRepository.save(build("6", "Cab", "cab",
                         "Comfortable cab for city & outstation passenger rides", "Load: 4 Passengers", 400, "Compact Sedan / Hatchback / SUV",
-                        "car", "https://poteranusha.s3.amazonaws.com/vehicles/cab.png", 150.00, 2.0, 15.00, "PASSENGER", 6));
+                        "car", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png", 150.00, 2.0, 15.00, "PASSENGER", 6));
             }
 
             // Seed pass_bike (Bike Taxi) if missing
             if (vehicleTypeRepository.findById("pass_bike").isEmpty() && vehicleTypeRepository.findByType("bike_taxi").isEmpty()) {
                 vehicleTypeRepository.save(build("pass_bike", "Bike Taxi (Passenger)", "bike_taxi",
                         "Quick & affordable 1-passenger bike ride", "1 Passenger", 80, "1 Helmet Provided",
-                        "bike", "https://poteranusha.s3.amazonaws.com/vehicles/bike.png", 30.00, 1.0, 10.00, "PASSENGER", 7));
+                        "bike", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/bike.png", 30.00, 1.0, 10.00, "PASSENGER", 7));
             }
 
             // Seed pass_auto (Auto Taxi) if missing
             if (vehicleTypeRepository.findById("pass_auto").isEmpty() && vehicleTypeRepository.findByType("auto_taxi").isEmpty()) {
                 vehicleTypeRepository.save(build("pass_auto", "Auto Taxi (Passenger)", "auto_taxi",
                         "Convenient city auto ride for up to 3 passengers", "3 Passengers", 250, "Up to 3 Passengers",
-                        "rickshaw", "https://poteranusha.s3.amazonaws.com/vehicles/auto.png", 50.00, 1.5, 15.00, "PASSENGER", 8));
+                        "rickshaw", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/auto.png", 50.00, 1.5, 15.00, "PASSENGER", 8));
             }
 
-            // Migrate any legacy 'BOTH' vehicle types to strict tracks
+            // Migrate any legacy 'BOTH' vehicle types & heal legacy S3 image URLs
             try {
                 vehicleTypeRepository.findAll().forEach(vt -> {
+                    boolean changed = false;
                     if ("BOTH".equalsIgnoreCase(vt.getServiceType())) {
                         String typeKey = (vt.getType() != null ? vt.getType() : "").toLowerCase();
                         if (typeKey.contains("cab") || typeKey.contains("taxi") || (vt.getId() != null && vt.getId().startsWith("pass_"))) {
@@ -116,6 +117,19 @@ public class VehicleTypeController {
                         } else {
                             vt.setServiceType("OUR_SERVICES");
                         }
+                        changed = true;
+                    }
+                    if (vt.getImageUrl() != null && vt.getImageUrl().contains("poteranusha.s3.amazonaws.com")) {
+                        vt.setImageUrl(vt.getImageUrl().replace("poteranusha.s3.amazonaws.com", "poteranusha.s3.ap-south-2.amazonaws.com"));
+                        changed = true;
+                    }
+                    String typeKey = (vt.getType() != null ? vt.getType() : "").toLowerCase();
+                    String idKey = (vt.getId() != null ? vt.getId() : "").trim();
+                    if ((typeKey.contains("cab") || "6".equals(idKey)) && (vt.getImageUrl() == null || vt.getImageUrl().isBlank() || vt.getImageUrl().contains("/vehicles/cab.png"))) {
+                        vt.setImageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png");
+                        changed = true;
+                    }
+                    if (changed) {
                         vehicleTypeRepository.save(vt);
                     }
                 });
@@ -421,17 +435,25 @@ public class VehicleTypeController {
         map.put("capacityKg", v.getCapacityKg() != null ? v.getCapacityKg() : 20);
         map.put("dimensions", v.getDimensions() != null ? v.getDimensions() : "");
         map.put("iconName", v.getIconName() != null ? v.getIconName() : "bike");
-        map.put("imageUrl", v.getImageUrl() != null ? v.getImageUrl() : "");
-        map.put("baseFare", v.getBaseFare() != null ? v.getBaseFare() : 40.0);
-        map.put("baseKm", v.getBaseKm() != null ? v.getBaseKm() : 1.0);
-        map.put("perKmRate", v.getPerKmRate() != null ? v.getPerKmRate() : 12.0);
-        map.put("status", v.getStatus() != null ? v.getStatus() : "active");
-        map.put("priority", v.getPriority() != null ? v.getPriority() : 1);
 
         String typeKey = (v.getType() != null ? v.getType() : "").toLowerCase();
         String nameKey = (v.getName() != null ? v.getName() : "").toLowerCase();
         String idKey = (v.getId() != null ? v.getId() : "").trim();
         String rawS = v.getServiceType() != null ? v.getServiceType().toUpperCase() : "";
+
+        String rawImageUrl = v.getImageUrl() != null ? v.getImageUrl().trim() : "";
+        if (rawImageUrl.contains("poteranusha.s3.amazonaws.com")) {
+            rawImageUrl = rawImageUrl.replace("poteranusha.s3.amazonaws.com", "poteranusha.s3.ap-south-2.amazonaws.com");
+        }
+        if (rawImageUrl.isEmpty() && (typeKey.contains("cab") || idKey.equals("6"))) {
+            rawImageUrl = "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png";
+        }
+        map.put("imageUrl", rawImageUrl);
+        map.put("baseFare", v.getBaseFare() != null ? v.getBaseFare() : 40.0);
+        map.put("baseKm", v.getBaseKm() != null ? v.getBaseKm() : 1.0);
+        map.put("perKmRate", v.getPerKmRate() != null ? v.getPerKmRate() : 12.0);
+        map.put("status", v.getStatus() != null ? v.getStatus() : "active");
+        map.put("priority", v.getPriority() != null ? v.getPriority() : 1);
 
         String sType;
         String sCategory;

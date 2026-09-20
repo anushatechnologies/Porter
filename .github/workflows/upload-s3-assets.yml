@@ -1,0 +1,41 @@
+name: Upload Vehicle Assets to S3
+
+on:
+  push:
+    paths:
+      - 'src/main/resources/static/vehicles/**'
+      - '.github/workflows/upload-s3-assets.yml'
+  workflow_dispatch:
+
+jobs:
+  upload-vehicle-assets:
+    name: Sync Static Vehicle Assets to S3
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Sync Vehicle Images to S3
+        run: |
+          BUCKET="${S3_BUCKET_NAME:-poteranusha}"
+          echo "Syncing vehicle assets to S3 bucket: $BUCKET..."
+          if [ -d "src/main/resources/static/vehicles" ]; then
+            aws s3 cp src/main/resources/static/vehicles/ "s3://$BUCKET/vehicles/" --recursive --content-type "image/png" --acl public-read || \
+            aws s3 cp src/main/resources/static/vehicles/ "s3://$BUCKET/vehicles/" --recursive --content-type "image/png"
+            echo "Listing uploaded vehicle assets in S3:"
+            aws s3 ls "s3://$BUCKET/vehicles/"
+            echo "✅ Vehicle assets successfully synced to S3."
+          else
+            echo "❌ Directory src/main/resources/static/vehicles not found!"
+            exit 1
+          fi
+        env:
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
