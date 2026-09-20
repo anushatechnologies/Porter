@@ -24,7 +24,7 @@ import java.math.BigDecimal;
 import java.util.*;
 
 @RestController
-@RequestMapping({"/api/passenger", "/api/passenger-bookings"})
+@RequestMapping({"/api/passenger", "/api/passenger-bookings", "/api/admin/passenger"})
 @RequiredArgsConstructor
 @Slf4j
 public class PassengerBookingController {
@@ -341,6 +341,73 @@ public class PassengerBookingController {
                     .findByVehicleCategoryCodeAndActiveTrue(PassengerPricingEngine.normalizeCategoryCode(vehicleCategoryCode)));
         }
         return ResponseEntity.ok(rentalPackageRepository.findByActiveTrue());
+    }
+
+    // --- Admin Management Endpoints for Passenger Vehicles ---
+    @GetMapping({"/admin/vehicles", "/admin/categories", "/vehicles/all", "/categories/all"})
+    public ResponseEntity<Map<String, Object>> getAdminVehicleCategories() {
+        List<PassengerVehicleCategory> categories = vehicleCategoryRepository.findAllByOrderByDisplayOrderAsc();
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("vehicles", categories);
+        resp.put("categories", categories);
+        resp.put("count", categories.size());
+        return ResponseEntity.ok(resp);
+    }
+
+    @PostMapping({"/admin/vehicles", "/admin/categories"})
+    public ResponseEntity<Map<String, Object>> saveAdminVehicleCategory(@RequestBody PassengerVehicleCategory category) {
+        PassengerVehicleCategory saved = vehicleCategoryRepository.save(category);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Category saved successfully", "vehicle", saved));
+    }
+
+    @PutMapping({"/admin/vehicles/{id}", "/admin/categories/{id}"})
+    public ResponseEntity<Map<String, Object>> updateAdminVehicleCategory(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> updates) {
+        Optional<PassengerVehicleCategory> existingOpt = vehicleCategoryRepository.findById(id);
+        if (existingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        PassengerVehicleCategory c = existingOpt.get();
+        if (updates.containsKey("displayName")) c.setDisplayName(String.valueOf(updates.get("displayName")));
+        if (updates.containsKey("description")) c.setDescription(String.valueOf(updates.get("description")));
+        if (updates.containsKey("imageUrl")) c.setImageUrl(String.valueOf(updates.get("imageUrl")));
+        if (updates.containsKey("passengerCapacity") && updates.get("passengerCapacity") instanceof Number) {
+            c.setPassengerCapacity(((Number) updates.get("passengerCapacity")).intValue());
+        }
+        if (updates.containsKey("luggageCapacity") && updates.get("luggageCapacity") instanceof Number) {
+            c.setLuggageCapacity(((Number) updates.get("luggageCapacity")).intValue());
+        }
+        if (updates.containsKey("baseFare") && updates.get("baseFare") != null) {
+            c.setBaseFare(new BigDecimal(updates.get("baseFare").toString()));
+        }
+        if (updates.containsKey("perKmRate") && updates.get("perKmRate") != null) {
+            c.setPerKmRate(new BigDecimal(updates.get("perKmRate").toString()));
+        }
+        if (updates.containsKey("perHourRate") && updates.get("perHourRate") != null) {
+            c.setPerHourRate(new BigDecimal(updates.get("perHourRate").toString()));
+        }
+        if (updates.containsKey("minimumFare") && updates.get("minimumFare") != null) {
+            c.setMinimumFare(new BigDecimal(updates.get("minimumFare").toString()));
+        }
+        if (updates.containsKey("active")) {
+            c.setActive(Boolean.parseBoolean(updates.get("active").toString()));
+        }
+        PassengerVehicleCategory saved = vehicleCategoryRepository.save(c);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Category updated successfully", "vehicle", saved));
+    }
+
+    @PatchMapping({"/admin/vehicles/{id}/toggle-status", "/admin/categories/{id}/toggle-status"})
+    public ResponseEntity<Map<String, Object>> toggleCategoryStatus(@PathVariable Long id) {
+        Optional<PassengerVehicleCategory> existingOpt = vehicleCategoryRepository.findById(id);
+        if (existingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        PassengerVehicleCategory c = existingOpt.get();
+        c.setActive(!Boolean.TRUE.equals(c.getActive()));
+        PassengerVehicleCategory saved = vehicleCategoryRepository.save(c);
+        return ResponseEntity.ok(Map.of("success", true, "active", saved.getActive(), "vehicle", saved));
     }
 
     private Optional<PassengerBooking> findBookingByIdOrNumber(String id) {

@@ -30,6 +30,26 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<?> handleNoResourceFound(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of(
+                        "success", false,
+                        "error", "Not Found",
+                        "message", "The requested endpoint or resource was not found: " + ex.getResourcePath()
+                ));
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.NoHandlerFoundException.class)
+    public ResponseEntity<?> handleNoHandlerFound(org.springframework.web.servlet.NoHandlerFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of(
+                        "success", false,
+                        "error", "Not Found",
+                        "message", "No handler found for " + ex.getHttpMethod() + " " + ex.getRequestURL()
+                ));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleAllExceptions(Exception ex) {
         ex.printStackTrace();

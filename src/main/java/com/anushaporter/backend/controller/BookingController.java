@@ -56,6 +56,12 @@ public class BookingController {
     @Autowired(required = false)
     private com.anushaporter.backend.repository.AppUserRepository appUserRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PricingVehicleRepository pricingVehicleRepository;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.VehicleTypeRepository vehicleTypeRepository;
+
     /**
      * Recommend optimal vehicle type based on weight, dimensions, and category.
      * POST /api/vehicles/recommend
@@ -309,6 +315,43 @@ public class BookingController {
                 if (prMap.get("distanceFare") != null) order.setDistanceFare(parseDoubleValue(prMap.get("distanceFare")));
                 if (prMap.get("laborCharge") != null) order.setHelperCharges(parseDoubleValue(prMap.get("laborCharge")));
                 if (prMap.get("gst") != null) order.setGstAmount(parseDoubleValue(prMap.get("gst")));
+            }
+
+            // If client didn't supply amount, compute fallback fare using vehicle pricing & coordinates
+            if (totalAmount == null || totalAmount <= 0) {
+                if (order.getDistanceKm() == null || order.getDistanceKm() <= 0) {
+                    if (pLat != null && pLng != null && dLat != null && dLng != null) {
+                        double distKm = calculateDistanceInMeters(pLat, pLng, dLat, dLng) / 1000.0;
+                        if (distKm > 0) {
+                            order.setDistanceKm(Math.round(distKm * 10.0) / 10.0);
+                        }
+                    }
+                }
+                double dist = (order.getDistanceKm() != null && order.getDistanceKm() > 0) ? order.getDistanceKm() : 5.0;
+                double baseFare = 100.0;
+                double perKm = 15.0;
+                double freeDist = 2.0;
+
+                String targetVehicle = (String) body.getOrDefault("vehicleId", body.getOrDefault("vehicleType", serviceName));
+                if (targetVehicle != null && !targetVehicle.isBlank() && pricingVehicleRepository != null) {
+                    com.anushaporter.backend.model.PricingVehicle pv = pricingVehicleRepository.findByVehicleId(targetVehicle);
+                    if (pv == null) {
+                        pv = pricingVehicleRepository.findFirstByVehicleIdIgnoreCase(targetVehicle).orElse(null);
+                    }
+                    if (pv != null) {
+                        if (pv.getBaseFare() != null) baseFare = pv.getBaseFare();
+                        if (pv.getPricePerKm() != null) perKm = pv.getPricePerKm();
+                        if (pv.getFreeDistance() != null) freeDist = pv.getFreeDistance();
+                    }
+                }
+                double extraDist = Math.max(0.0, dist - freeDist);
+                double computedFare = baseFare + (extraDist * perKm);
+                if (order.getHelpersCount() != null && order.getHelpersCount() > 0) {
+                    computedFare += (order.getHelpersCount() * 150.0);
+                }
+                totalAmount = Math.round(computedFare * 100.0) / 100.0;
+                order.setBaseFare(baseFare);
+                order.setDistanceFare(Math.round((extraDist * perKm) * 100.0) / 100.0);
             }
             order.setAmount(totalAmount != null ? totalAmount : 0.0);
 
@@ -1757,17 +1800,30 @@ public class BookingController {
         response.put("paymentConfirmationPending", isPaymentPending);
 
         Order orderInstance = orderOpt.orElse(null);
-        boolean canCancel = orderInstance != null && isOrderCancellable(orderInstance, driverEntity);
+        boolean isInitialSearchingStage = "searching".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
+                || "created".equalsIgnoreCase(status) || "placed".equalsIgnoreCase(status) || "unassigned".equalsIgnoreCase(status)
+                || "requested".equalsIgnoreCase(status) || !hasAssignedDriver;
+
+        boolean canCancel;
+        if (isInitialSearchingStage) {
+            canCancel = !"cancelled".equalsIgnoreCase(status);
+        } else {
+            canCancel = orderInstance != null && isOrderCancellable(orderInstance, driverEntity);
+        }
+
         response.put("canCancel", canCancel);
         response.put("isCancellable", canCancel);
         response.put("allowCancel", canCancel);
         response.put("cancellationAllowed", canCancel);
         response.put("cancellationWindowActive", canCancel);
         if (!canCancel) {
-            String blockedReason = "Driver has arrived near drop location";
+            String blockedReason = "Cancellation is not available for this trip";
             if ("cancelled".equalsIgnoreCase(status)) blockedReason = "Booking is already cancelled";
             else if (isDelivered) blockedReason = "Order has been delivered";
             else if (isOtpVerified) blockedReason = "Delivery OTP has been verified";
+            else if (driverEntity != null && orderInstance != null && isDriverNearDropLocation(orderInstance, driverEntity)) {
+                blockedReason = "Driver has arrived near drop location";
+            }
             response.put("cancellationBlockedReason", blockedReason);
         } else {
             response.put("cancellationBlockedReason", null);

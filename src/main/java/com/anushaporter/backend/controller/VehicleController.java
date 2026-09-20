@@ -24,13 +24,44 @@ public class VehicleController {
     @Autowired(required = false)
     private com.anushaporter.backend.repository.VehicleTypeRepository vehicleTypeRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PassengerVehicleCategoryRepository passengerVehicleCategoryRepository;
+
     /**
      * GET /api/vehicles
      * If ?status=active is passed, returns active vehicle types for Driver Registration: { success: true, vehicles: [...] }.
      * Otherwise returns fleet vehicles joined with pricing configuration for User App and Admin Panel: [...].
      */
     @GetMapping
-    public ResponseEntity<?> getAll(@RequestParam(required = false) String status) {
+    public ResponseEntity<?> getAll(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String serviceType) {
+        if ("PASSENGER".equalsIgnoreCase(serviceType)) {
+            List<com.anushaporter.backend.model.PassengerVehicleCategory> categories = passengerVehicleCategoryRepository != null
+                    ? passengerVehicleCategoryRepository.findAllByOrderByDisplayOrderAsc()
+                    : Collections.emptyList();
+            List<Map<String, Object>> items = categories.stream().map(c -> {
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("id", "PV-" + c.getId());
+                map.put("vehicleId", c.getCategoryCode() != null ? c.getCategoryCode().toLowerCase() : String.valueOf(c.getId()));
+                map.put("name", c.getDisplayName());
+                map.put("model", c.getDisplayName());
+                map.put("type", c.getCategoryCode());
+                map.put("serviceType", "PASSENGER");
+                map.put("plate", "COMMERCIAL");
+                map.put("owner", "Fleet");
+                map.put("trips", 0);
+                map.put("baseFare", c.getBaseFare() != null ? c.getBaseFare().doubleValue() : 50.0);
+                map.put("pricePerKm", c.getPerKmRate() != null ? c.getPerKmRate().doubleValue() : 12.0);
+                map.put("minFare", c.getMinimumFare() != null ? c.getMinimumFare().doubleValue() : 50.0);
+                map.put("capacity", c.getPassengerCapacity() + " Passengers");
+                map.put("capacityKg", c.getLuggageCapacity() != null ? c.getLuggageCapacity() * 20 : 100);
+                map.put("status", Boolean.TRUE.equals(c.getActive()));
+                map.put("imageUrl", c.getImageUrl() != null ? c.getImageUrl() : "");
+                return map;
+            }).collect(Collectors.toList());
+            return ResponseEntity.ok(items);
+        }
         if ("active".equalsIgnoreCase(status)) {
             List<com.anushaporter.backend.model.VehicleType> list = vehicleTypeRepository != null
                     ? vehicleTypeRepository.findByStatusOrderByPriorityAsc("active")

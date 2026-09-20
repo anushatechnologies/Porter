@@ -164,9 +164,41 @@ public class AutoAssignmentService {
                     }
                 }
             } else {
-                log.info("No active eligible drivers found in Tier {} (<= {} km) for Booking '{}'. Expanding immediately to next tier...",
-                        currentTierNum, currentMaxRadius, bookingId);
-                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+                int waitSecs = Math.min(15, tierDurationSeconds);
+                log.info("No active eligible drivers immediately found in Tier {} (<= {} km) for Booking '{}'. Polling for online drivers for {}s before expanding...",
+                        currentTierNum, currentMaxRadius, bookingId, waitSecs);
+                long waitEnd = System.currentTimeMillis() + (waitSecs * 1000L);
+                while (System.currentTimeMillis() < waitEnd && LocalDateTime.now().isBefore(deadline)) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    Order checked = orderRepository.findByBookingId(bookingId).orElse(null);
+                    if (checked == null || isAssignedOrTerminal(checked.getStatus())) {
+                        return true;
+                    }
+                    Set<Long> updatedOffered = new HashSet<>(driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId));
+                    List<Driver> newlyEligible = driverRepository.findAll().stream()
+                            .filter(d -> driverEligibilityService.isEligible(d, checked, updatedOffered))
+                            .toList();
+                    List<Driver> newlyInTier = driverRankingService.filterDriversWithinRadius(newlyEligible, pickupLat, pickupLng, currentMaxRadius);
+                    if (!newlyInTier.isEmpty()) {
+                        log.info("Found {} newly online driver(s) within <= {} km for Booking '{}'. Dispatching offers...",
+                                newlyInTier.size(), currentMaxRadius, bookingId);
+                        driverOfferService.broadcastOffersToActiveDrivers(checked, newlyInTier, currentMaxRadius, offerTimeoutSeconds > 0 ? offerTimeoutSeconds : 60);
+                        long broadcastEnd = System.currentTimeMillis() + (tierDurationSeconds * 1000L);
+                        while (System.currentTimeMillis() < broadcastEnd && LocalDateTime.now().isBefore(deadline)) {
+                            try { Thread.sleep(1000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                            Order orderPoll = orderRepository.findByBookingId(bookingId).orElse(null);
+                            if (orderPoll == null || isAssignedOrTerminal(orderPoll.getStatus())) {
+                                return true;
+                            }
+                        }
+                        break;
+                    }
+                }
             }
         }
 
