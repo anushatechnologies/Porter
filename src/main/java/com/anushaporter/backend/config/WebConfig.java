@@ -57,6 +57,8 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/passenger/**",
                         "/api/admin/passenger/**",
                         "/api/vehicle-types/**",
+                        "/api/admin/vehicle-types/**",
+                        "/api/admin/vehicles/**",
                         "/api/driver/vehicles/**",
                         "/api/drivers/vehicles/**",
                         "/uploads/**",

@@ -250,11 +250,9 @@ public class DriverOfferService {
                         return false;
                     }
 
-                    // Strict vehicle and service track match
+                    // Unified vehicle and service track match
                     if (driver != null && driverEligibilityService != null) {
-                        String orderTrack = driverEligibilityService.resolveOrderTrack(o);
-                        String orderCategory = driverEligibilityService.normalizeVehicleCategory(o.getServiceName(), orderTrack);
-                        boolean matches = driverTrack.equals(orderTrack) && driverCategory.equals(orderCategory);
+                        boolean matches = driverEligibilityService.isVehicleCompatible(driver, o);
                         if (!matches) {
                             try {
                                 offer.setStatus(DriverOfferStatus.CANCELLED);

@@ -56,16 +56,22 @@ public class DriverVehicleDataCorrectionRunner implements CommandLineRunner {
                     modified = true;
                 }
 
-                // Synchronize serviceType (OUR_SERVICES vs PASSENGER)
+                // Synchronize serviceType (OUR_SERVICES vs PASSENGER vs BOTH)
                 String sType = d.getServiceType();
-                if (sType == null || sType.isBlank() || "BOTH".equalsIgnoreCase(sType)) {
-                    String vStr = (d.getVehicleType() != null ? d.getVehicleType() : (d.getVehicle() != null ? d.getVehicle() : "")).toLowerCase();
-                    if (vStr.contains("cab") || vStr.contains("car") || vStr.contains("taxi") || vStr.contains("sedan")
-                            || vStr.contains("suv") || vStr.contains("biketaxi") || vStr.contains("autotaxi") || vStr.startsWith("pass")) {
-                        d.setServiceType("PASSENGER");
-                    } else {
-                        d.setServiceType("OUR_SERVICES");
-                    }
+                String vStr = (d.getVehicleType() != null ? d.getVehicleType() : (d.getVehicle() != null ? d.getVehicle() : "")).toLowerCase();
+                String targetType = sType;
+                if (vStr.contains("cab") || vStr.contains("car") || vStr.contains("taxi") || vStr.contains("sedan")
+                        || vStr.contains("suv") || vStr.equals("6")) {
+                    targetType = "PASSENGER";
+                } else if (vStr.contains("auto") || vStr.contains("rickshaw") || vStr.contains("3wheel")
+                        || vStr.contains("bike") || vStr.contains("scooter") || vStr.contains("2wheel") || vStr.contains("motorcycle")) {
+                    targetType = "BOTH";
+                } else if (vStr.contains("tataace") || vStr.contains("ace") || vStr.contains("pickup") || vStr.contains("8ft")
+                        || vStr.contains("407") || vStr.contains("truck") || vStr.contains("1109") || vStr.contains("lpt")) {
+                    targetType = "OUR_SERVICES";
+                }
+                if (targetType != null && !targetType.equalsIgnoreCase(sType)) {
+                    d.setServiceType(targetType);
                     modified = true;
                 }
 

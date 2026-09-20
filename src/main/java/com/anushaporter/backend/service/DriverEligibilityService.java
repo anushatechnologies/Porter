@@ -77,31 +77,71 @@ public class DriverEligibilityService {
             }
         }
 
-        // 7. Resolve Service Track for Order and Driver
-        String orderTrack = resolveOrderTrack(order);
-        String driverTrack = resolveDriverTrack(driver);
-
-        if (!orderTrack.equals(driverTrack)) {
-            log.debug("Driver '{}' track '{}' does not match order track '{}'", driver.getId(), driverTrack, orderTrack);
-            return false;
-        }
-
-        // 8. Check vehicle compatibility (strict category matching within track)
-        String orderVehicleRaw = order != null ? (order.getServiceName() != null ? order.getServiceName() : order.getVehicleType()) : "";
-        String driverVehicleRaw = driver.getVehicleType() != null && !driver.getVehicleType().isBlank()
-                ? driver.getVehicleType()
-                : (driver.getVehicle() != null ? driver.getVehicle() : "");
-
-        String requiredCategory = normalizeVehicleCategory(orderVehicleRaw, orderTrack);
-        String driverCategory = normalizeVehicleCategory(driverVehicleRaw, driverTrack);
-
-        if ("UNKNOWN".equals(requiredCategory) || "UNKNOWN".equals(driverCategory) || !requiredCategory.equals(driverCategory)) {
-            log.debug("Driver '{}' category '{}' does not strictly match required order category '{}'",
-                    driver.getId(), driverCategory, requiredCategory);
+        // 7. Check vehicle compatibility across service tracks
+        if (!isVehicleCompatible(driver, order)) {
+            log.debug("Driver '{}' vehicle is not compatible with order '{}' (serviceName: '{}', serviceType: '{}')",
+                    driver.getId(), order != null ? order.getId() : null,
+                    order != null ? order.getServiceName() : null,
+                    order != null ? order.getServiceType() : null);
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * Determines whether a driver's vehicle is compatible with an incoming order.
+     * Supports dual-fleet capability for Auto and 2-Wheeler drivers (goods + passenger rides)
+     * while strictly ensuring freight trucks never receive passenger orders.
+     */
+    public boolean isVehicleCompatible(Driver driver, Order order) {
+        if (driver == null || order == null) return false;
+
+        String orderTrack = resolveOrderTrack(order);
+        String orderVehicleRaw = order.getServiceName() != null ? order.getServiceName() : order.getVehicleType();
+        String driverVehicleRaw = driver.getVehicleType() != null && !driver.getVehicleType().isBlank()
+                ? driver.getVehicleType()
+                : (driver.getVehicle() != null ? driver.getVehicle() : "");
+
+        String dClean = driverVehicleRaw.toLowerCase().replaceAll("[^a-z0-9]", "");
+
+        if ("PASSENGER".equalsIgnoreCase(orderTrack)) {
+            // Freight trucks can NEVER take passenger orders
+            if (dClean.contains("tataace") || dClean.contains("ace") || dClean.contains("pickup") || dClean.contains("8ft")
+                    || dClean.contains("407") || dClean.contains("tata407") || dClean.contains("truck") || dClean.contains("1109") || dClean.contains("lpt")) {
+                return false;
+            }
+
+            String reqCategory = normalizeVehicleCategory(orderVehicleRaw, "PASSENGER");
+            if ("PASSENGER_AUTO_TAXI".equals(reqCategory)) {
+                return dClean.contains("auto") || dClean.contains("rickshaw") || dClean.contains("3wheel") || dClean.contains("threewheel")
+                        || dClean.equals("2") || dClean.equals("passauto") || dClean.equals("8");
+            }
+            if ("PASSENGER_BIKE_TAXI".equals(reqCategory)) {
+                return dClean.contains("bike") || dClean.contains("scooter") || dClean.contains("motorcycle") || dClean.contains("moto")
+                        || dClean.contains("2wheel") || dClean.contains("twowheel") || dClean.equals("1") || dClean.equals("passbike") || dClean.equals("7");
+            }
+            if ("CAB".equals(reqCategory)) {
+                return dClean.contains("cab") || dClean.contains("car") || dClean.contains("taxi") || dClean.contains("sedan")
+                        || dClean.contains("hatchback") || dClean.contains("suv") || dClean.equals("6");
+            }
+            return false;
+        } else {
+            // OUR_SERVICES (Goods & Delivery)
+            // Dedicated passenger cabs cannot take goods delivery
+            if (dClean.contains("cab") || dClean.contains("car") || dClean.contains("taxi") || dClean.contains("sedan")
+                    || dClean.contains("hatchback") || dClean.contains("suv") || dClean.equals("6")) {
+                return false;
+            }
+
+            String reqCategory = normalizeVehicleCategory(orderVehicleRaw, "OUR_SERVICES");
+            String driverCategory = normalizeVehicleCategory(driverVehicleRaw, "OUR_SERVICES");
+
+            if ("UNKNOWN".equals(reqCategory) || "UNKNOWN".equals(driverCategory)) {
+                return false;
+            }
+            return reqCategory.equals(driverCategory);
+        }
     }
 
     /**
@@ -124,11 +164,14 @@ public class DriverEligibilityService {
     }
 
     /**
-     * Resolves whether a driver belongs to PASSENGER or OUR_SERVICES.
+     * Resolves whether a driver belongs to PASSENGER, OUR_SERVICES, or BOTH.
      */
     public String resolveDriverTrack(Driver driver) {
         if (driver == null) return "OUR_SERVICES";
         String sType = driver.getServiceType() != null ? driver.getServiceType().trim().toUpperCase() : "";
+        if ("BOTH".equals(sType) || "ALL".equals(sType)) {
+            return "BOTH";
+        }
         if (sType.contains("PASSENGER") || sType.contains("CAB") || sType.contains("RIDE")) {
             return "PASSENGER";
         }
@@ -136,8 +179,11 @@ public class DriverEligibilityService {
             return "OUR_SERVICES";
         }
         String vStr = (driver.getVehicleType() != null ? driver.getVehicleType() : (driver.getVehicle() != null ? driver.getVehicle() : "")).toLowerCase().replaceAll("[^a-z0-9]", "");
-        if (vStr.contains("cab") || vStr.contains("biketaxi") || vStr.contains("autotaxi") || vStr.startsWith("pass") || vStr.equals("6") || vStr.equals("passbike") || vStr.equals("passauto")) {
+        if (vStr.contains("cab") || vStr.contains("sedan") || vStr.contains("hatchback") || vStr.contains("suv") || vStr.equals("6")) {
             return "PASSENGER";
+        }
+        if (vStr.contains("auto") || vStr.contains("rickshaw") || vStr.contains("3wheel") || vStr.contains("bike") || vStr.contains("scooter") || vStr.contains("2wheel")) {
+            return "BOTH";
         }
         return "OUR_SERVICES";
     }

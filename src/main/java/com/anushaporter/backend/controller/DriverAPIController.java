@@ -1513,6 +1513,9 @@ public class DriverAPIController {
                             || vClean.contains("hatchback") || vClean.contains("suv") || vClean.contains("biketaxi") || vClean.contains("autotaxi")
                             || vClean.startsWith("pass") || vClean.equals("6")) {
                         driver.setServiceType("PASSENGER");
+                    } else if (vClean.contains("auto") || vClean.contains("rickshaw") || vClean.contains("3wheel")
+                            || vClean.contains("bike") || vClean.contains("scooter") || vClean.contains("2wheel") || vClean.contains("motorcycle")) {
+                        driver.setServiceType("BOTH");
                     } else {
                         driver.setServiceType("OUR_SERVICES");
                     }
@@ -1956,9 +1959,7 @@ public class DriverAPIController {
                 })
                 .filter(o -> {
                     if (currentDriver == null || driverEligibilityService == null) return true;
-                    String orderTrack = driverEligibilityService.resolveOrderTrack(o);
-                    String orderCategory = driverEligibilityService.normalizeVehicleCategory(o.getServiceName(), orderTrack);
-                    return driverTrack.equalsIgnoreCase(orderTrack) && driverCategory.equalsIgnoreCase(orderCategory);
+                    return driverEligibilityService.isVehicleCompatible(currentDriver, o);
                 })
                 .filter(o -> {
                     // Distance filtering: if driver location and pickup coordinates are both known, filter strictly by maxRadius

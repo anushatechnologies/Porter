@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 @RequestMapping({
         "/api/vehicle-types",
         "/api/admin/vehicle-types",
+        "/api/admin/vehicles",
         "/api/driver/vehicles",
         "/api/drivers/vehicles",
         "/api/vehicles/types"
