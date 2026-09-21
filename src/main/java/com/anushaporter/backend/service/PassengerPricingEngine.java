@@ -31,6 +31,9 @@ public class PassengerPricingEngine {
     private final PassengerPricingVersionService versionService;
     private final MapsDirectionsProvider mapsDirectionsProvider;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.anushaporter.backend.repository.VehicleTypeRepository vehicleTypeRepository;
+
     public static String normalizeCategoryCode(String code) {
         if (code == null || code.isBlank()) return "SEDAN";
         String normalized = code.trim().toUpperCase();
@@ -52,7 +55,7 @@ public class PassengerPricingEngine {
 
         // 1. Validate Vehicle Category & Passenger Capacity
         PassengerVehicleCategory category = vehicleCategoryRepository.findByCategoryCode(categoryCode)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle category not found: " + categoryCode));
+                .orElseGet(() -> resolveFromVehicleTypes(categoryCode));
 
         int passengers = req.getPassengerCount() != null ? req.getPassengerCount() : 1;
         if (passengers > category.getPassengerCapacity()) {
@@ -387,5 +390,39 @@ public class PassengerPricingEngine {
                 .driverCommissionPercentage(new BigDecimal("20.00"))
                 .taxPercentage(new BigDecimal("5.00"))
                 .build();
+    }
+
+    private PassengerVehicleCategory resolveFromVehicleTypes(String categoryCode) {
+        if (vehicleTypeRepository != null && categoryCode != null && !categoryCode.isBlank()) {
+            String cleanCode = categoryCode.replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+            Optional<com.anushaporter.backend.model.VehicleType> opt = vehicleTypeRepository.findAll().stream()
+                    .filter(v -> {
+                        String id = (v.getId() != null ? v.getId() : "").replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+                        String type = (v.getType() != null ? v.getType() : "").replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+                        String name = (v.getName() != null ? v.getName() : "").replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+                        return cleanCode.equals(id) || cleanCode.equals(type) || cleanCode.equals(name) || name.contains(cleanCode) || type.contains(cleanCode);
+                    })
+                    .findFirst();
+            if (opt.isPresent()) {
+                var v = opt.get();
+                PassengerVehicleCategory cat = new PassengerVehicleCategory();
+                cat.setCategoryCode(categoryCode.toUpperCase());
+                cat.setDisplayName(v.getDisplayName() != null && !v.getDisplayName().isBlank() ? v.getDisplayName() : v.getName());
+                cat.setDescription(v.getDescription());
+                int capacity = v.getMaxPassengers() != null && v.getMaxPassengers() > 0 ? v.getMaxPassengers() : 4;
+                cat.setPassengerCapacity(capacity);
+                cat.setLuggageCapacity(v.getMaxLuggage() != null ? v.getMaxLuggage() : 2);
+                cat.setBaseFare(BigDecimal.valueOf(v.getBaseFare() != null ? v.getBaseFare() : 50.0));
+                cat.setPerKmRate(BigDecimal.valueOf(v.getPerKmRate() != null ? v.getPerKmRate() : 15.0));
+                cat.setMinimumFare(BigDecimal.valueOf(v.getMinFare() != null ? v.getMinFare() : (v.getBaseFare() != null ? v.getBaseFare() : 50.0)));
+                cat.setMinimumKm(BigDecimal.valueOf(v.getBaseKm() != null ? v.getBaseKm() : 1.0));
+                cat.setDriverAllowance(BigDecimal.valueOf(v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0));
+                cat.setImageUrl(v.getImageUrl());
+                cat.setDisplayOrder(v.getPriority() != null ? v.getPriority() : 1);
+                cat.setActive(true);
+                return vehicleCategoryRepository.save(cat);
+            }
+        }
+        throw new IllegalArgumentException("Vehicle category not found: " + categoryCode);
     }
 }

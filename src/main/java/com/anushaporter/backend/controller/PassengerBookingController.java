@@ -12,6 +12,8 @@ import com.anushaporter.backend.repository.PassengerBookingRepository;
 import com.anushaporter.backend.repository.PassengerServiceRepository;
 import com.anushaporter.backend.repository.PassengerVehicleCategoryRepository;
 import com.anushaporter.backend.repository.RentalPackageRepository;
+import com.anushaporter.backend.model.VehicleType;
+import com.anushaporter.backend.repository.VehicleTypeRepository;
 import com.anushaporter.backend.service.PassengerBookingService;
 import com.anushaporter.backend.service.PassengerPricingEngine;
 import com.anushaporter.backend.util.JwtUtil;
@@ -37,9 +39,11 @@ public class PassengerBookingController {
     private final RentalPackageRepository rentalPackageRepository;
     private final JwtUtil jwtUtil;
     private final AppUserRepository appUserRepository;
+    private final VehicleTypeRepository vehicleTypeRepository;
 
     @PostMapping({"/fare-estimate", "/fares/estimate"})
     public ResponseEntity<PassengerFareEstimateResponse> getFareEstimate(@RequestBody PassengerFareEstimateRequest request) {
+        ensurePassengerCategoriesSynced();
         PassengerFareEstimateResponse response = pricingEngine.calculateFare(request);
         response.setSuccess(true);
 
@@ -263,6 +267,7 @@ public class PassengerBookingController {
 
     @GetMapping({"/categories", "/vehicles"})
     public ResponseEntity<Map<String, Object>> getVehicleCategories() {
+        ensurePassengerCategoriesSynced();
         List<PassengerVehicleCategory> categories = vehicleCategoryRepository.findByActiveTrueOrderByDisplayOrderAsc();
         List<Map<String, Object>> data = categories.stream().map(c -> {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -543,5 +548,43 @@ public class PassengerBookingController {
         if (customerId != null) request.setCustomerId(customerId);
         if (customerName != null) request.setCustomerName(customerName);
         if (email != null) request.setCustomerEmail(email);
+    }
+
+    private void ensurePassengerCategoriesSynced() {
+        if (vehicleTypeRepository != null) {
+            try {
+                List<VehicleType> passengerTypes = vehicleTypeRepository.findAll().stream()
+                        .filter(vt -> {
+                            if (!"active".equalsIgnoreCase(vt.getStatus())) return false;
+                            String sType = vt.getServiceType() != null ? vt.getServiceType().toUpperCase() : "";
+                            String t = (vt.getType() != null ? vt.getType() : "").toLowerCase();
+                            String n = (vt.getName() != null ? vt.getName() : "").toLowerCase();
+                            return sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB")
+                                    || t.contains("cab") || t.contains("taxi") || n.contains("cab") || n.contains("taxi") || "6".equals(vt.getId());
+                        })
+                        .toList();
+                for (VehicleType vt : passengerTypes) {
+                    String code = (vt.getType() != null && !vt.getType().isBlank() ? vt.getType() : vt.getId()).toUpperCase();
+                    if (vehicleCategoryRepository.findByCategoryCode(code).isEmpty()) {
+                        PassengerVehicleCategory cat = new PassengerVehicleCategory();
+                        cat.setCategoryCode(code);
+                        cat.setDisplayName(vt.getDisplayName() != null && !vt.getDisplayName().isBlank() ? vt.getDisplayName() : vt.getName());
+                        cat.setDescription(vt.getDescription());
+                        int capacity = vt.getMaxPassengers() != null && vt.getMaxPassengers() > 0 ? vt.getMaxPassengers() : 4;
+                        cat.setPassengerCapacity(capacity);
+                        cat.setLuggageCapacity(vt.getMaxLuggage() != null ? vt.getMaxLuggage() : 2);
+                        cat.setBaseFare(BigDecimal.valueOf(vt.getBaseFare() != null ? vt.getBaseFare() : 50.0));
+                        cat.setPerKmRate(BigDecimal.valueOf(vt.getPerKmRate() != null ? vt.getPerKmRate() : 15.0));
+                        cat.setMinimumFare(BigDecimal.valueOf(vt.getMinFare() != null ? vt.getMinFare() : (vt.getBaseFare() != null ? vt.getBaseFare() : 50.0)));
+                        cat.setMinimumKm(BigDecimal.valueOf(vt.getBaseKm() != null ? vt.getBaseKm() : 1.0));
+                        cat.setDriverAllowance(BigDecimal.valueOf(vt.getDriverAllowance() != null ? vt.getDriverAllowance() : 0.0));
+                        cat.setImageUrl(vt.getImageUrl());
+                        cat.setDisplayOrder(vt.getPriority() != null ? vt.getPriority() : 1);
+                        cat.setActive(true);
+                        vehicleCategoryRepository.save(cat);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
     }
 }

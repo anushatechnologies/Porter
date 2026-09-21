@@ -65,6 +65,12 @@ public class VehicleTypeController {
                 if (changed) {
                     vehicleTypeRepository.save(vt);
                 }
+
+                // Auto-sync passenger vehicles into passenger_vehicle_categories on startup
+                String sType = vt.getServiceType() != null ? vt.getServiceType().toUpperCase() : "";
+                if (sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB") || typeKey.contains("cab") || typeKey.contains("taxi")) {
+                    syncToPassengerCategory(vt);
+                }
             });
         } catch (Exception ignored) {}
     }
@@ -316,11 +322,17 @@ public class VehicleTypeController {
         if (passengerVehicleCategoryRepository == null || v == null) return;
         try {
             String sType = v.getServiceType() != null ? v.getServiceType().toUpperCase() : "";
-            boolean isPassenger = sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB");
+            String t = (v.getType() != null ? v.getType() : "").toLowerCase();
+            String n = (v.getName() != null ? v.getName() : "").toLowerCase();
+            boolean isPassenger = sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB")
+                    || t.contains("cab") || t.contains("taxi") || n.contains("cab") || n.contains("taxi") || "6".equals(v.getId());
             String catCode = (v.getType() != null && !v.getType().isBlank() ? v.getType() : v.getId()).toUpperCase();
 
             Optional<com.anushaporter.backend.model.PassengerVehicleCategory> existingOpt =
                     passengerVehicleCategoryRepository.findByCategoryCode(catCode);
+            if (existingOpt.isEmpty() && v.getName() != null && !v.getName().isBlank()) {
+                existingOpt = passengerVehicleCategoryRepository.findByCategoryCode(v.getName().trim().toUpperCase());
+            }
 
             if (isPassenger) {
                 com.anushaporter.backend.model.PassengerVehicleCategory cat = existingOpt.orElse(new com.anushaporter.backend.model.PassengerVehicleCategory());

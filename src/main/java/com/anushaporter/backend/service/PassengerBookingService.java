@@ -158,6 +158,7 @@ public class PassengerBookingService {
                 order.setReceiverPhone(savedBooking.getCustomerPhone());
                 order.setPaymentMethod(savedBooking.getPaymentMethod() != null ? savedBooking.getPaymentMethod() : "CASH");
                 order.setServiceName(categoryCode);
+                order.setVehicleType(categoryCode);
                 order.setServiceType("PASSENGER");
                 order.setPassengerCount(passengers);
                 order.setPickupAddress(savedBooking.getPickupAddress());
