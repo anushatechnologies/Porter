@@ -373,10 +373,21 @@ public class DriverAPIController {
                 }
             } else if (resolvedV != null) {
                 String vClean = resolvedV.toLowerCase().replaceAll("[^a-z0-9]", "");
-                if (vClean.contains("cab") || vClean.contains("car") || vClean.contains("taxi") || vClean.contains("biketaxi") || vClean.contains("autotaxi") || vClean.startsWith("pass")) {
+                boolean isDedicatedFreight = vClean.contains("tataace") || vClean.contains("ace") || vClean.contains("pickup")
+                        || vClean.contains("8ft") || vClean.contains("407") || vClean.contains("truck") || vClean.contains("1109") || vClean.contains("lpt");
+                boolean isDedicatedPassenger = vClean.contains("cab") || vClean.contains("car") || vClean.contains("taxi")
+                        || vClean.contains("sedan") || vClean.contains("hatchback") || vClean.contains("suv") || vClean.contains("biketaxi") || vClean.contains("autotaxi") || vClean.startsWith("pass");
+
+                if (isDedicatedFreight) {
+                    driver.setServiceType("OUR_SERVICES");
+                } else if (isDedicatedPassenger) {
                     driver.setServiceType("PASSENGER");
                 } else {
-                    driver.setServiceType("OUR_SERVICES");
+                    // For dual-track or ambiguous vehicle names (e.g. "Auto", "Bike", "Scooter"),
+                    // preserve driver's existing serviceType if set; otherwise default to OUR_SERVICES
+                    if (driver.getServiceType() == null || driver.getServiceType().isBlank()) {
+                        driver.setServiceType("OUR_SERVICES");
+                    }
                 }
             }
 

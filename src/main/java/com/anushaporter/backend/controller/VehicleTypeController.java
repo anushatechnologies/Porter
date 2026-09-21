@@ -31,7 +31,11 @@ import java.util.stream.Collectors;
         "/api/admin/vehicles",
         "/api/driver/vehicles",
         "/api/drivers/vehicles",
-        "/api/vehicles/types"
+        "/api/driver/vehicle-types",
+        "/api/drivers/vehicle-types",
+        "/api/driver/vehicle-options",
+        "/api/vehicles/types",
+        "/api/vehicle/types"
 })
 public class VehicleTypeController {
 
