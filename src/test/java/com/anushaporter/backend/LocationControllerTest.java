@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import org.mockito.Mockito;
 
+import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -94,4 +95,50 @@ public class LocationControllerTest {
                 .andExpect(jsonPath("$.data.lat").isNumber())
                 .andExpect(jsonPath("$.data.lng").isNumber());
     }
+
+    @Test
+    public void testDynamicLocationAndDistinctCoordinates() throws Exception {
+        // Autocomplete for Yashoda Hospitals Somajiguda
+        var mvcResult = mockMvc.perform(get("/api/location/autocomplete").param("input", "Yashoda Hospitals Somajiguda"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.predictions").isArray())
+                .andReturn();
+
+        String responseJson = mvcResult.getResponse().getContentAsString();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(responseJson);
+        String placeId = root.path("predictions").get(0).path("placeId").asText();
+
+        // Details must resolve to Somajiguda/Yashoda coordinates (~17.424-17.427, ~78.455), NOT the Madhapur default (17.4486, 78.3808)
+        mockMvc.perform(get("/api/location/details").param("placeId", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.lat", closeTo(17.425, 0.02)))
+                .andExpect(jsonPath("$.data.lng", closeTo(78.455, 0.02)))
+                .andExpect(jsonPath("$.data.lat", not(17.4486)));
+
+        // Test Raidurgam distinct coordinates (~17.4197, ~78.3749)
+        var raidurgamResult = mockMvc.perform(get("/api/location/autocomplete").param("input", "Raidurgam Police Station"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String raidurgamPlaceId = mapper.readTree(raidurgamResult.getResponse().getContentAsString())
+                .path("predictions").get(0).path("placeId").asText();
+
+        mockMvc.perform(get("/api/location/details").param("placeId", raidurgamPlaceId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.lat", closeTo(17.419, 0.02)))
+                .andExpect(jsonPath("$.data.lng", closeTo(78.375, 0.02)));
+    }
+
+    @Test
+    public void testDirectCoordinatePlaceId() throws Exception {
+        mockMvc.perform(get("/api/location/details").param("placeId", "coord_17.4325_78.4072"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.lat").value(17.4325))
+                .andExpect(jsonPath("$.data.lng").value(78.4072));
+    }
 }
+

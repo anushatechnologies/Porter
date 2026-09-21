@@ -323,3 +323,50 @@ export const updateDriverProfile = async (payload: any) => {
   * **Topic:** `/topic/driver/{driverId}/offers`
   * **Offer Payload:** Contains `bookingId`, `pickupAddress`, `dropAddress`, `fare`, and `timerSeconds`.
 
+---
+
+## 📌 Section 6: Customer App Place-Picker & Real Coordinates Contract
+
+### 6.1 The 5.3 km Fixed Distance Issue & The Fix
+* **The Root Cause:** In earlier builds, selecting places would default coordinates to Madhapur `(17.4486, 78.3808)`. Any booking created from Raidurgam / Gachibowli `(17.4197, 78.3749)` to `(17.4486, 78.3808)` computed a fixed road driving distance of **5.3 km**.
+* **The Backend Resolution:** The backend now features:
+  1. Dynamic OpenStreetMap (Nominatim) search and geocoding fallback (no API key required).
+  2. In-memory coordinate cache so `placeId` lookup immediately returns real `lat` and `lng`.
+  3. Real Hyderabad zone coordinates (Somajiguda, Banjara Hills, Raidurgam, Kukatpally, Secunderabad, etc.) preventing collapse to a single default point.
+  4. Direct coordinate parsing: `coord_{lat}_{lng}` is supported as a `placeId`.
+
+### 6.2 Frontend Best Practices for Customer App Place Picker
+1. **Search Places:**
+   * Call `GET /api/location/autocomplete?input={query}`
+   * Returns a list of predictions with `placeId` (e.g., `osm_123456`, Google `ChIJ...`, or landmark ID).
+2. **Fetch Exact Coordinates:**
+   * When the customer taps a suggestion, call `GET /api/location/details?placeId={placeId}`
+   * Response:
+     ```json
+     {
+       "success": true,
+       "data": {
+         "placeId": "osm_123456",
+         "name": "Yashoda Hospitals",
+         "formattedAddress": "Yashoda Hospitals, Raj Bhavan Road, Somajiguda, Hyderabad",
+         "lat": 17.4265,
+         "lng": 78.4554
+       }
+     }
+     ```
+3. **Send Real Lat/Lng in Booking:**
+   * When calling `POST /api/passenger/book`, pass the exact `lat` and `lng` received:
+     ```json
+     {
+       "pickupAddress": "Raidurgam Police Station, Gachibowli",
+       "pickupLat": 17.4197,
+       "pickupLng": 78.3749,
+       "dropAddress": "Yashoda Hospitals, Somajiguda",
+       "dropLat": 17.4265,
+       "dropLng": 78.4554,
+       "vehicleCategoryCode": "CAB",
+       "serviceType": "ONE_WAY"
+     }
+     ```
+   * *If the Customer App already uses client-side Google Places / Maps SDK*, it can send the client-geocoded `lat` and `lng` directly into `dropLat` and `dropLng`.
+
