@@ -1494,13 +1494,23 @@ public class DriverAPIController {
                 driver.setServiceType("OUR_SERVICES");
             }
         } else {
-            // Check vehicleId from vehicleTypeRepository if available
-            if (vehicleId != null && !vehicleId.isBlank() && vehicleTypeRepository != null) {
-                VehicleType vt = vehicleTypeRepository.findById(vehicleId).orElse(null);
+            // Check vehicleId or resolvedVehicle from vehicleTypeRepository if available
+            if (vehicleTypeRepository != null) {
+                VehicleType vt = null;
+                if (vehicleId != null && !vehicleId.isBlank()) {
+                    vt = vehicleTypeRepository.findById(vehicleId).orElse(null);
+                }
+                if (vt == null && resolvedVehicle != null && !resolvedVehicle.isBlank()) {
+                    vt = vehicleTypeRepository.findAll().stream()
+                            .filter(v -> resolvedVehicle.equalsIgnoreCase(v.getName()) || resolvedVehicle.equalsIgnoreCase(v.getType()) || resolvedVehicle.equalsIgnoreCase(v.getId()))
+                            .findFirst().orElse(null);
+                }
                 if (vt != null && vt.getServiceType() != null && !vt.getServiceType().isBlank()) {
                     String vtService = vt.getServiceType().trim().toUpperCase();
                     if (vtService.contains("PASSENGER")) {
                         driver.setServiceType("PASSENGER");
+                    } else if (vtService.contains("BOTH")) {
+                        driver.setServiceType("BOTH");
                     } else {
                         driver.setServiceType("OUR_SERVICES");
                     }

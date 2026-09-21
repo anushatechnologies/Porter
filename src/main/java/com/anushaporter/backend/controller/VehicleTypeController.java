@@ -38,95 +38,31 @@ public class VehicleTypeController {
     @Autowired
     private VehicleTypeRepository vehicleTypeRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PassengerVehicleCategoryRepository passengerVehicleCategoryRepository;
+
     @PostConstruct
-    public void seedDefaultVehicleTypes() {
-        if (vehicleTypeRepository.count() == 0) {
-            List<VehicleType> defaults = Arrays.asList(
-                    // ── Default Fleets ──────────────────────────────────────────────
-                    build("1", "2 Wheeler", "two_wheeler", "Best for goods delivery & parcel",
-                            "Load: Up to 20kg", 20, "Ideal for documents, food parcels",
-                            "bike", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/bike.png",
-                            40.00, 1.0, 12.00, "OUR_SERVICES", 1),
-
-                    build("2", "3 Wheeler / Auto", "auto_rickshaw", "Best for cargo load & shifting",
-                            "Load: Up to 500kg", 500, "5ft x 3.5ft x 3.5ft",
-                            "rickshaw", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/auto.png",
-                            120.00, 1.0, 20.00, "OUR_SERVICES", 2),
-
-                    build("3", "Tata Ace", "tata_ace", "Best for large boxes and business deliveries",
-                            "Load: Up to 750kg", 750, "7ft x 4ft x 5ft",
-                            "truck-delivery", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/tata_ace.png",
-                            250.00, 1.0, 30.00, "OUR_SERVICES", 3),
-
-                    build("4", "Pickup 8ft", "pickup_8ft", "Heavy duty transport for bulky goods",
-                            "Load: Up to 1200kg", 1200, "8ft x 4.8ft x 5ft",
-                            "pickup", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/pickup.png",
-                            350.00, 1.0, 35.00, "OUR_SERVICES", 4),
-
-                    build("5", "Tata 407", "tata_407", "Commercial heavy goods and shifting transport",
-                            "Load: Up to 2500kg", 2500, "10ft x 6ft x 6ft",
-                            "truck", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/truck.png",
-                            600.00, 1.0, 50.00, "OUR_SERVICES", 5),
-
-                    build("6", "Cab", "cab", "Comfortable cab for city & outstation passenger rides",
-                            "Load: 4 Passengers", 400, "Compact Sedan / Hatchback / SUV",
-                            "car", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png",
-                            150.00, 2.0, 15.00, "PASSENGER", 6),
-
-                    build("pass_bike", "Bike Taxi (Passenger)", "bike_taxi", "Quick & affordable 1-passenger bike ride",
-                            "1 Passenger", 80, "1 Helmet Provided",
-                            "bike", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/bike.png",
-                            30.00, 1.0, 10.00, "PASSENGER", 7),
-
-                    build("pass_auto", "Auto Taxi (Passenger)", "auto_taxi", "Convenient city auto ride for up to 3 passengers",
-                            "3 Passengers", 250, "Up to 3 Passengers",
-                            "rickshaw", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/auto.png",
-                            50.00, 1.5, 15.00, "PASSENGER", 8)
-            );
-            vehicleTypeRepository.saveAll(defaults);
-            System.out.println("[VehicleType] Seeded default vehicle types for Our Services & Passenger Fleets.");
-        } else {
-            // Seed 6 (Cab) if missing
-            if (vehicleTypeRepository.findById("6").isEmpty() && vehicleTypeRepository.findByType("cab").isEmpty()) {
-                vehicleTypeRepository.save(build("6", "Cab", "cab",
-                        "Comfortable cab for city & outstation passenger rides", "Load: 4 Passengers", 400, "Compact Sedan / Hatchback / SUV",
-                        "car", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png", 150.00, 2.0, 15.00, "PASSENGER", 6));
-            }
-
-            // Seed pass_bike (Bike Taxi) if missing
-            if (vehicleTypeRepository.findById("pass_bike").isEmpty() && vehicleTypeRepository.findByType("bike_taxi").isEmpty()) {
-                vehicleTypeRepository.save(build("pass_bike", "Bike Taxi (Passenger)", "bike_taxi",
-                        "Quick & affordable 1-passenger bike ride", "1 Passenger", 80, "1 Helmet Provided",
-                        "bike", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/bike.png", 30.00, 1.0, 10.00, "PASSENGER", 7));
-            }
-
-            // Seed pass_auto (Auto Taxi) if missing
-            if (vehicleTypeRepository.findById("pass_auto").isEmpty() && vehicleTypeRepository.findByType("auto_taxi").isEmpty()) {
-                vehicleTypeRepository.save(build("pass_auto", "Auto Taxi (Passenger)", "auto_taxi",
-                        "Convenient city auto ride for up to 3 passengers", "3 Passengers", 250, "Up to 3 Passengers",
-                        "rickshaw", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/auto.png", 50.00, 1.5, 15.00, "PASSENGER", 8));
-            }
-
-            // Heal legacy S3 image URLs
-            try {
-                vehicleTypeRepository.findAll().forEach(vt -> {
-                    boolean changed = false;
-                    if (vt.getImageUrl() != null && vt.getImageUrl().contains("poteranusha.s3.amazonaws.com")) {
-                        vt.setImageUrl(vt.getImageUrl().replace("poteranusha.s3.amazonaws.com", "poteranusha.s3.ap-south-2.amazonaws.com"));
-                        changed = true;
-                    }
-                    String typeKey = (vt.getType() != null ? vt.getType() : "").toLowerCase();
-                    String idKey = (vt.getId() != null ? vt.getId() : "").trim();
-                    if ((typeKey.contains("cab") || "6".equals(idKey)) && (vt.getImageUrl() == null || vt.getImageUrl().isBlank() || vt.getImageUrl().contains("/vehicles/cab.png"))) {
-                        vt.setImageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png");
-                        changed = true;
-                    }
-                    if (changed) {
-                        vehicleTypeRepository.save(vt);
-                    }
-                });
-            } catch (Exception ignored) {}
-        }
+    public void initVehicleTypes() {
+        // Default dummy seeding disabled: only admin-created vehicles will show.
+        // Heal legacy S3 image URLs if existing records are present.
+        try {
+            vehicleTypeRepository.findAll().forEach(vt -> {
+                boolean changed = false;
+                if (vt.getImageUrl() != null && vt.getImageUrl().contains("poteranusha.s3.amazonaws.com")) {
+                    vt.setImageUrl(vt.getImageUrl().replace("poteranusha.s3.amazonaws.com", "poteranusha.s3.ap-south-2.amazonaws.com"));
+                    changed = true;
+                }
+                String typeKey = (vt.getType() != null ? vt.getType() : "").toLowerCase();
+                String idKey = (vt.getId() != null ? vt.getId() : "").trim();
+                if ((typeKey.contains("cab") || "6".equals(idKey)) && (vt.getImageUrl() == null || vt.getImageUrl().isBlank() || vt.getImageUrl().contains("/vehicles/cab.png"))) {
+                    vt.setImageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png");
+                    changed = true;
+                }
+                if (changed) {
+                    vehicleTypeRepository.save(vt);
+                }
+            });
+        } catch (Exception ignored) {}
     }
 
     private VehicleType build(String id, String name, String type, String description,
@@ -248,6 +184,7 @@ public class VehicleTypeController {
 
             populateVehicleTypeFields(v, body);
             VehicleType saved = vehicleTypeRepository.save(v);
+            syncToPassengerCategory(saved);
 
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("success", true);
@@ -285,6 +222,7 @@ public class VehicleTypeController {
         VehicleType v = opt.get();
         populateVehicleTypeFields(v, body);
         VehicleType saved = vehicleTypeRepository.save(v);
+        syncToPassengerCategory(saved);
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("success", true);
@@ -330,6 +268,7 @@ public class VehicleTypeController {
             v.setStatus("active".equalsIgnoreCase(v.getStatus()) ? "inactive" : "active");
         }
         vehicleTypeRepository.save(v);
+        syncToPassengerCategory(v);
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -360,12 +299,50 @@ public class VehicleTypeController {
         VehicleType v = opt.get();
         v.setStatus("inactive");
         vehicleTypeRepository.save(v);
+        syncToPassengerCategory(v);
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Vehicle category disabled (soft-deleted)",
                 "id", v.getId()
         ));
+    }
+
+    private void syncToPassengerCategory(VehicleType v) {
+        if (passengerVehicleCategoryRepository == null || v == null) return;
+        try {
+            String sType = v.getServiceType() != null ? v.getServiceType().toUpperCase() : "";
+            boolean isPassenger = sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB");
+            String catCode = (v.getType() != null && !v.getType().isBlank() ? v.getType() : v.getId()).toUpperCase();
+
+            Optional<com.anushaporter.backend.model.PassengerVehicleCategory> existingOpt =
+                    passengerVehicleCategoryRepository.findByCategoryCode(catCode);
+
+            if (isPassenger) {
+                com.anushaporter.backend.model.PassengerVehicleCategory cat = existingOpt.orElse(new com.anushaporter.backend.model.PassengerVehicleCategory());
+                cat.setCategoryCode(catCode);
+                cat.setDisplayName(v.getDisplayName() != null && !v.getDisplayName().isBlank() ? v.getDisplayName() : v.getName());
+                cat.setDescription(v.getDescription());
+                int capacity = v.getMaxPassengers() != null && v.getMaxPassengers() > 0
+                        ? v.getMaxPassengers()
+                        : (catCode.contains("BIKE") ? 1 : (catCode.contains("AUTO") ? 3 : 4));
+                cat.setPassengerCapacity(capacity);
+                cat.setLuggageCapacity(v.getMaxLuggage() != null ? v.getMaxLuggage() : 2);
+                cat.setBaseFare(java.math.BigDecimal.valueOf(v.getBaseFare() != null ? v.getBaseFare() : 50.0));
+                cat.setPerKmRate(java.math.BigDecimal.valueOf(v.getPerKmRate() != null ? v.getPerKmRate() : 15.0));
+                cat.setMinimumFare(java.math.BigDecimal.valueOf(v.getMinFare() != null ? v.getMinFare() : (v.getBaseFare() != null ? v.getBaseFare() : 50.0)));
+                cat.setMinimumKm(java.math.BigDecimal.valueOf(v.getBaseKm() != null ? v.getBaseKm() : 1.0));
+                cat.setDriverAllowance(java.math.BigDecimal.valueOf(v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0));
+                cat.setImageUrl(v.getImageUrl());
+                cat.setDisplayOrder(v.getPriority() != null ? v.getPriority() : 1);
+                cat.setActive("active".equalsIgnoreCase(v.getStatus()));
+                passengerVehicleCategoryRepository.save(cat);
+            } else if (existingOpt.isPresent()) {
+                var cat = existingOpt.get();
+                cat.setActive(false);
+                passengerVehicleCategoryRepository.save(cat);
+            }
+        } catch (Exception ignored) {}
     }
 
     private void populateVehicleTypeFields(VehicleType v, Map<String, Object> body) {

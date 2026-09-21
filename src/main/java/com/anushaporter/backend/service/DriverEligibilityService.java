@@ -104,12 +104,24 @@ public class DriverEligibilityService {
                 : (driver.getVehicle() != null ? driver.getVehicle() : "");
 
         String dClean = driverVehicleRaw.toLowerCase().replaceAll("[^a-z0-9]", "");
+        String oClean = (orderVehicleRaw != null ? orderVehicleRaw : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+        String driverTrack = resolveDriverTrack(driver);
 
         if ("PASSENGER".equalsIgnoreCase(orderTrack)) {
+            // A driver explicitly configured for OUR_SERVICES only must NEVER receive PASSENGER orders
+            if ("OUR_SERVICES".equalsIgnoreCase(driverTrack)) {
+                return false;
+            }
+
             // Freight trucks can NEVER take passenger orders
             if (dClean.contains("tataace") || dClean.contains("ace") || dClean.contains("pickup") || dClean.contains("8ft")
                     || dClean.contains("407") || dClean.contains("tata407") || dClean.contains("truck") || dClean.contains("1109") || dClean.contains("lpt")) {
                 return false;
+            }
+
+            // Direct exact match between driver vehicle and order vehicle
+            if (!dClean.isEmpty() && !oClean.isEmpty() && (dClean.equals(oClean) || driverVehicleRaw.equalsIgnoreCase(orderVehicleRaw))) {
+                return true;
             }
 
             String reqCategory = normalizeVehicleCategory(orderVehicleRaw, "PASSENGER");
@@ -128,19 +140,35 @@ public class DriverEligibilityService {
             return false;
         } else {
             // OUR_SERVICES (Goods & Delivery)
+            // A dedicated passenger driver must NEVER receive goods delivery
+            if ("PASSENGER".equalsIgnoreCase(driverTrack)) {
+                return false;
+            }
+
             // Dedicated passenger cabs cannot take goods delivery
             if (dClean.contains("cab") || dClean.contains("car") || dClean.contains("taxi") || dClean.contains("sedan")
                     || dClean.contains("hatchback") || dClean.contains("suv") || dClean.equals("6")) {
                 return false;
             }
 
+            // Direct exact match between driver vehicle and order vehicle
+            if (!dClean.isEmpty() && !oClean.isEmpty() && (dClean.equals(oClean) || driverVehicleRaw.equalsIgnoreCase(orderVehicleRaw))) {
+                return true;
+            }
+
             String reqCategory = normalizeVehicleCategory(orderVehicleRaw, "OUR_SERVICES");
             String driverCategory = normalizeVehicleCategory(driverVehicleRaw, "OUR_SERVICES");
 
-            if ("UNKNOWN".equals(reqCategory) || "UNKNOWN".equals(driverCategory)) {
-                return false;
+            if (!"UNKNOWN".equals(reqCategory) && !"UNKNOWN".equals(driverCategory) && reqCategory.equals(driverCategory)) {
+                return true;
             }
-            return reqCategory.equals(driverCategory);
+
+            // Substring match for custom vehicles (e.g. "Tata Intra V30" vs "tata_intra")
+            if (!dClean.isEmpty() && !oClean.isEmpty() && (dClean.contains(oClean) || oClean.contains(dClean))) {
+                return true;
+            }
+
+            return false;
         }
     }
 

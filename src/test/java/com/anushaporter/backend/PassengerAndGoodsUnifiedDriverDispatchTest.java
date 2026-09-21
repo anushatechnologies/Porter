@@ -71,6 +71,9 @@ public class PassengerAndGoodsUnifiedDriverDispatchTest {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private VehicleTypeRepository vehicleTypeRepository;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -82,6 +85,17 @@ public class PassengerAndGoodsUnifiedDriverDispatchTest {
         orderRepository.deleteAll();
         driverRepository.deleteAll();
         appUserRepository.deleteAll();
+        vehicleTypeRepository.deleteAll();
+
+        VehicleType v1 = new VehicleType();
+        v1.setId("1"); v1.setName("2 Wheeler"); v1.setType("two_wheeler"); v1.setServiceType("OUR_SERVICES"); v1.setStatus("active");
+        VehicleType v2 = new VehicleType();
+        v2.setId("2"); v2.setName("3 Wheeler / Auto"); v2.setType("auto_rickshaw"); v2.setServiceType("OUR_SERVICES"); v2.setStatus("active");
+        VehicleType v3 = new VehicleType();
+        v3.setId("3"); v3.setName("Tata Ace"); v3.setType("tata_ace"); v3.setServiceType("OUR_SERVICES"); v3.setStatus("active");
+        VehicleType v6 = new VehicleType();
+        v6.setId("6"); v6.setName("Cab"); v6.setType("cab"); v6.setServiceType("PASSENGER"); v6.setStatus("active");
+        vehicleTypeRepository.saveAll(List.of(v1, v2, v3, v6));
 
         if (autoAssignmentService != null) {
             autoAssignmentService.setTierDurationSeconds(30);

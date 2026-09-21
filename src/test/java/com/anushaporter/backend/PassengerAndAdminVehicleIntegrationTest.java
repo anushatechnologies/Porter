@@ -69,6 +69,9 @@ public class PassengerAndAdminVehicleIntegrationTest {
     private PassengerVehicleCategoryRepository passengerVehicleCategoryRepository;
 
     @Autowired
+    private VehicleTypeRepository vehicleTypeRepository;
+
+    @Autowired
     private JwtUtil jwtUtil;
 
     private MockMvc mockMvc;
@@ -82,6 +85,16 @@ public class PassengerAndAdminVehicleIntegrationTest {
         driverRepository.deleteAll();
         appUserRepository.deleteAll();
         autoAssignmentService.setTierDurationSeconds(1);
+
+        if (vehicleTypeRepository.count() == 0) {
+            VehicleType v = new VehicleType();
+            v.setId("1");
+            v.setName("2 Wheeler");
+            v.setType("two_wheeler");
+            v.setStatus("active");
+            v.setServiceType("OUR_SERVICES");
+            vehicleTypeRepository.save(v);
+        }
 
         // Ensure category "AUTO" exists in passenger vehicle categories
         if (passengerVehicleCategoryRepository.findByCategoryCode("AUTO").isEmpty()) {

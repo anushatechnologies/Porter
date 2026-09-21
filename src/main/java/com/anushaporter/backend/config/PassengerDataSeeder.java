@@ -87,149 +87,21 @@ public class PassengerDataSeeder implements CommandLineRunner {
     }
 
     private void seedVehicleCategories() {
-        if (categoryRepository.findByCategoryCode("BIKE").isEmpty()) {
-            categoryRepository.save(PassengerVehicleCategory.builder()
-                    .categoryCode("BIKE")
-                    .displayName("Bike")
-                    .description("Affordable & quick motorcycle ride (Helmet provided)")
-                    .passengerCapacity(1)
-                    .luggageCapacity(1)
-                    .baseFare(new BigDecimal("20.00"))
-                    .perKmRate(new BigDecimal("8.00"))
-                    .perHourRate(new BigDecimal("60.00"))
-                    .minimumFare(new BigDecimal("20.00"))
-                    .minimumKm(new BigDecimal("1.50"))
-                    .driverAllowance(BigDecimal.ZERO)
-                    .displayOrder(0)
-                    .active(true)
-                    .imageUrl("https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=400&q=80")
-                    .build());
-            log.info("[PassengerDataSeeder] Seeded BIKE vehicle category.");
-        }
-
-        if (categoryRepository.findByCategoryCode("AUTO").isEmpty()) {
-            categoryRepository.save(PassengerVehicleCategory.builder()
-                    .categoryCode("AUTO")
-                    .displayName("Auto")
-                    .description("Affordable 3-wheeler auto rickshaw")
-                    .passengerCapacity(3)
-                    .luggageCapacity(2)
-                    .baseFare(new BigDecimal("30.00"))
-                    .perKmRate(new BigDecimal("14.00"))
-                    .perHourRate(new BigDecimal("100.00"))
-                    .minimumFare(new BigDecimal("30.00"))
-                    .minimumKm(new BigDecimal("2.00"))
-                    .driverAllowance(BigDecimal.ZERO)
-                    .displayOrder(1)
-                    .active(true)
-                    .imageUrl("https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400&q=80")
-                    .build());
-        }
-
-        if (categoryRepository.findByCategoryCode("HATCHBACK").isEmpty()) {
-            categoryRepository.saveAll(List.of(
-                    PassengerVehicleCategory.builder()
-                            .categoryCode("HATCHBACK")
-                            .displayName("Mini / Hatchback")
-                            .description("Compact & economical (Alto, WagonR, Swift)")
-                            .passengerCapacity(4)
-                            .luggageCapacity(2)
-                            .baseFare(new BigDecimal("250.00"))
-                            .perKmRate(new BigDecimal("12.00"))
-                            .perHourRate(new BigDecimal("120.00"))
-                            .minimumFare(new BigDecimal("250.00"))
-                            .minimumKm(new BigDecimal("10.00"))
-                            .driverAllowance(BigDecimal.ZERO)
-                            .displayOrder(2)
-                            .active(true)
-                            .imageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png")
-                            .build(),
-                    PassengerVehicleCategory.builder()
-                            .categoryCode("SEDAN")
-                            .displayName("Sedan")
-                            .description("Comfortable & spacious (Dzire, Etios, Amaze)")
-                            .passengerCapacity(4)
-                            .luggageCapacity(3)
-                            .baseFare(new BigDecimal("300.00"))
-                            .perKmRate(new BigDecimal("14.00"))
-                            .perHourRate(new BigDecimal("140.00"))
-                            .minimumFare(new BigDecimal("300.00"))
-                            .minimumKm(new BigDecimal("10.00"))
-                            .driverAllowance(new BigDecimal("100.00"))
-                            .displayOrder(3)
-                            .active(true)
-                            .imageUrl("https://images.unsplash.com/photo-1550355291-bbee04a92027?w=400&q=80")
-                            .build(),
-                    PassengerVehicleCategory.builder()
-                            .categoryCode("SUV")
-                            .displayName("SUV")
-                            .description("Spacious family travel (Ertiga, Carens, Xylo)")
-                            .passengerCapacity(6)
-                            .luggageCapacity(4)
-                            .baseFare(new BigDecimal("450.00"))
-                            .perKmRate(new BigDecimal("18.00"))
-                            .perHourRate(new BigDecimal("180.00"))
-                            .minimumFare(new BigDecimal("450.00"))
-                            .minimumKm(new BigDecimal("10.00"))
-                            .driverAllowance(new BigDecimal("150.00"))
-                            .displayOrder(4)
-                            .active(true)
-                            .imageUrl("https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=400&q=80")
-                            .build(),
-                    PassengerVehicleCategory.builder()
-                            .categoryCode("PREMIUM_SUV")
-                            .displayName("Premium SUV")
-                            .description("Executive comfort (Innova, Crysta)")
-                            .passengerCapacity(7)
-                            .luggageCapacity(4)
-                            .baseFare(new BigDecimal("600.00"))
-                            .perKmRate(new BigDecimal("22.00"))
-                            .perHourRate(new BigDecimal("220.00"))
-                            .minimumFare(new BigDecimal("600.00"))
-                            .minimumKm(new BigDecimal("10.00"))
-                            .driverAllowance(new BigDecimal("200.00"))
-                            .displayOrder(5)
-                            .active(true)
-                            .imageUrl("https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=400&q=80")
-                            .build(),
-                    PassengerVehicleCategory.builder()
-                            .categoryCode("LUXURY")
-                            .displayName("Luxury")
-                            .description("High-end travel (Mercedes, BMW, Audi)")
-                            .passengerCapacity(4)
-                            .luggageCapacity(3)
-                            .baseFare(new BigDecimal("1000.00"))
-                            .perKmRate(new BigDecimal("35.00"))
-                            .perHourRate(new BigDecimal("350.00"))
-                            .minimumFare(new BigDecimal("1000.00"))
-                            .minimumKm(new BigDecimal("10.00"))
-                            .driverAllowance(new BigDecimal("300.00"))
-                            .displayOrder(6)
-                            .active(true)
-                            .imageUrl("https://images.unsplash.com/photo-1563720223185-11003d516935?w=400&q=80")
-                            .build()
-            ));
-        }
-
-        // Maintain display order for existing databases: BIKE=0, AUTO=1
-        categoryRepository.findByCategoryCode("BIKE").ifPresent(bike -> {
-            if (bike.getDisplayOrder() == null || bike.getDisplayOrder() != 0) {
-                bike.setDisplayOrder(0);
-                categoryRepository.save(bike);
-            }
-        });
-        categoryRepository.findByCategoryCode("AUTO").ifPresent(auto -> {
-            if (auto.getDisplayOrder() == null || auto.getDisplayOrder() == 0) {
-                auto.setDisplayOrder(1);
-                categoryRepository.save(auto);
-            }
-        });
-        categoryRepository.findByCategoryCode("HATCHBACK").ifPresent(hatchback -> {
-            if (hatchback.getImageUrl() == null || hatchback.getImageUrl().contains("unsplash.com")) {
-                hatchback.setImageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png");
-                categoryRepository.save(hatchback);
-            }
-        });
+        // Default vehicle category seeding is disabled: Only admin-added passenger vehicles are retained.
+        try {
+            categoryRepository.findByCategoryCode("AUTO").ifPresent(auto -> {
+                if (auto.getDisplayOrder() == null || auto.getDisplayOrder() == 0) {
+                    auto.setDisplayOrder(1);
+                    categoryRepository.save(auto);
+                }
+            });
+            categoryRepository.findByCategoryCode("HATCHBACK").ifPresent(hatchback -> {
+                if (hatchback.getImageUrl() == null || hatchback.getImageUrl().contains("unsplash.com")) {
+                    hatchback.setImageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png");
+                    categoryRepository.save(hatchback);
+                }
+            });
+        } catch (Exception ignored) {}
     }
 
     private void seedRentalPackages() {

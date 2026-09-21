@@ -29,12 +29,7 @@ public class CustomerServiceController {
             categoryRepository.saveAll(defaultCategories);
             System.out.println("Seeded " + defaultCategories.size() + " default Service Categories into the database.");
         }
-
-        if (serviceRepository.count() == 0) {
-            List<PorterService> defaultServices = PorterServiceController.getDefaultFallbackServices();
-            serviceRepository.saveAll(defaultServices);
-            System.out.println("Seeded " + defaultServices.size() + " default Porter Services into the database.");
-        }
+        // Porter services default seeding disabled: only admin-created services/vehicles will show.
     }
 
     /**

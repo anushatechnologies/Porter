@@ -19,11 +19,7 @@ public class PorterServiceController {
 
     @PostConstruct
     public void initSeedData() {
-        if (serviceRepository.count() == 0) {
-            List<PorterService> seeds = getDefaultFallbackServices();
-            serviceRepository.saveAll(seeds);
-            System.out.println("Seeded " + seeds.size() + " default Porter Services into the database.");
-        }
+        // Seeding default porter services disabled: only admin-managed services will show.
     }
 
     /**
@@ -43,16 +39,6 @@ public class PorterServiceController {
             }
         } else {
             services = serviceRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
-        }
-
-        // If table is empty, return default seeded services
-        if (services.isEmpty()) {
-            services = getDefaultFallbackServices();
-            if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
-                services = services.stream()
-                        .filter(s -> s.getCategory() != null && s.getCategory().equalsIgnoreCase(category))
-                        .collect(Collectors.toList());
-            }
         }
 
         // Filter by city availability if provided
