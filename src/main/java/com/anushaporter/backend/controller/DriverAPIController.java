@@ -762,7 +762,7 @@ public class DriverAPIController {
         order.setStatus("accepted");
         order.setAcceptedAt(now);
 
-        Order saved = orderRepository.findById(order.getId()).orElse(order);
+        Order saved = orderRepository.save(order);
         if (pushNotificationService != null) {
             pushNotificationService.notifyOrderStatus(saved, saved.getStatus());
         }

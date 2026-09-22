@@ -224,4 +224,62 @@ public class PorterServiceIntegrationTest {
                 .andExpect(jsonPath("$.featuredServices[1].id", is("s1")))
                 .andExpect(jsonPath("$.featuredServices[2].id", is("s2")));
     }
+
+    @Test
+    void testCategoryFilterIncludesBothTwoWheelerAndScooter() throws Exception {
+        PorterService s1 = new PorterService();
+        s1.setServiceId("2-wheeler");
+        s1.setName("2 Wheeler");
+        s1.setCategory("two_wheeler");
+        s1.setCategoryId("2");
+        s1.setCategoryName("2 Wheeler / Bike");
+        s1.setBaseFare(49.0);
+        s1.setPerKmRate(11.0);
+        s1.setIsActive(true);
+        s1.setDisplayOrder(1);
+        serviceRepository.save(s1);
+
+        PorterService s2 = new PorterService();
+        s2.setServiceId("scooter");
+        s2.setName("Scooter");
+        s2.setCategory("bike"); // saved with "bike"
+        s2.setCategoryId("2");
+        s2.setCategoryName("2 Wheeler / Bike");
+        s2.setBaseFare(35.0);
+        s2.setPerKmRate(9.0);
+        s2.setIsActive(true);
+        s2.setDisplayOrder(2);
+        serviceRepository.save(s2);
+
+        // 1. Querying /api/services?category=two_wheeler should return both
+        mockMvc.perform(get("/api/services?category=two_wheeler"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.services", hasSize(2)))
+                .andExpect(jsonPath("$.services[*].id", containsInAnyOrder("2-wheeler", "scooter")));
+
+        // 2. Querying /api/services?category=bike should return both
+        mockMvc.perform(get("/api/services?category=bike"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.services", hasSize(2)))
+                .andExpect(jsonPath("$.services[*].id", containsInAnyOrder("2-wheeler", "scooter")));
+
+        // 3. Querying /api/services?category=2 should return both
+        mockMvc.perform(get("/api/services?category=2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.services", hasSize(2)))
+                .andExpect(jsonPath("$.services[*].id", containsInAnyOrder("2-wheeler", "scooter")));
+
+        // 4. Querying /api/services/vehicles should include both
+        mockMvc.perform(get("/api/services/vehicles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vehicles", hasSize(2)))
+                .andExpect(jsonPath("$.vehicles[*].id", containsInAnyOrder("2-wheeler", "scooter")));
+
+        // 5. Querying /api/admin/services?category=two_wheeler should return both
+        mockMvc.perform(get("/api/admin/services?category=two_wheeler")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.services", hasSize(2)))
+                .andExpect(jsonPath("$.services[*].serviceId", containsInAnyOrder("2-wheeler", "scooter")));
+    }
 }

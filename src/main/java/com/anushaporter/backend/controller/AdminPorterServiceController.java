@@ -31,7 +31,7 @@ public class AdminPorterServiceController {
         // 1. Filter by category if provided
         if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
             services = services.stream()
-                    .filter(s -> s.getCategory() != null && s.getCategory().equalsIgnoreCase(category))
+                    .filter(s -> PorterServiceController.matchesCategoryFilter(s, category))
                     .collect(Collectors.toList());
         }
 
@@ -322,10 +322,37 @@ public class AdminPorterServiceController {
             target.setLabel(target.getName());
         }
         if (payload.containsKey("category") && payload.get("category") != null) {
-            target.setCategory(payload.get("category").toString().trim().toLowerCase());
+            String rawCat = payload.get("category").toString().trim().toLowerCase();
+            if (rawCat.equals("bike") || rawCat.equals("scooter") || rawCat.contains("2_wheel") || rawCat.contains("two_wheel")) {
+                rawCat = "two_wheeler";
+            }
+            target.setCategory(rawCat);
         }
         if (payload.containsKey("categoryId") && payload.get("categoryId") != null) {
-            target.setCategoryId(payload.get("categoryId").toString().trim());
+            String catId = payload.get("categoryId").toString().trim();
+            target.setCategoryId(catId);
+            if ("2".equals(catId)) {
+                if (target.getCategory() == null || target.getCategory().isBlank() || target.getCategory().equals("bike") || target.getCategory().equals("scooter")) {
+                    target.setCategory("two_wheeler");
+                }
+                if (target.getCategoryName() == null || target.getCategoryName().isBlank()) {
+                    target.setCategoryName("2 Wheeler / Bike");
+                }
+            } else if ("1".equals(catId)) {
+                if (target.getCategory() == null || target.getCategory().isBlank()) {
+                    target.setCategory("vehicle");
+                }
+                if (target.getCategoryName() == null || target.getCategoryName().isBlank()) {
+                    target.setCategoryName("Porter Trucks & Fleet");
+                }
+            } else if ("3".equals(catId)) {
+                if (target.getCategory() == null || target.getCategory().isBlank()) {
+                    target.setCategory("packers");
+                }
+                if (target.getCategoryName() == null || target.getCategoryName().isBlank()) {
+                    target.setCategoryName("Packers & Movers");
+                }
+            }
         }
         if (payload.containsKey("categoryName") && payload.get("categoryName") != null) {
             target.setCategoryName(payload.get("categoryName").toString().trim());

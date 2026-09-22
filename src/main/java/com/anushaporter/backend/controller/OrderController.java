@@ -284,7 +284,7 @@ public class OrderController {
             order.setStatus("accepted");
             order.setAcceptedAt(now);
 
-            Order savedOrder = repository.findById(order.getId()).orElse(order);
+            Order savedOrder = repository.save(order);
             if (pushNotificationService != null) {
                 pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
             }
@@ -673,7 +673,7 @@ public class OrderController {
         order.setStatus("accepted");
         order.setAcceptedAt(now);
 
-        Order savedOrder = repository.findById(order.getId()).orElse(order);
+        Order savedOrder = repository.save(order);
         if (pushNotificationService != null) {
             pushNotificationService.notifyOrderStatus(savedOrder, savedOrder.getStatus());
         }

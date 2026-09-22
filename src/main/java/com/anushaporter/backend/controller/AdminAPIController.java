@@ -34,6 +34,12 @@ public class AdminAPIController {
     @Autowired(required = false)
     private com.anushaporter.backend.service.S3ImageService s3ImageService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.StorageService storageService;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.DriverAuthService driverAuthService;
+
     @GetMapping("/customers")
     public ResponseEntity<?> getCustomers() {
         return ResponseEntity.ok(appUserRepository.findByRoleIgnoreCase("customer"));
@@ -254,12 +260,41 @@ public class AdminAPIController {
         m.put("paymentMethod", pb.getPaymentMethod() != null ? pb.getPaymentMethod() : "CASH");
         m.put("startOtp", pb.getStartOtp());
         m.put("deliveryOtp", pb.getStartOtp());
-        m.put("driverId", pb.getDriverId());
-        m.put("driverName", pb.getDriverName());
-        m.put("driverPhone", pb.getDriverPhone());
-        m.put("vehicleNumber", pb.getVehicleNumber());
-        m.put("vehicleModel", pb.getVehicleModel());
-        m.put("driver", pb.getDriver());
+
+        Long driverId = pb.getDriverId();
+        String dName = pb.getDriverName();
+        String dPhone = pb.getDriverPhone();
+        String vNum = pb.getVehicleNumber();
+        String vMod = pb.getVehicleModel();
+        Driver resolvedDrv = (driverId != null) ? resolveDriver(driverId.toString()) : null;
+        if (resolvedDrv != null) {
+            if (dName == null || dName.isBlank()) dName = resolvedDrv.getName();
+            if (dPhone == null || dPhone.isBlank()) dPhone = resolvedDrv.getPhone();
+            if (vNum == null || vNum.isBlank()) vNum = resolvedDrv.getVehicleNumber();
+            if (vMod == null || vMod.isBlank()) vMod = resolvedDrv.getVehicleType();
+        }
+
+        m.put("driverId", driverId);
+        m.put("driverName", dName != null ? dName : "");
+        m.put("driverPhone", dPhone != null ? dPhone : "");
+        m.put("vehicleNumber", vNum != null ? vNum : "");
+        m.put("vehicleModel", vMod != null ? vMod : "");
+
+        if (resolvedDrv != null) {
+            Map<String, Object> drvObj = new LinkedHashMap<>();
+            drvObj.put("id", resolvedDrv.getId());
+            drvObj.put("driverId", resolvedDrv.getId().toString());
+            drvObj.put("name", resolvedDrv.getName());
+            drvObj.put("phone", resolvedDrv.getPhone());
+            drvObj.put("vehicleNumber", resolvedDrv.getVehicleNumber());
+            drvObj.put("vehicleType", resolvedDrv.getVehicleType());
+            drvObj.put("rating", resolvedDrv.getRating() != null ? resolvedDrv.getRating() : "4.8");
+            drvObj.put("profilePhotoUri", storageService != null ? storageService.getPresignedOrSanitizedUrl(resolvedDrv.getProfilePhotoUri()) : resolvedDrv.getProfilePhotoUri());
+            m.put("driver", drvObj);
+        } else {
+            m.put("driver", pb.getDriver());
+        }
+
         m.put("distanceKm", pb.getDistanceKm() != null ? pb.getDistanceKm().doubleValue() : 0.0);
         m.put("durationMinutes", pb.getDurationMinutes());
         m.put("createdAt", pb.getCreatedAt() != null ? pb.getCreatedAt() : java.time.LocalDateTime.now());
@@ -293,10 +328,36 @@ public class AdminAPIController {
         m.put("paymentMethod", o.getPaymentMethod() != null ? o.getPaymentMethod() : "CASH");
         m.put("startOtp", o.getStartOtp() != null ? o.getStartOtp() : o.getDeliveryOtp());
         m.put("deliveryOtp", o.getDeliveryOtp() != null ? o.getDeliveryOtp() : o.getStartOtp());
-        m.put("driverId", o.getDriverId());
-        m.put("driverName", o.getDriverName());
-        m.put("driverPhone", o.getDriverPhone());
-        m.put("vehicleNumber", o.getDriverVehicleNumber());
+
+        String dId = o.getDriverId();
+        String dName = o.getDriverName();
+        String dPhone = o.getDriverPhone();
+        String dVeh = o.getDriverVehicleNumber();
+        Driver resolvedDrv = resolveDriver(dId);
+        if (resolvedDrv != null) {
+            if (dName == null || dName.isBlank()) dName = resolvedDrv.getName();
+            if (dPhone == null || dPhone.isBlank()) dPhone = resolvedDrv.getPhone();
+            if (dVeh == null || dVeh.isBlank()) dVeh = resolvedDrv.getVehicleNumber();
+        }
+        m.put("driverId", dId);
+        m.put("driverName", dName != null ? dName : "");
+        m.put("driverPhone", dPhone != null ? dPhone : "");
+        m.put("vehicleNumber", dVeh != null ? dVeh : "");
+        if (resolvedDrv != null) {
+            Map<String, Object> drvObj = new LinkedHashMap<>();
+            drvObj.put("id", resolvedDrv.getId());
+            drvObj.put("driverId", resolvedDrv.getId().toString());
+            drvObj.put("name", resolvedDrv.getName());
+            drvObj.put("phone", resolvedDrv.getPhone());
+            drvObj.put("vehicleNumber", resolvedDrv.getVehicleNumber());
+            drvObj.put("vehicleType", resolvedDrv.getVehicleType());
+            drvObj.put("rating", resolvedDrv.getRating() != null ? resolvedDrv.getRating() : "4.8");
+            drvObj.put("profilePhotoUri", storageService != null ? storageService.getPresignedOrSanitizedUrl(resolvedDrv.getProfilePhotoUri()) : resolvedDrv.getProfilePhotoUri());
+            m.put("driver", drvObj);
+        } else {
+            m.put("driver", null);
+        }
+
         m.put("distanceKm", o.getDistanceKm() != null ? o.getDistanceKm() : 0.0);
         m.put("createdAt", o.getCreatedAt() != null ? o.getCreatedAt() : java.time.LocalDateTime.now());
         return m;
@@ -327,10 +388,36 @@ public class AdminAPIController {
         m.put("paymentMethod", o.getPaymentMethod() != null ? o.getPaymentMethod() : "cash");
         m.put("startOtp", o.getStartOtp() != null ? o.getStartOtp() : o.getDeliveryOtp());
         m.put("deliveryOtp", o.getDeliveryOtp() != null ? o.getDeliveryOtp() : o.getStartOtp());
-        m.put("driverId", o.getDriverId());
-        m.put("driverName", o.getDriverName());
-        m.put("driverPhone", o.getDriverPhone());
-        m.put("vehicleNumber", o.getDriverVehicleNumber());
+
+        String dId = o.getDriverId();
+        String dName = o.getDriverName();
+        String dPhone = o.getDriverPhone();
+        String dVeh = o.getDriverVehicleNumber();
+        Driver resolvedDrv = resolveDriver(dId);
+        if (resolvedDrv != null) {
+            if (dName == null || dName.isBlank()) dName = resolvedDrv.getName();
+            if (dPhone == null || dPhone.isBlank()) dPhone = resolvedDrv.getPhone();
+            if (dVeh == null || dVeh.isBlank()) dVeh = resolvedDrv.getVehicleNumber();
+        }
+        m.put("driverId", dId);
+        m.put("driverName", dName != null ? dName : "");
+        m.put("driverPhone", dPhone != null ? dPhone : "");
+        m.put("vehicleNumber", dVeh != null ? dVeh : "");
+        if (resolvedDrv != null) {
+            Map<String, Object> drvObj = new LinkedHashMap<>();
+            drvObj.put("id", resolvedDrv.getId());
+            drvObj.put("driverId", resolvedDrv.getId().toString());
+            drvObj.put("name", resolvedDrv.getName());
+            drvObj.put("phone", resolvedDrv.getPhone());
+            drvObj.put("vehicleNumber", resolvedDrv.getVehicleNumber());
+            drvObj.put("vehicleType", resolvedDrv.getVehicleType());
+            drvObj.put("rating", resolvedDrv.getRating() != null ? resolvedDrv.getRating() : "4.8");
+            drvObj.put("profilePhotoUri", storageService != null ? storageService.getPresignedOrSanitizedUrl(resolvedDrv.getProfilePhotoUri()) : resolvedDrv.getProfilePhotoUri());
+            m.put("driver", drvObj);
+        } else {
+            m.put("driver", null);
+        }
+
         m.put("houseSize", o.getHouseSize());
         m.put("scheduledDate", o.getScheduledDate());
         m.put("scheduledSlot", o.getScheduledSlot());
@@ -367,13 +454,61 @@ public class AdminAPIController {
         m.put("paymentMethod", o.getPaymentMethod() != null ? o.getPaymentMethod() : "cash");
         m.put("startOtp", o.getStartOtp() != null ? o.getStartOtp() : o.getDeliveryOtp());
         m.put("deliveryOtp", o.getDeliveryOtp() != null ? o.getDeliveryOtp() : o.getStartOtp());
-        m.put("driverId", o.getDriverId());
-        m.put("driverName", o.getDriverName());
-        m.put("driverPhone", o.getDriverPhone());
-        m.put("vehicleNumber", o.getDriverVehicleNumber());
+
+        String dId = o.getDriverId();
+        String dName = o.getDriverName();
+        String dPhone = o.getDriverPhone();
+        String dVeh = o.getDriverVehicleNumber();
+        Driver resolvedDrv = resolveDriver(dId);
+        if (resolvedDrv != null) {
+            if (dName == null || dName.isBlank()) dName = resolvedDrv.getName();
+            if (dPhone == null || dPhone.isBlank()) dPhone = resolvedDrv.getPhone();
+            if (dVeh == null || dVeh.isBlank()) dVeh = resolvedDrv.getVehicleNumber();
+        }
+        m.put("driverId", dId);
+        m.put("driverName", dName != null ? dName : "");
+        m.put("driverPhone", dPhone != null ? dPhone : "");
+        m.put("vehicleNumber", dVeh != null ? dVeh : "");
+        if (resolvedDrv != null) {
+            Map<String, Object> drvObj = new LinkedHashMap<>();
+            drvObj.put("id", resolvedDrv.getId());
+            drvObj.put("driverId", resolvedDrv.getId().toString());
+            drvObj.put("name", resolvedDrv.getName());
+            drvObj.put("phone", resolvedDrv.getPhone());
+            drvObj.put("vehicleNumber", resolvedDrv.getVehicleNumber());
+            drvObj.put("vehicleType", resolvedDrv.getVehicleType());
+            drvObj.put("rating", resolvedDrv.getRating() != null ? resolvedDrv.getRating() : "4.8");
+            drvObj.put("profilePhotoUri", storageService != null ? storageService.getPresignedOrSanitizedUrl(resolvedDrv.getProfilePhotoUri()) : resolvedDrv.getProfilePhotoUri());
+            m.put("driver", drvObj);
+        } else {
+            m.put("driver", null);
+        }
+
         m.put("distanceKm", o.getDistanceKm() != null ? o.getDistanceKm() : 0.0);
         m.put("createdAt", o.getCreatedAt() != null ? o.getCreatedAt() : java.time.LocalDateTime.now());
         return m;
+    }
+
+    public Driver resolveDriver(String rawId) {
+        if (rawId == null || rawId.isBlank()) return null;
+        String clean = rawId.trim();
+        if (clean.toUpperCase().startsWith("DRV-")) clean = clean.substring(4).trim();
+        if (clean.toUpperCase().startsWith("DRV_")) clean = clean.substring(4).trim();
+        if (clean.matches("^\\d+$")) {
+            try {
+                Long id = Long.parseLong(clean);
+                Optional<Driver> opt = driverRepository.findById(id);
+                if (opt.isPresent()) return opt.get();
+            } catch (Exception ignored) {}
+        }
+        if (driverAuthService != null) {
+            Driver resolved = driverAuthService.resolveDriverByIdentifier(rawId);
+            if (resolved != null) return resolved;
+        }
+        final String searchClean = clean;
+        Optional<Driver> byPhone = driverRepository.findByPhone(searchClean);
+        if (byPhone.isPresent()) return byPhone.get();
+        return driverRepository.findByEmail(searchClean).orElse(null);
     }
 
     public static boolean isPackersOrder(com.anushaporter.backend.model.Order o) {
@@ -429,51 +564,232 @@ public class AdminAPIController {
                 "revenueToday", revenueToday));
     }
 
+    public Map<String, Object> formatDriverDetails(Driver d) {
+        if (d == null) return Collections.emptyMap();
+        if (driverAuthService != null) {
+            d = driverAuthService.ensureFullyRegisteredStatus(d);
+        }
+        boolean isComplete = d.isFullyRegistered();
+        int regStep = isComplete ? 5 : (d.getRegistrationStep() != null ? d.getRegistrationStep() : 1);
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", "DRV-" + d.getId());
+        m.put("driverId", d.getId().toString());
+        m.put("numericId", d.getId());
+        m.put("name", d.getName() != null ? d.getName() : "Unknown");
+        m.put("email", d.getEmail() != null ? d.getEmail() : "");
+        m.put("phone", d.getPhone() != null ? d.getPhone() : "");
+        m.put("dob", d.getDob() != null ? d.getDob() : "");
+        m.put("gender", d.getGender() != null ? d.getGender() : "");
+
+        String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType()
+                : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
+        String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle()
+                : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
+        m.put("vehicle", v);
+        m.put("vehicleType", vType);
+        m.put("vehicle_type", vType);
+        m.put("vehicleName", vType);
+        m.put("vehicleNumber", d.getVehicleNumber() != null ? d.getVehicleNumber() : "");
+
+        String rawService = d.getServiceType() != null ? d.getServiceType().toUpperCase() : "OUR_SERVICES";
+        String cleanService = "PASSENGER".equals(rawService) ? "PASSENGER" : "OUR_SERVICES";
+        String serviceCategoryLabel = "PASSENGER".equals(cleanService) ? "Passenger Rides" : "Our Services";
+        m.put("serviceType", cleanService);
+        m.put("service_type", cleanService);
+        m.put("serviceCategory", serviceCategoryLabel);
+        m.put("service_category", serviceCategoryLabel);
+
+        m.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
+        m.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
+        m.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
+        m.put("verificationStatus", d.getVerificationStatus() != null ? d.getVerificationStatus() : (d.getKyc() != null ? d.getKyc() : "pending"));
+        m.put("rejectionReason", d.getRejectionReason() != null ? d.getRejectionReason() : d.getRejectedReason());
+        m.put("rejectedReason", d.getRejectedReason() != null ? d.getRejectedReason() : d.getRejectionReason());
+        m.put("rejectedDocuments", d.getRejectedDocuments() != null ? d.getRejectedDocuments() : "");
+        m.put("rejectionNotes", d.getRejectionNotes() != null ? d.getRejectionNotes() : "");
+
+        m.put("rcNumber", d.getRcNumber() != null ? d.getRcNumber() : "");
+        m.put("licenseNumber", d.getLicenseNumber() != null ? d.getLicenseNumber() : "");
+        m.put("aadhaarNumber", d.getAadhaarNumber() != null ? d.getAadhaarNumber() : "");
+        m.put("panNumber", d.getPanNumber() != null ? d.getPanNumber() : "");
+
+        m.put("addressLine1", d.getAddressLine1() != null ? d.getAddressLine1() : "");
+        m.put("addressLine2", d.getAddressLine2() != null ? d.getAddressLine2() : "");
+        m.put("city", d.getCity() != null ? d.getCity() : "");
+        m.put("state", d.getState() != null ? d.getState() : "");
+        m.put("pincode", d.getPincode() != null ? d.getPincode() : "");
+
+        m.put("bankName", d.getBankName() != null ? d.getBankName() : "");
+        m.put("accountHolderName", d.getAccountHolderName() != null ? d.getAccountHolderName() : "");
+        m.put("accountNumber", d.getAccountNumber() != null ? d.getAccountNumber() : "");
+        m.put("ifscCode", d.getIfscCode() != null ? d.getIfscCode() : "");
+        m.put("upiId", d.getUpiId() != null ? d.getUpiId() : "");
+
+        m.put("isRegistered", isComplete);
+        m.put("registrationCompleted", isComplete);
+        m.put("hasDraft", !isComplete);
+        m.put("registrationStep", regStep);
+
+        m.put("rating", d.getRating() != null ? d.getRating() : "4.8");
+        m.put("trips", d.getTrips() != null ? d.getTrips() : 0);
+        m.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
+        m.put("wallet_balance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
+
+        String licUri = d.getLicenseUri();
+        String rcUri = d.getRcUri();
+        String aadhUri = d.getAadhaarUri();
+        String panUri = d.getPanUri();
+        String photoUri = d.getProfilePhotoUri();
+        String passbookUri = d.getBankPassbookUri();
+        if (storageService != null) {
+            licUri = storageService.getPresignedOrSanitizedUrl(licUri);
+            rcUri = storageService.getPresignedOrSanitizedUrl(rcUri);
+            aadhUri = storageService.getPresignedOrSanitizedUrl(aadhUri);
+            panUri = storageService.getPresignedOrSanitizedUrl(panUri);
+            photoUri = storageService.getPresignedOrSanitizedUrl(photoUri);
+            passbookUri = storageService.getPresignedOrSanitizedUrl(passbookUri);
+        }
+        m.put("licenseUri", licUri);
+        m.put("rcUri", rcUri);
+        m.put("aadhaarUri", aadhUri);
+        m.put("panUri", panUri);
+        m.put("profilePhotoUri", photoUri);
+        m.put("bankPassbookUri", passbookUri);
+
+        double lat = d.getLatitude() != null ? d.getLatitude() : 17.4483;
+        double lng = d.getLongitude() != null ? d.getLongitude() : 78.3915;
+        Map<String, Object> locMap = new LinkedHashMap<>();
+        locMap.put("lat", lat);
+        locMap.put("lng", lng);
+        locMap.put("x", lat);
+        locMap.put("y", lng);
+        locMap.put("speed", d.getSpeed() != null ? d.getSpeed() : 0.0);
+        locMap.put("angle", d.getHeading() != null ? d.getHeading() : 45.0);
+        m.put("location", locMap);
+
+        return m;
+    }
+
     @GetMapping("/drivers")
-    public ResponseEntity<?> getDrivers(@RequestParam(required = false) String status) {
+    public ResponseEntity<?> getDrivers(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String kyc,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String serviceType,
+            @RequestParam(required = false) String service) {
+
         List<Driver> drivers = driverRepository.findAll();
 
-        if (status != null && !status.isEmpty()) {
-            drivers = drivers.stream()
-                    .filter(d -> status.equalsIgnoreCase(d.getKyc()))
-                    .collect(Collectors.toList());
-        }
+        String statusFilter = status != null ? status.trim() : null;
+        String kycFilter = kyc != null ? kyc.trim() : null;
+        String searchTerm = search != null ? search.trim().toLowerCase() : (q != null ? q.trim().toLowerCase() : null);
+        String requestedService = serviceType != null && !serviceType.isBlank() ? serviceType : service;
 
-        List<Map<String, Object>> response = drivers.stream().map(d -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("driverId", d.getId().toString());
-            m.put("id", "DRV-" + d.getId());
-            m.put("name", d.getName() != null ? d.getName() : "Unknown");
-            m.put("email", d.getEmail() != null ? d.getEmail() : "");
-            m.put("phone", d.getPhone() != null ? d.getPhone() : "");
-            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType()
-                    : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
-            String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle()
-                    : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
-            m.put("vehicle", v);
-            m.put("vehicleType", vType);
-            m.put("vehicle_type", vType);
-            m.put("vehicleName", vType);
-            m.put("vehicleNumber", d.getVehicleNumber() != null ? d.getVehicleNumber() : "");
-            m.put("status", d.getStatus() != null ? d.getStatus().toLowerCase() : "offline");
-            m.put("kyc", d.getKyc() != null ? d.getKyc() : "pending");
-            m.put("kycStatus", d.getKyc() != null ? d.getKyc() : "pending");
-            m.put("rating", d.getRating() != null ? d.getRating() : "4.8");
-            m.put("walletBalance", d.getWalletBalance() != null ? d.getWalletBalance() : 0.0);
-            return m;
-        }).collect(Collectors.toList());
+        String normalizedService = null;
+        if (requestedService != null && !requestedService.isBlank()) {
+            String s = requestedService.trim().toUpperCase();
+            if (s.contains("PASSENGER") || s.contains("CAB") || s.contains("RIDE")) {
+                normalizedService = "PASSENGER";
+            } else if (s.contains("OUR") || s.contains("GOOD") || s.contains("TRUCK") || s.contains("LOGISTICS")) {
+                normalizedService = "OUR_SERVICES";
+            }
+        }
+        final String finalServiceFilter = normalizedService;
+
+        List<Map<String, Object>> response = drivers.stream()
+                .filter(d -> {
+                    // Status filter (online, offline, active, suspended)
+                    if (statusFilter != null && !statusFilter.isEmpty() && !"all".equalsIgnoreCase(statusFilter)) {
+                        boolean matchesStatus = d.getStatus() != null && d.getStatus().equalsIgnoreCase(statusFilter);
+                        boolean matchesKyc = d.getKyc() != null && d.getKyc().equalsIgnoreCase(statusFilter);
+                        if (!matchesStatus && !matchesKyc) {
+                            return false;
+                        }
+                    }
+
+                    // KYC filter (verified, approved, pending, rejected, draft)
+                    if (kycFilter != null && !kycFilter.isEmpty() && !"all".equalsIgnoreCase(kycFilter)) {
+                        if (d.getKyc() == null || !d.getKyc().equalsIgnoreCase(kycFilter)) {
+                            return false;
+                        }
+                    }
+
+                    // Service Type filter
+                    if (finalServiceFilter != null) {
+                        String rawS = d.getServiceType() != null ? d.getServiceType().toUpperCase() : "OUR_SERVICES";
+                        if ("PASSENGER".equals(finalServiceFilter)) {
+                            if (!"PASSENGER".equals(rawS)) return false;
+                        } else if ("OUR_SERVICES".equals(finalServiceFilter)) {
+                            if (!"OUR_SERVICES".equals(rawS) && !"GOODS".equals(rawS)) return false;
+                        }
+                    }
+
+                    // Search filter
+                    if (searchTerm != null && !searchTerm.isBlank()) {
+                        String name = d.getName() != null ? d.getName().toLowerCase() : "";
+                        String drvPhone = d.getPhone() != null ? d.getPhone().toLowerCase() : "";
+                        String email = d.getEmail() != null ? d.getEmail().toLowerCase() : "";
+                        String vNum = d.getVehicleNumber() != null ? d.getVehicleNumber().toLowerCase() : "";
+                        String vType = d.getVehicleType() != null ? d.getVehicleType().toLowerCase() : "";
+                        String idStr = d.getId() != null ? d.getId().toString() : "";
+                        String drvId = "drv-" + idStr;
+
+                        if (!name.contains(searchTerm)
+                                && !drvPhone.contains(searchTerm)
+                                && !email.contains(searchTerm)
+                                && !vNum.contains(searchTerm)
+                                && !vType.contains(searchTerm)
+                                && !idStr.equals(searchTerm)
+                                && !drvId.equals(searchTerm)) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                })
+                .map(this::formatDriverDetails)
+                .collect(Collectors.toList());
 
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/drivers/{driverId}/kyc")
-    public ResponseEntity<?> updateDriverKyc(@PathVariable Long driverId, @RequestBody Map<String, String> payload) {
-        Optional<Driver> driverOpt = driverRepository.findById(driverId);
-        if (driverOpt.isEmpty()) {
+    @GetMapping({"/drivers/{id:[0-9]+}", "/drivers/{id:DRV-[0-9]+}", "/drivers/{id:drv-[0-9]+}"})
+    public ResponseEntity<?> getDriverById(@PathVariable String id) {
+        Driver d = resolveDriver(id);
+        if (d == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Driver not found: " + id));
+        }
+        return ResponseEntity.ok(formatDriverDetails(d));
+    }
+
+    @GetMapping("/drivers/our-services")
+    public ResponseEntity<?> getOurServicesDrivers(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String kyc,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String q) {
+        return getDrivers(status, kyc, search, q, "OUR_SERVICES", null);
+    }
+
+    @GetMapping("/drivers/passengers")
+    public ResponseEntity<?> getPassengerDrivers(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String kyc,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String q) {
+        return getDrivers(status, kyc, search, q, "PASSENGER", null);
+    }
+
+    @PutMapping({"/drivers/{driverId}/kyc", "/drivers/{driverId:[0-9]+}/kyc", "/drivers/{driverId:DRV-[0-9]+}/kyc", "/drivers/{driverId:drv-[0-9]+}/kyc"})
+    public ResponseEntity<?> updateDriverKyc(@PathVariable String driverId, @RequestBody Map<String, String> payload) {
+        Driver driver = resolveDriver(driverId);
+        if (driver == null) {
             return ResponseEntity.notFound().build();
         }
 
-        Driver driver = driverOpt.get();
         String status = payload.get("status");
         if (status != null) {
             driver.setKyc(status);
@@ -487,116 +803,116 @@ public class AdminAPIController {
                 .ok(Map.of("success", true, "driverId", driver.getId().toString(), "kycStatus", driver.getKyc()));
     }
 
-    @PostMapping("/drivers/{id}/verify")
-    public ResponseEntity<Map<String, Object>> verifyDriver(@PathVariable Long id) {
-        return driverRepository.findById(id).map(driver -> {
-            driver.setKyc("verified");
+    @PostMapping({"/drivers/{id}/verify", "/drivers/verify/{id}"})
+    public ResponseEntity<Map<String, Object>> verifyDriver(@PathVariable String id) {
+        Driver driver = resolveDriver(id);
+        if (driver == null) return ResponseEntity.notFound().build();
 
-            if (notificationRepository != null) {
-                com.anushaporter.backend.model.Notification notif = new com.anushaporter.backend.model.Notification();
-                notif.setTitle("Account Approved!");
-                notif.setMessage("Congratulations! Your partner account has been approved. You can now log in and accept orders.");
-                notif.setAudience("driver");
-                notif.setTarget(driver.getEmail());
-                notif.setReadStatus(false);
-                notificationRepository.save(notif);
-            }
+        driver.setKyc("verified");
+        driver.setVerificationStatus("approved");
+        driver.setRegistrationStep(5);
+        if (driverAuthService != null) {
+            driver = driverAuthService.ensureFullyRegisteredStatus(driver);
+        }
 
-            Driver savedDriver = driverRepository.save(driver);
-            return ResponseEntity.ok(Map.of("success", (Object) true, "driver", (Object) savedDriver));
-        }).orElse(ResponseEntity.notFound().build());
+        if (notificationRepository != null) {
+            com.anushaporter.backend.model.Notification notif = new com.anushaporter.backend.model.Notification();
+            notif.setTitle("Account Approved!");
+            notif.setMessage("Congratulations! Your partner account has been approved. You can now log in and accept orders.");
+            notif.setAudience("driver");
+            notif.setTarget(driver.getEmail());
+            notif.setReadStatus(false);
+            notificationRepository.save(notif);
+        }
+
+        Driver savedDriver = driverRepository.save(driver);
+        return ResponseEntity.ok(Map.of("success", (Object) true, "driver", (Object) formatDriverDetails(savedDriver)));
     }
 
     @PostMapping({"/drivers/{id}/reject", "/drivers/reject/{id}"})
     public ResponseEntity<?> rejectDriver(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestBody(required = false) Map<String, Object> payload) {
-        return driverRepository.findById(id).map(driver -> {
-            driver.setKyc("rejected");
-            driver.setVerificationStatus("REJECTED_REQUIRES_REUPLOAD");
+        Driver driver = resolveDriver(id);
+        if (driver == null) return ResponseEntity.notFound().build();
 
-            String rejectionReason = null;
-            String rejectedDocsString = null;
-            String notes = null;
+        driver.setKyc("rejected");
+        driver.setVerificationStatus("REJECTED_REQUIRES_REUPLOAD");
 
-            if (payload != null) {
-                rejectionReason = payload.get("rejectionReason") != null ? payload.get("rejectionReason").toString()
-                        : (payload.get("reason") != null ? payload.get("reason").toString() : null);
-                notes = payload.get("notes") != null ? payload.get("notes").toString() : null;
+        String rejectionReason = null;
+        String rejectedDocsString = null;
+        String notes = null;
 
-                Object rejectedDocsObj = payload.get("rejectedDocuments");
-                if (rejectedDocsObj instanceof List) {
-                    List<?> list = (List<?>) rejectedDocsObj;
-                    rejectedDocsString = list.stream().map(Object::toString).collect(Collectors.joining(","));
-                } else if (rejectedDocsObj != null) {
-                    rejectedDocsString = rejectedDocsObj.toString();
-                }
+        if (payload != null) {
+            rejectionReason = payload.get("rejectionReason") != null ? payload.get("rejectionReason").toString()
+                    : (payload.get("reason") != null ? payload.get("reason").toString() : null);
+            notes = payload.get("notes") != null ? payload.get("notes").toString() : null;
+
+            Object rejectedDocsObj = payload.get("rejectedDocuments");
+            if (rejectedDocsObj instanceof List) {
+                List<?> list = (List<?>) rejectedDocsObj;
+                rejectedDocsString = list.stream().map(Object::toString).collect(Collectors.joining(","));
+            } else if (rejectedDocsObj != null) {
+                rejectedDocsString = rejectedDocsObj.toString();
             }
+        }
 
-            if (rejectionReason != null && !rejectionReason.isBlank()) {
-                driver.setRejectionReason(rejectionReason);
-            }
-            if (rejectedDocsString != null && !rejectedDocsString.isBlank()) {
-                driver.setRejectedDocuments(rejectedDocsString);
-            }
-            if (notes != null && !notes.isBlank()) {
-                driver.setRejectionNotes(notes);
-            }
+        if (rejectionReason != null && !rejectionReason.isBlank()) {
+            driver.setRejectionReason(rejectionReason);
+        }
+        if (rejectedDocsString != null && !rejectedDocsString.isBlank()) {
+            driver.setRejectedDocuments(rejectedDocsString);
+        }
+        if (notes != null && !notes.isBlank()) {
+            driver.setRejectionNotes(notes);
+        }
 
-            if (notificationRepository != null) {
-                com.anushaporter.backend.model.Notification notif = new com.anushaporter.backend.model.Notification();
-                notif.setTitle("Verification Requires Document Re-upload");
-                String docInfo = (rejectedDocsString != null && !rejectedDocsString.isBlank()) ? " [" + rejectedDocsString + "]" : "";
-                notif.setMessage("Your verification requires document re-upload" + docInfo + ". Open the driver app to re-upload.");
-                notif.setAudience("driver");
-                notif.setTarget(driver.getEmail());
-                notif.setReadStatus(false);
-                notificationRepository.save(notif);
-            }
+        if (notificationRepository != null) {
+            com.anushaporter.backend.model.Notification notif = new com.anushaporter.backend.model.Notification();
+            notif.setTitle("Verification Requires Document Re-upload");
+            String docInfo = (rejectedDocsString != null && !rejectedDocsString.isBlank()) ? " [" + rejectedDocsString + "]" : "";
+            notif.setMessage("Your verification requires document re-upload" + docInfo + ". Open the driver app to re-upload.");
+            notif.setAudience("driver");
+            notif.setTarget(driver.getEmail());
+            notif.setReadStatus(false);
+            notificationRepository.save(notif);
+        }
 
-            Driver savedDriver = driverRepository.save(driver);
-            Map<String, Object> resp = new LinkedHashMap<>();
-            resp.put("success", true);
-            resp.put("message", "Driver verification rejected with re-upload requirement");
-            resp.put("verificationStatus", savedDriver.getVerificationStatus());
-            resp.put("rejectionReason", savedDriver.getRejectionReason());
-            resp.put("rejectedDocuments", savedDriver.getRejectedDocuments());
-            resp.put("driver", savedDriver);
-            return ResponseEntity.ok(resp);
-        }).orElse(ResponseEntity.notFound().build());
+        Driver savedDriver = driverRepository.save(driver);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("message", "Driver verification rejected with re-upload requirement");
+        resp.put("verificationStatus", savedDriver.getVerificationStatus());
+        resp.put("rejectionReason", savedDriver.getRejectionReason());
+        resp.put("rejectedDocuments", savedDriver.getRejectedDocuments());
+        resp.put("driver", formatDriverDetails(savedDriver));
+        return ResponseEntity.ok(resp);
     }
 
-    @DeleteMapping({"/drivers/{id:[0-9]+}", "/drivers/{id:DRV-[0-9]+}"})
+    @DeleteMapping({"/drivers/{id:[0-9]+}", "/drivers/{id:DRV-[0-9]+}", "/drivers/{id:drv-[0-9]+}"})
     public ResponseEntity<?> deleteDriver(@PathVariable String id) {
-        Long driverId = null;
-        String cleanId = id != null ? id.trim() : "";
-        if (cleanId.toUpperCase().startsWith("DRV-")) {
-            cleanId = cleanId.substring(4).trim();
+        Driver driver = resolveDriver(id);
+        if (driver == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Driver not found: " + id));
         }
-        try {
-            driverId = Long.parseLong(cleanId);
-        } catch (NumberFormatException ignored) {}
 
-        Optional<Driver> driverOpt = driverId != null ? driverRepository.findById(driverId) : Optional.empty();
+        if (s3ImageService != null) {
+            try { s3ImageService.deleteImage(driver.getProfilePhotoUri()); } catch (Exception ignored) {}
+            try { s3ImageService.deleteImage(driver.getAadhaarUri()); } catch (Exception ignored) {}
+            try { s3ImageService.deleteImage(driver.getLicenseUri()); } catch (Exception ignored) {}
+            try { s3ImageService.deleteImage(driver.getRcUri()); } catch (Exception ignored) {}
+            try { s3ImageService.deleteImage(driver.getBankPassbookUri()); } catch (Exception ignored) {}
+        }
 
-        return driverOpt.<ResponseEntity<?>>map(driver -> {
-            if (s3ImageService != null) {
-                try { s3ImageService.deleteImage(driver.getProfilePhotoUri()); } catch (Exception ignored) {}
-                try { s3ImageService.deleteImage(driver.getAadhaarUri()); } catch (Exception ignored) {}
-                try { s3ImageService.deleteImage(driver.getLicenseUri()); } catch (Exception ignored) {}
-                try { s3ImageService.deleteImage(driver.getRcUri()); } catch (Exception ignored) {}
-                try { s3ImageService.deleteImage(driver.getBankPassbookUri()); } catch (Exception ignored) {}
-            }
-
-            Long deletedId = driver.getId();
-            driverRepository.delete(driver);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Driver profile removed successfully",
-                    "id", deletedId,
-                    "driverId", deletedId.toString()
-            ));
-        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Driver not found: " + id)));
+        Long deletedId = driver.getId();
+        driverRepository.delete(driver);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Driver profile removed successfully",
+                "id", deletedId,
+                "driverId", deletedId.toString()
+        ));
     }
 
     /**

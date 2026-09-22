@@ -20,6 +20,35 @@ public class PorterServiceController {
     @PostConstruct
     public void initSeedData() {
         // Seeding default porter services disabled: only admin-managed services will show.
+        // Data patch: Normalize any existing 2-wheeler / bike records so category matches canonical slug
+        try {
+            List<PorterService> all = serviceRepository.findAll();
+            for (PorterService s : all) {
+                boolean needsSave = false;
+                String cat = s.getCategory() != null ? s.getCategory().toLowerCase().trim() : "";
+                String svcId = s.getServiceId() != null ? s.getServiceId().toLowerCase().trim() : "";
+                String name = s.getName() != null ? s.getName().toLowerCase().trim() : "";
+
+                if (cat.equals("bike") || cat.equals("scooter") || svcId.contains("scooter") || name.contains("scooter")
+                        || "2".equals(s.getCategoryId()) || cat.contains("2_wheel") || cat.contains("two_wheel")) {
+                    if (!"two_wheeler".equals(s.getCategory())) {
+                        s.setCategory("two_wheeler");
+                        needsSave = true;
+                    }
+                    if (s.getCategoryId() == null || s.getCategoryId().isBlank()) {
+                        s.setCategoryId("2");
+                        needsSave = true;
+                    }
+                    if (s.getCategoryName() == null || s.getCategoryName().isBlank()) {
+                        s.setCategoryName("2 Wheeler / Bike");
+                        needsSave = true;
+                    }
+                }
+                if (needsSave) {
+                    serviceRepository.save(s);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     /**
@@ -31,14 +60,11 @@ public class PorterServiceController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String city) {
 
-        List<PorterService> services;
+        List<PorterService> services = serviceRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
         if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
-            services = serviceRepository.findByCategoryAndIsActiveTrueOrderByDisplayOrderAsc(category.toLowerCase());
-            if (services.isEmpty()) {
-                services = serviceRepository.findByCategoryIgnoreCaseAndIsActiveTrueOrderByDisplayOrderAsc(category);
-            }
-        } else {
-            services = serviceRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
+            services = services.stream()
+                    .filter(s -> matchesCategoryFilter(s, category))
+                    .collect(Collectors.toList());
         }
 
         // Filter by city availability if provided
@@ -59,6 +85,44 @@ public class PorterServiceController {
                 "featuredServices", formatted,
                 "services", formatted
         ));
+    }
+
+    public static boolean matchesCategoryFilter(PorterService s, String category) {
+        if (s == null) return false;
+        if (category == null || category.isBlank() || "all".equalsIgnoreCase(category)) return true;
+
+        String target = category.trim().toLowerCase().replaceAll("[^a-z0-9]", "");
+        String sCat = (s.getCategory() != null ? s.getCategory() : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+        String sCatId = (s.getCategoryId() != null ? s.getCategoryId() : "").trim().toLowerCase();
+        String sCatName = (s.getCategoryName() != null ? s.getCategoryName() : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+        String sName = (s.getName() != null ? s.getName() : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+        String sId = (s.getServiceId() != null ? s.getServiceId() : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+
+        // Direct equality
+        if (sCat.equalsIgnoreCase(target) || sCatId.equalsIgnoreCase(category.trim())) {
+            return true;
+        }
+
+        // Category 2: 2 Wheeler / Bike / Scooter
+        if (target.contains("twowheel") || target.contains("2wheel") || target.contains("bike") || target.contains("scooter") || "2".equals(target)) {
+            return sCat.contains("twowheel") || sCat.contains("2wheel") || sCat.contains("bike") || sCat.contains("scooter")
+                    || sCatId.equals("2") || sCatName.contains("twowheel") || sCatName.contains("2wheel") || sCatName.contains("bike")
+                    || sName.contains("twowheel") || sName.contains("2wheel") || sName.contains("scooter") || sId.contains("twowheel") || sId.contains("scooter");
+        }
+
+        // Category 1: Trucks / Fleet / Vehicle
+        if (target.contains("truck") || target.contains("fleet") || target.contains("vehicle") || "1".equals(target)) {
+            return sCat.contains("truck") || sCat.contains("fleet") || sCat.contains("vehicle") || sCatId.equals("1")
+                    || sCatName.contains("truck") || sCatName.contains("fleet");
+        }
+
+        // Category 3: Packers & Movers / Shifting
+        if (target.contains("packer") || target.contains("mover") || target.contains("shift") || "3".equals(target)) {
+            return sCat.contains("packer") || sCat.contains("mover") || sCat.contains("shift") || sCatId.equals("3")
+                    || sCatName.contains("packer") || sCatName.contains("mover");
+        }
+
+        return sCat.contains(target) || sCatName.contains(target);
     }
 
     /**
@@ -93,7 +157,14 @@ public class PorterServiceController {
         }
 
         List<Map<String, Object>> vehicles = services.stream()
-                .filter(s -> s.getCategory() == null || "vehicle".equalsIgnoreCase(s.getCategory()) || "two_wheeler".equalsIgnoreCase(s.getCategory()))
+                .filter(s -> {
+                    if (s.getCategory() == null) return true;
+                    String c = s.getCategory().toLowerCase();
+                    String cid = s.getCategoryId() != null ? s.getCategoryId() : "";
+                    return "vehicle".contains(c) || c.contains("truck") || c.contains("two_wheel")
+                            || c.contains("2_wheel") || c.contains("bike") || c.contains("scooter")
+                            || "1".equals(cid) || "2".equals(cid);
+                })
                 .map(this::formatServiceForApp)
                 .collect(Collectors.toList());
 
