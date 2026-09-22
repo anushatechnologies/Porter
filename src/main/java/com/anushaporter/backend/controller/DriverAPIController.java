@@ -1626,7 +1626,7 @@ public class DriverAPIController {
             driver.setRegistrationStep(5);
         } else if (isSaveAndNext) {
             int currentStepVal = stepParam != null ? stepParam : (driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
-            driver.setRegistrationStep(currentStepVal + 1);
+            driver.setRegistrationStep(Math.min(currentStepVal + 1, 4));
             if (driver.getKyc() == null || "draft".equalsIgnoreCase(driver.getKyc()) || "in_progress".equalsIgnoreCase(driver.getKyc())) {
                 driver.setKyc("draft");
             }
@@ -1634,17 +1634,20 @@ public class DriverAPIController {
             boolean isFinalSubmit = Boolean.TRUE.equals(payload.get("submit"))
                     || Boolean.TRUE.equals(payload.get("isFinalSubmit"))
                     || "submit".equalsIgnoreCase(String.valueOf(payload.get("action")))
-                    || (stepParam != null && stepParam >= 4)
                     || (uri != null && uri.endsWith("/submit"));
-            if (isFinalSubmit || (!isSaveAndNext && (driver.getKyc() == null || !"draft".equalsIgnoreCase(text(payload, "kyc"))))) {
-                // Auto-approve driver registration; no need of admin approval
+
+            if (isFinalSubmit) {
+                // Auto-approve driver registration only upon explicit final submission
                 driver.setKyc("approved");
                 driver.setVerificationStatus("approved");
                 driver.setRegistrationStep(5);
-            } else if (stepParam != null) {
-                driver.setRegistrationStep(stepParam);
-            } else if (driver.getKyc() == null) {
-                driver.setKyc("draft");
+            } else {
+                // Partial draft save without final submission: ALWAYS preserve draft status
+                int currentStepVal = stepParam != null ? stepParam : (driver.getRegistrationStep() != null ? driver.getRegistrationStep() : 1);
+                driver.setRegistrationStep(Math.min(currentStepVal, 4));
+                if (driver.getKyc() == null || !"approved".equalsIgnoreCase(driver.getKyc())) {
+                    driver.setKyc("draft");
+                }
             }
         }
 
