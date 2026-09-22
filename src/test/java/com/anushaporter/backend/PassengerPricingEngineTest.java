@@ -272,4 +272,62 @@ public class PassengerPricingEngineTest {
 
         assertThrows(PassengerCapacityExceededException.class, () -> pricingEngine.calculateFare(invalidReq));
     }
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.config.PassengerPricingDataCorrectionRunner pricingDataCorrectionRunner;
+
+    @Test
+    void testDuplicateAutoPricingRules_DoesNotThrowNonUniqueResultExceptionAndGetsCleanedUp() {
+        // Ensure AUTO category exists
+        if (categoryRepository.findFirstByCategoryCodeOrderByIdDesc("AUTO").isEmpty()) {
+            categoryRepository.save(PassengerVehicleCategory.builder()
+                    .categoryCode("AUTO")
+                    .displayName("Auto Rickshaw")
+                    .passengerCapacity(3)
+                    .luggageCapacity(2)
+                    .baseFare(new BigDecimal("30.00"))
+                    .minimumKm(new BigDecimal("1.50"))
+                    .perKmRate(new BigDecimal("15.00"))
+                    .minimumFare(new BigDecimal("30.00"))
+                    .displayOrder(1)
+                    .active(true)
+                    .build());
+        }
+
+        String versionId = "PV-2026-09-07-01";
+        // Create 6 duplicate rules for AUTO to simulate MySQL duplicate issue
+        for (int i = 1; i <= 6; i++) {
+            ruleRepository.save(PassengerPricingRule.builder()
+                    .pricingVersionId(versionId)
+                    .serviceCode("ONE_WAY")
+                    .vehicleCategoryCode("AUTO")
+                    .baseFare(new BigDecimal("35.00"))
+                    .minimumKm(new BigDecimal("2.00"))
+                    .perKmRate(new BigDecimal("15.00"))
+                    .minimumFare(new BigDecimal("35.00"))
+                    .perMinuteRate(new BigDecimal("1.00"))
+                    .driverAllowance(BigDecimal.ZERO)
+                    .build());
+        }
+
+        // 1. calculateFare MUST succeed with LIMIT 1 and not throw NonUniqueResultException
+        PassengerFareEstimateRequest req = PassengerFareEstimateRequest.builder()
+                .serviceType("ONE_WAY")
+                .vehicleCategoryCode("AUTO")
+                .passengerCount(2)
+                .manualDistanceKm(new BigDecimal("10.00"))
+                .scheduledPickupTime(LocalDateTime.of(2026, 9, 7, 14, 0))
+                .build();
+
+        PassengerFareEstimateResponse res = assertDoesNotThrow(() -> pricingEngine.calculateFare(req));
+        assertNotNull(res);
+        assertEquals("AUTO", res.getVehicleCategoryCode());
+        assertTrue(res.getEstimatedFare().compareTo(BigDecimal.ZERO) > 0);
+
+        // 2. Run data correction runner and verify duplicate rules are cleaned up
+        if (pricingDataCorrectionRunner != null) {
+            int deleted = pricingDataCorrectionRunner.cleanupDuplicatePricingRules();
+            assertTrue(deleted >= 5, "Should delete at least 5 duplicate rules");
+        }
+    }
 }

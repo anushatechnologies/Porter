@@ -54,7 +54,7 @@ public class PassengerPricingEngine {
         String categoryCode = normalizeCategoryCode(req.getVehicleCategoryCode());
 
         // 1. Validate Vehicle Category & Passenger Capacity
-        PassengerVehicleCategory category = vehicleCategoryRepository.findByCategoryCode(categoryCode)
+        PassengerVehicleCategory category = vehicleCategoryRepository.findFirstByCategoryCodeOrderByIdDesc(categoryCode)
                 .orElseGet(() -> resolveFromVehicleTypes(categoryCode));
 
         int passengers = req.getPassengerCount() != null ? req.getPassengerCount() : 1;
@@ -69,7 +69,7 @@ public class PassengerPricingEngine {
         String versionId = activeVersion.getVersionNumber();
 
         PassengerPricingRule rule = pricingRuleRepository
-                .findByPricingVersionIdAndServiceCodeAndVehicleCategoryCode(versionId, serviceCode, categoryCode)
+                .findFirstByPricingVersionIdAndServiceCodeAndVehicleCategoryCodeOrderByIdDesc(versionId, serviceCode, categoryCode)
                 .orElseGet(() -> pricingRuleRepository
                         .findFirstByServiceCodeAndVehicleCategoryCodeOrderByIdDesc(serviceCode, categoryCode)
                         .orElseGet(() -> createFallbackRule(versionId, serviceCode, category)));

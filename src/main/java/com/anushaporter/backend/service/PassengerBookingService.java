@@ -49,7 +49,7 @@ public class PassengerBookingService {
         String serviceCode = req.getServiceType() != null ? req.getServiceType().toUpperCase() : "ONE_WAY";
         String categoryCode = PassengerPricingEngine.normalizeCategoryCode(req.getVehicleCategoryCode());
 
-        PassengerVehicleCategory category = vehicleCategoryRepository.findByCategoryCode(categoryCode)
+        PassengerVehicleCategory category = vehicleCategoryRepository.findFirstByCategoryCodeOrderByIdDesc(categoryCode)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle category not found: " + categoryCode));
 
         int passengers = req.getPassengerCount() != null ? req.getPassengerCount() : 1;

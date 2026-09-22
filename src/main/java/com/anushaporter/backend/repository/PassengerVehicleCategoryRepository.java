@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface PassengerVehicleCategoryRepository extends JpaRepository<PassengerVehicleCategory, Long> {
     Optional<PassengerVehicleCategory> findByCategoryCode(String categoryCode);
+    Optional<PassengerVehicleCategory> findFirstByCategoryCodeOrderByIdDesc(String categoryCode);
     List<PassengerVehicleCategory> findByActiveTrueOrderByDisplayOrderAsc();
     List<PassengerVehicleCategory> findAllByOrderByDisplayOrderAsc();
     List<PassengerVehicleCategory> findByActiveTrueAndPassengerCapacityGreaterThanEqualOrderByDisplayOrderAsc(Integer passengerCapacity);

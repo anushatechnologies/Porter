@@ -12,6 +12,8 @@ public interface PassengerPricingRuleRepository extends JpaRepository<PassengerP
     List<PassengerPricingRule> findByPricingVersionId(String pricingVersionId);
     Optional<PassengerPricingRule> findByPricingVersionIdAndServiceCodeAndVehicleCategoryCode(
             String pricingVersionId, String serviceCode, String vehicleCategoryCode);
+    Optional<PassengerPricingRule> findFirstByPricingVersionIdAndServiceCodeAndVehicleCategoryCodeOrderByIdDesc(
+            String pricingVersionId, String serviceCode, String vehicleCategoryCode);
     Optional<PassengerPricingRule> findFirstByServiceCodeAndVehicleCategoryCodeOrderByIdDesc(
             String serviceCode, String vehicleCategoryCode);
 }
