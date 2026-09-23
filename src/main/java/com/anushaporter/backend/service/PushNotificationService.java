@@ -329,7 +329,7 @@ public class PushNotificationService {
         payload.put("to", token);
         payload.put("title", title);
         payload.put("body", message);
-        payload.put("sound", "default");
+        payload.put("sound", null); // Explicitly null: OS plays no sound; frontend controls custom audio/voice
         payload.put("priority", "high");
         payload.put("data", Map.of(
                 "bookingId", bookingId == null ? "" : bookingId,
