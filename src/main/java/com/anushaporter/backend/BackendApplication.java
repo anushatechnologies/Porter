@@ -14,7 +14,13 @@ import java.util.Optional;
 public class BackendApplication {
 
 	public static void main(String[] args) {
+		java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Kolkata"));
 		SpringApplication.run(BackendApplication.class, args);
+	}
+
+	@jakarta.annotation.PostConstruct
+	public void init() {
+		java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Kolkata"));
 	}
 
 	@Autowired

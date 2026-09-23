@@ -84,13 +84,17 @@ public class DatabaseConfig {
             /*
              * MySQL connection parameters
              */
-            if (url.startsWith("jdbc:mysql:")
-                    && !url.contains("?")) {
-
-                url = url +
-                        "?useSSL=true" +
-                        "&allowPublicKeyRetrieval=true" +
-                        "&serverTimezone=UTC";
+            if (url.startsWith("jdbc:mysql:")) {
+                if (!url.contains("?")) {
+                    url = url +
+                            "?useSSL=true" +
+                            "&allowPublicKeyRetrieval=true" +
+                            "&serverTimezone=Asia/Kolkata";
+                } else if (!url.contains("serverTimezone")) {
+                    url = url + "&serverTimezone=Asia/Kolkata";
+                } else {
+                    url = url.replaceAll("serverTimezone=[^&]*", "serverTimezone=Asia/Kolkata");
+                }
             }
 
             log.info(

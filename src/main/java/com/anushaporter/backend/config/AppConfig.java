@@ -14,6 +14,7 @@ public class AppConfig {
     public ObjectMapper objectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
+        mapper.setTimeZone(java.util.TimeZone.getTimeZone("Asia/Kolkata"));
         return mapper;
     }
 
