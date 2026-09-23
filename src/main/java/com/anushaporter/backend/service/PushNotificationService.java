@@ -9,6 +9,8 @@ import com.anushaporter.backend.repository.DriverRepository;
 import com.anushaporter.backend.repository.NotificationRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import org.slf4j.Logger;
@@ -71,12 +73,25 @@ public class PushNotificationService {
             if (token.startsWith("ExpoPushToken[")) {
                 sendExpo(token, title, message, bookingId, type);
             } else {
+                AndroidConfig androidConfig = AndroidConfig.builder()
+                        .setPriority(AndroidConfig.Priority.HIGH)
+                        .setNotification(AndroidNotification.builder()
+                                .setChannelId("order_dispatch")
+                                .setSound("default")
+                                .setPriority(AndroidNotification.Priority.HIGH)
+                                .setDefaultSound(true)
+                                .setDefaultVibrateTimings(true)
+                                .build())
+                        .build();
+
                 Message push = Message.builder()
                         .setToken(token)
                         .setNotification(com.google.firebase.messaging.Notification.builder()
                                 .setTitle(title).setBody(message).build())
+                        .setAndroidConfig(androidConfig)
                         .putData("bookingId", bookingId == null ? "" : bookingId)
                         .putData("notificationType", type)
+                        .putData("channelId", "order_dispatch")
                         .build();
                 safeSendFirebase(push);
             }
@@ -329,11 +344,13 @@ public class PushNotificationService {
         payload.put("to", token);
         payload.put("title", title);
         payload.put("body", message);
-        payload.put("sound", null); // Explicitly null: OS plays no sound; frontend controls custom audio/voice
+        payload.put("sound", "default"); // Enables background/locked sound playback on Android
+        payload.put("channelId", "order_dispatch"); // Android notification channel with high importance
         payload.put("priority", "high");
         payload.put("data", Map.of(
                 "bookingId", bookingId == null ? "" : bookingId,
-                "notificationType", type
+                "notificationType", type,
+                "channelId", "order_dispatch"
         ));
         HttpRequest request = HttpRequest.newBuilder(EXPO_URI)
                 .header("Content-Type", "application/json")
