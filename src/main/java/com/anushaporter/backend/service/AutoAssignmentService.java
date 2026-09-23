@@ -120,7 +120,7 @@ public class AutoAssignmentService {
                 return true;
             }
 
-            Set<Long> alreadyOffered = new HashSet<>(driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId));
+            Set<Long> alreadyOffered = getExcludedDriverIdsForBooking(bookingId);
             List<Driver> allDrivers = driverRepository.findAll();
             List<Driver> eligibleDrivers = allDrivers.stream()
                     .filter(d -> driverEligibilityService.isEligible(d, currentOrder, alreadyOffered))
@@ -152,7 +152,7 @@ public class AutoAssignmentService {
                     }
 
                     // Check if any new drivers came online within current unlocked radius
-                    Set<Long> updatedOffered = new HashSet<>(driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId));
+                    Set<Long> updatedOffered = getExcludedDriverIdsForBooking(bookingId);
                     List<Driver> newlyEligible = driverRepository.findAll().stream()
                             .filter(d -> driverEligibilityService.isEligible(d, checked, updatedOffered))
                             .toList();
@@ -179,7 +179,7 @@ public class AutoAssignmentService {
                     if (checked == null || isAssignedOrTerminal(checked.getStatus())) {
                         return true;
                     }
-                    Set<Long> updatedOffered = new HashSet<>(driverOfferRepository.findAllDriverIdsOfferedForBooking(bookingId));
+                    Set<Long> updatedOffered = getExcludedDriverIdsForBooking(bookingId);
                     List<Driver> newlyEligible = driverRepository.findAll().stream()
                             .filter(d -> driverEligibilityService.isEligible(d, checked, updatedOffered))
                             .toList();
@@ -233,6 +233,15 @@ public class AutoAssignmentService {
         return true;
     }
 
+    private Set<Long> getExcludedDriverIdsForBooking(String bookingId) {
+        Set<Long> excluded = new HashSet<>();
+        if (bookingId != null && !bookingId.isBlank()) {
+            excluded.addAll(driverOfferRepository.findExcludedDriverIdsForBooking(bookingId));
+            excluded.addAll(driverOfferRepository.findActiveOfferedDriverIds(bookingId, LocalDateTime.now()));
+        }
+        return excluded;
+    }
+
     private boolean isAssignedOrTerminal(String status) {
         if (status == null) return false;
         String s = status.trim().toUpperCase();
@@ -240,7 +249,7 @@ public class AutoAssignmentService {
                 || s.equals("DRIVER_EN_ROUTE") || s.equals("DRIVER_ARRIVED")
                 || s.equals("PICKED_UP") || s.equals("IN_TRANSIT")
                 || s.equals("DELIVERED") || s.equals("COMPLETED")
-                || s.equals("CANCELLED") || s.equals("DRIVER_CANCELLED");
+                || s.equals("CANCELLED") || s.equals("CANCELLED_BY_CUSTOMER") || s.equals("CANCELLED_BY_ADMIN");
     }
 
     @PreDestroy

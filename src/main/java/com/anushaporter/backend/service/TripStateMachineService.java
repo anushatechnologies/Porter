@@ -24,6 +24,15 @@ public class TripStateMachineService {
     private AutoAssignmentService autoAssignmentService;
 
     @Autowired(required = false)
+    private DriverOfferService driverOfferService;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
+
+    @Autowired(required = false)
+    private com.anushaporter.backend.config.handler.TelemetryWebSocketHandler telemetryWebSocketHandler;
+
+    @Autowired(required = false)
     private PushNotificationService pushNotificationService;
 
     // Allowed State Transitions Map
@@ -93,23 +102,78 @@ public class TripStateMachineService {
         // Handle DRIVER_CANCELLED (Triggers auto-reassignment)
         if (targetStatus == BookingStatus.DRIVER_CANCELLED) {
             String reason = request.getCancellationReason() != null ? request.getCancellationReason() : "Driver cancelled trip.";
-            order.setCancellationReason(reason);
-            order.setStatus(BookingStatus.DRIVER_CANCELLED.name());
+
+            // 1. Identify cancelled driver ID
+            Long cancelledDriverId = null;
+            if (driverId != null && !driverId.isBlank()) {
+                try { cancelledDriverId = Long.parseLong(driverId.trim()); } catch (Exception ignored) {}
+            }
+            if (cancelledDriverId == null && order.getDriverId() != null && !order.getDriverId().isBlank()) {
+                try { cancelledDriverId = Long.parseLong(order.getDriverId().trim()); } catch (Exception ignored) {}
+            }
+
+            // 2. Mark Driver A's offer CANCELLED, dismiss notifications & stop ringtone
+            if (driverOfferService != null && cancelledDriverId != null) {
+                try {
+                    driverOfferService.onDriverCancelled(bookingId, cancelledDriverId, reason);
+                } catch (Exception e) {
+                    log.warn("Failed to update DriverOffer on driver cancellation for {}: {}", bookingId, e.getMessage());
+                }
+            }
+
+            // 3. Reset Order to SEARCHING and clear driver assignment
+            order.setCancellationReason("Driver cancelled: " + reason);
+            order.setStatus(BookingStatus.SEARCHING.name());
             order.setDriverId(null);
             order.setDriverName(null);
             order.setDriverPhone(null);
             order.setDriverVehicleNumber(null);
-            orderRepository.save(order);
+            order.setDriverEmail(null);
+            Order savedOrder = orderRepository.save(order);
 
-            log.info("Driver {} cancelled Booking '{}'. Initiating automatic re-assignment...", driverId, bookingId);
+            // 4. Synchronize PassengerBooking table (if passenger ride)
+            if (passengerBookingRepository != null) {
+                try {
+                    var pbOpt = passengerBookingRepository.findByBookingNumber(bookingId);
+                    if (pbOpt.isEmpty()) {
+                        try { pbOpt = passengerBookingRepository.findById(Long.valueOf(bookingId)); } catch (Exception ignored) {}
+                    }
+                    pbOpt.ifPresent(pb -> {
+                        pb.setStatus(com.anushaporter.backend.model.PassengerBookingStatus.DRIVER_SEARCHING);
+                        pb.setDriverId(null);
+                        pb.setDriverName(null);
+                        pb.setDriverPhone(null);
+                        pb.setVehicleNumber(null);
+                        pb.setVehicleModel(null);
+                        pb.setDriverAssignedAt(null);
+                        pb.setCancellationReason("Driver cancelled: " + reason);
+                        passengerBookingRepository.save(pb);
+                    });
+                } catch (Exception e) {
+                    log.warn("Failed to reset PassengerBooking for {}: {}", bookingId, e.getMessage());
+                }
+            }
 
-            // Re-trigger auto-assignment in background
+            // 5. Broadcast status updates via WebSocket
+            if (telemetryWebSocketHandler != null) {
+                try {
+                    telemetryWebSocketHandler.broadcastOrderUpdate(bookingId, BookingStatus.SEARCHING.name());
+                    telemetryWebSocketHandler.broadcastPassengerStatus(bookingId, com.anushaporter.backend.model.PassengerBookingStatus.DRIVER_SEARCHING.name());
+                } catch (Exception ignored) {}
+            }
+
+            log.info("Driver {} cancelled Booking '{}'. Reverted order to SEARCHING and initiated auto-reassignment...",
+                    cancelledDriverId != null ? cancelledDriverId : driverId, bookingId);
+
+            // 6. Re-trigger auto-assignment in background
             autoAssignmentService.startAutoAssignment(bookingId);
 
             response.put("success", true);
             response.put("statusCode", 200);
             response.put("status", BookingStatus.SEARCHING.name());
+            response.put("bookingId", bookingId);
             response.put("message", "Driver cancelled. Auto-reassignment initiated.");
+            response.put("order", savedOrder);
             return response;
         }
 

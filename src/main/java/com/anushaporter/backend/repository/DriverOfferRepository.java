@@ -27,6 +27,12 @@ public interface DriverOfferRepository extends JpaRepository<DriverOffer, Long> 
     @Query("SELECT DISTINCT o.driverId FROM DriverOffer o WHERE o.bookingId = :bookingId")
     List<Long> findAllDriverIdsOfferedForBooking(@Param("bookingId") String bookingId);
 
+    @Query("SELECT DISTINCT o.driverId FROM DriverOffer o WHERE o.bookingId = :bookingId AND o.status IN ('REJECTED', 'CANCELLED')")
+    List<Long> findExcludedDriverIdsForBooking(@Param("bookingId") String bookingId);
+
+    @Query("SELECT DISTINCT o.driverId FROM DriverOffer o WHERE o.bookingId = :bookingId AND o.status = 'OFFERED' AND (o.expiresAt IS NULL OR o.expiresAt > :now)")
+    List<Long> findActiveOfferedDriverIds(@Param("bookingId") String bookingId, @Param("now") LocalDateTime now);
+
     @Query("SELECT o FROM DriverOffer o WHERE o.driverId = :driverId AND o.status = 'OFFERED' AND (o.expiresAt IS NULL OR o.expiresAt > :now)")
     List<DriverOffer> findActiveOffersForDriver(@Param("driverId") Long driverId, @Param("now") LocalDateTime now);
 

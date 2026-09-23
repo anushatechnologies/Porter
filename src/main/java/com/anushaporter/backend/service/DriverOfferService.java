@@ -656,4 +656,53 @@ public class DriverOfferService {
             } catch (Exception ignored) {}
         }
     }
+
+    /**
+     * When an assigned driver cancels the booking:
+     * 1. Marks this driver's offer as CANCELLED (or creates a CANCELLED offer record) so they are permanently excluded from reassignment.
+     * 2. Dismisses pending notifications for this driver.
+     * 3. Dispatches WebSocket event to stop ringtone immediately on the cancelled driver's device.
+     * 4. Sends push notification to driver acknowledging the cancellation.
+     */
+    @Transactional
+    public void onDriverCancelled(String bookingId, Long driverId, String reason) {
+        if (bookingId == null || bookingId.isBlank()) return;
+        LocalDateTime now = LocalDateTime.now();
+
+        if (driverId != null) {
+            Optional<DriverOffer> offerOpt = driverOfferRepository.findFirstByBookingIdAndDriverIdOrderByIdDesc(bookingId, driverId);
+            if (offerOpt.isPresent()) {
+                DriverOffer offer = offerOpt.get();
+                offer.setStatus(DriverOfferStatus.CANCELLED);
+                offer.setRespondedAt(now);
+                driverOfferRepository.save(offer);
+            } else {
+                DriverOffer cancelledOffer = new DriverOffer();
+                cancelledOffer.setBookingId(bookingId);
+                cancelledOffer.setDriverId(driverId);
+                cancelledOffer.setStatus(DriverOfferStatus.CANCELLED);
+                cancelledOffer.setOfferedAt(now);
+                cancelledOffer.setRespondedAt(now);
+                driverOfferRepository.save(cancelledOffer);
+            }
+
+            if (notificationRepository != null) {
+                try {
+                    notificationRepository.dismissDriverNotificationForBooking(bookingId, driverId);
+                } catch (Exception ignored) {}
+            }
+
+            if (telemetryWebSocketHandler != null) {
+                try {
+                    telemetryWebSocketHandler.broadcastOfferDismissForDriver(bookingId, driverId, "CANCELLED_BY_DRIVER");
+                } catch (Exception ignored) {}
+            }
+
+            if (pushNotificationService != null) {
+                try {
+                    driverRepository.findById(driverId).ifPresent(d -> pushNotificationService.notifyOfferDismissedForDriver(d, bookingId));
+                } catch (Exception ignored) {}
+            }
+        }
+    }
 }
