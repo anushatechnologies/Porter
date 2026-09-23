@@ -217,14 +217,33 @@ public class DriverAPIController {
         map.put("aadhaarNumber", driver.getAadhaarNumber() != null ? driver.getAadhaarNumber() : "");
         map.put("panNumber", driver.getPanNumber() != null ? driver.getPanNumber() : "");
         map.put("addressLine1", driver.getAddressLine1() != null ? driver.getAddressLine1() : "");
+        map.put("address_line1", driver.getAddressLine1() != null ? driver.getAddressLine1() : "");
+        map.put("address", driver.getAddressLine1() != null ? driver.getAddressLine1() : "");
         map.put("addressLine2", driver.getAddressLine2() != null ? driver.getAddressLine2() : "");
+        map.put("address_line2", driver.getAddressLine2() != null ? driver.getAddressLine2() : "");
         map.put("city", driver.getCity() != null ? driver.getCity() : "");
         map.put("state", driver.getState() != null ? driver.getState() : "");
         map.put("pincode", driver.getPincode() != null ? driver.getPincode() : "");
-        map.put("bankAccountNumber", driver.getBankAccountNumber() != null ? driver.getBankAccountNumber() : "");
-        map.put("bankIfscCode", driver.getBankIfscCode() != null ? driver.getBankIfscCode() : "");
-        map.put("bankAccountName", driver.getBankAccountName() != null ? driver.getBankAccountName() : "");
-        map.put("upiId", driver.getUpiId() != null ? driver.getUpiId() : "");
+        map.put("pinCode", driver.getPincode() != null ? driver.getPincode() : "");
+        String bName = driver.getBankName() != null ? driver.getBankName() : "";
+        map.put("bankName", bName);
+        map.put("bank_name", bName);
+        String acctNum = driver.getBankAccountNumber() != null ? driver.getBankAccountNumber() : "";
+        map.put("bankAccountNumber", acctNum);
+        map.put("accountNumber", acctNum);
+        map.put("account_number", acctNum);
+        String ifscVal = driver.getBankIfscCode() != null ? driver.getBankIfscCode() : "";
+        map.put("bankIfscCode", ifscVal);
+        map.put("ifscCode", ifscVal);
+        map.put("ifsc", ifscVal);
+        String acctName = driver.getBankAccountName() != null ? driver.getBankAccountName() : "";
+        map.put("bankAccountName", acctName);
+        map.put("accountHolderName", acctName);
+        map.put("account_holder_name", acctName);
+        String upiVal = driver.getUpiId() != null ? driver.getUpiId() : "";
+        map.put("upiId", upiVal);
+        map.put("upi_id", upiVal);
+        map.put("upi", upiVal);
         map.put("trips", driver.getTrips() != null ? driver.getTrips() : 0);
         map.put("latitude", driver.getLatitude());
         map.put("longitude", driver.getLongitude());
@@ -409,17 +428,48 @@ public class DriverAPIController {
             if (text(payload, "panNumber") != null) driver.setPanNumber(text(payload, "panNumber").trim().toUpperCase());
 
             // Address
-            if (text(payload, "addressLine1") != null) driver.setAddressLine1(text(payload, "addressLine1").trim());
-            if (text(payload, "addressLine2") != null) driver.setAddressLine2(text(payload, "addressLine2").trim());
+            String addr1 = text(payload, "addressLine1");
+            if (addr1 == null) addr1 = text(payload, "address_line1");
+            if (addr1 == null) addr1 = text(payload, "address");
+            if (addr1 != null) driver.setAddressLine1(addr1.trim());
+
+            String addr2 = text(payload, "addressLine2");
+            if (addr2 == null) addr2 = text(payload, "address_line2");
+            if (addr2 != null) driver.setAddressLine2(addr2.trim());
+
             if (text(payload, "city") != null) driver.setCity(text(payload, "city").trim());
             if (text(payload, "state") != null) driver.setState(text(payload, "state").trim());
-            if (text(payload, "pincode") != null) driver.setPincode(text(payload, "pincode").trim());
+
+            String pin = text(payload, "pincode");
+            if (pin == null) pin = text(payload, "pinCode");
+            if (pin == null) pin = text(payload, "postalCode");
+            if (pin != null) driver.setPincode(pin.trim());
 
             // Bank & UPI
-            if (text(payload, "bankAccountNumber") != null) driver.setBankAccountNumber(text(payload, "bankAccountNumber").trim());
-            if (text(payload, "bankIfscCode") != null) driver.setBankIfscCode(text(payload, "bankIfscCode").trim().toUpperCase());
-            if (text(payload, "bankAccountName") != null) driver.setBankAccountName(text(payload, "bankAccountName").trim());
-            if (text(payload, "upiId") != null) driver.setUpiId(text(payload, "upiId").trim());
+            String bName = text(payload, "bankName");
+            if (bName == null) bName = text(payload, "bank_name");
+            if (bName != null) driver.setBankName(bName.trim());
+
+            String acctNum = text(payload, "bankAccountNumber");
+            if (acctNum == null) acctNum = text(payload, "accountNumber");
+            if (acctNum == null) acctNum = text(payload, "account_number");
+            if (acctNum != null) driver.setBankAccountNumber(acctNum.trim());
+
+            String ifscCode = text(payload, "bankIfscCode");
+            if (ifscCode == null) ifscCode = text(payload, "ifscCode");
+            if (ifscCode == null) ifscCode = text(payload, "ifsc");
+            if (ifscCode == null) ifscCode = text(payload, "ifsc_code");
+            if (ifscCode != null) driver.setBankIfscCode(ifscCode.trim().toUpperCase());
+
+            String acctName = text(payload, "bankAccountName");
+            if (acctName == null) acctName = text(payload, "accountHolderName");
+            if (acctName == null) acctName = text(payload, "account_holder_name");
+            if (acctName != null) driver.setBankAccountName(acctName.trim());
+
+            String upi = text(payload, "upiId");
+            if (upi == null) upi = text(payload, "upi_id");
+            if (upi == null) upi = text(payload, "upi");
+            if (upi != null) driver.setUpiId(upi.trim());
 
             // Profile photo
             String photoUri = text(payload, "profilePhotoUri");
@@ -1321,14 +1371,16 @@ public class DriverAPIController {
         }
     }
 
-    // B. Submit Registration / Save & Next
+    // B. Submit Registration / Save & Next / KYC
     @PostMapping({ "/drivers/register", "/driver/register", "/drivers/register/step", "/driver/register/step",
             "/drivers/register/save-and-next", "/driver/register/save-and-next",
             "/drivers/registration/submit", "/driver/registration/submit",
             "/drivers/registration/save-and-next", "/driver/registration/save-and-next",
             "/drivers/registration/step", "/driver/registration/step",
             "/drivers/registration", "/driver/registration",
-            "/drivers/register/submit", "/driver/register/submit" })
+            "/drivers/register/submit", "/driver/register/submit",
+            "/driver/kyc", "/drivers/kyc", "/driver/kyc/submit", "/drivers/kyc/submit",
+            "/driver/kyc/save-and-next", "/drivers/kyc/save-and-next", "/driver/kyc/step", "/drivers/kyc/step" })
     public ResponseEntity<?> registerDriver(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
         AppUser appUser = getAuthenticatedAppUser(request);
         if (appUser == null) {
@@ -1379,7 +1431,7 @@ public class DriverAPIController {
 
         if (driver.getId() != null && driver.getKyc() != null &&
                 ("verified".equalsIgnoreCase(driver.getKyc()) || "approved".equalsIgnoreCase(driver.getKyc()))) {
-            if (!isUpdate && text(payload, "panNumber") == null && text(payload, "pan") == null && payload.get("documents") == null) {
+            if (!isUpdate && text(payload, "panNumber") == null && text(payload, "pan") == null && text(payload, "panCardNumber") == null && payload.get("documents") == null) {
                 return ResponseEntity.status(409).body(
                         Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists and is approved."));
             }
@@ -1388,7 +1440,7 @@ public class DriverAPIController {
         // If KYC is already pending review and this is a new submit attempt (not save-and-next / draft resume)
         if (!isSaveAndNext && driver.getId() != null && driver.getKyc() != null
                 && "pending".equalsIgnoreCase(driver.getKyc())) {
-            if (!isUpdate && text(payload, "panNumber") == null && text(payload, "pan") == null && payload.get("documents") == null) {
+            if (!isUpdate && text(payload, "panNumber") == null && text(payload, "pan") == null && text(payload, "panCardNumber") == null && payload.get("documents") == null) {
                 return ResponseEntity.status(409).body(
                         Map.of("success", false, "error", "Conflict", "message", "Your KYC application already exists."));
             }
@@ -1396,14 +1448,24 @@ public class DriverAPIController {
 
         String name = text(payload, "name");
         String aadhaar = text(payload, "aadhaarNumber");
+        if (aadhaar == null) aadhaar = text(payload, "aadhaar");
         String pan = text(payload, "panNumber");
         if (pan == null) pan = text(payload, "pan");
         if (pan == null) pan = text(payload, "panCardNumber");
         String pincode = text(payload, "pincode");
+        if (pincode == null) pincode = text(payload, "pinCode");
+        if (pincode == null) pincode = text(payload, "postalCode");
         String ifsc = text(payload, "ifscCode");
+        if (ifsc == null) ifsc = text(payload, "bankIfscCode");
+        if (ifsc == null) ifsc = text(payload, "ifsc");
+        if (ifsc == null) ifsc = text(payload, "ifsc_code");
         String accountNumber = text(payload, "accountNumber");
+        if (accountNumber == null) accountNumber = text(payload, "bankAccountNumber");
+        if (accountNumber == null) accountNumber = text(payload, "account_number");
         String licenseNumber = text(payload, "licenseNumber");
+        if (licenseNumber == null) licenseNumber = text(payload, "license");
         String rcNumber = text(payload, "rcNumber");
+        if (rcNumber == null) rcNumber = text(payload, "rc");
 
         // Strict Backend Validation Checks (HTTP 400)
         if (name != null && !name.matches("^[a-zA-Z\\s]{2,50}$")) {
@@ -1551,14 +1613,36 @@ public class DriverAPIController {
         if (aadhaar != null) driver.setAadhaarNumber(aadhaar);
         if (pan != null && !pan.trim().isEmpty()) driver.setPanNumber(pan.trim().toUpperCase());
         if (licenseNumber != null) driver.setLicenseNumber(licenseNumber);
-        if (text(payload, "addressLine1") != null) driver.setAddressLine1(text(payload, "addressLine1"));
-        if (text(payload, "city") != null) driver.setCity(text(payload, "city"));
-        if (text(payload, "state") != null) driver.setState(text(payload, "state"));
-        if (pincode != null) driver.setPincode(pincode);
-        if (text(payload, "bankName") != null) driver.setBankName(text(payload, "bankName"));
-        if (text(payload, "accountHolderName") != null) driver.setAccountHolderName(text(payload, "accountHolderName"));
-        if (accountNumber != null) driver.setAccountNumber(accountNumber);
-        if (ifsc != null) driver.setIfscCode(ifsc);
+        String addr1 = text(payload, "addressLine1");
+        if (addr1 == null) addr1 = text(payload, "address_line1");
+        if (addr1 == null) addr1 = text(payload, "address");
+        if (addr1 != null) driver.setAddressLine1(addr1.trim());
+
+        String addr2 = text(payload, "addressLine2");
+        if (addr2 == null) addr2 = text(payload, "address_line2");
+        if (addr2 != null) driver.setAddressLine2(addr2.trim());
+
+        if (text(payload, "city") != null) driver.setCity(text(payload, "city").trim());
+        if (text(payload, "state") != null) driver.setState(text(payload, "state").trim());
+        if (pincode != null) driver.setPincode(pincode.trim());
+
+        String bName = text(payload, "bankName");
+        if (bName == null) bName = text(payload, "bank_name");
+        if (bName != null) driver.setBankName(bName.trim());
+
+        String holder = text(payload, "accountHolderName");
+        if (holder == null) holder = text(payload, "bankAccountName");
+        if (holder == null) holder = text(payload, "account_holder_name");
+        if (holder == null) holder = text(payload, "bankAccountHolderName");
+        if (holder != null) driver.setAccountHolderName(holder.trim());
+
+        if (accountNumber != null) driver.setAccountNumber(accountNumber.trim());
+        if (ifsc != null) driver.setIfscCode(ifsc.trim().toUpperCase());
+
+        String upi = text(payload, "upiId");
+        if (upi == null) upi = text(payload, "upi_id");
+        if (upi == null) upi = text(payload, "upi");
+        if (upi != null) driver.setUpiId(upi.trim());
 
         // Process all KYC documents to S3
         @SuppressWarnings("unchecked")
@@ -1773,15 +1857,36 @@ public class DriverAPIController {
         data.put("rcNumber", driver.getRcNumber());
         data.put("licenseNumber", driver.getLicenseNumber());
         data.put("aadhaarNumber", driver.getAadhaarNumber());
-        data.put("panNumber", driver.getPanNumber());
-        data.put("addressLine1", driver.getAddressLine1());
-        data.put("city", driver.getCity());
-        data.put("state", driver.getState());
-        data.put("pincode", driver.getPincode());
-        data.put("bankName", driver.getBankName());
-        data.put("accountHolderName", driver.getAccountHolderName());
-        data.put("accountNumber", driver.getAccountNumber());
-        data.put("ifscCode", driver.getIfscCode());
+        data.put("panNumber", driver.getPanNumber() != null ? driver.getPanNumber() : "");
+        data.put("pan", driver.getPanNumber() != null ? driver.getPanNumber() : "");
+        data.put("addressLine1", driver.getAddressLine1() != null ? driver.getAddressLine1() : "");
+        data.put("address_line1", driver.getAddressLine1() != null ? driver.getAddressLine1() : "");
+        data.put("address", driver.getAddressLine1() != null ? driver.getAddressLine1() : "");
+        data.put("addressLine2", driver.getAddressLine2() != null ? driver.getAddressLine2() : "");
+        data.put("address_line2", driver.getAddressLine2() != null ? driver.getAddressLine2() : "");
+        data.put("city", driver.getCity() != null ? driver.getCity() : "");
+        data.put("state", driver.getState() != null ? driver.getState() : "");
+        data.put("pincode", driver.getPincode() != null ? driver.getPincode() : "");
+        data.put("pinCode", driver.getPincode() != null ? driver.getPincode() : "");
+        String bName = driver.getBankName() != null ? driver.getBankName() : "";
+        data.put("bankName", bName);
+        data.put("bank_name", bName);
+        String acctNum = driver.getBankAccountNumber() != null ? driver.getBankAccountNumber() : "";
+        data.put("bankAccountNumber", acctNum);
+        data.put("accountNumber", acctNum);
+        data.put("account_number", acctNum);
+        String ifscVal = driver.getBankIfscCode() != null ? driver.getBankIfscCode() : "";
+        data.put("bankIfscCode", ifscVal);
+        data.put("ifscCode", ifscVal);
+        data.put("ifsc", ifscVal);
+        String acctName = driver.getBankAccountName() != null ? driver.getBankAccountName() : "";
+        data.put("bankAccountName", acctName);
+        data.put("accountHolderName", acctName);
+        data.put("account_holder_name", acctName);
+        String upiVal = driver.getUpiId() != null ? driver.getUpiId() : "";
+        data.put("upiId", upiVal);
+        data.put("upi_id", upiVal);
+        data.put("upi", upiVal);
         data.put("profilePhotoUri", photoUrl);
         data.put("profilePhotoUrl", photoUrl);
         data.put("profilePhoto", photoUrl);

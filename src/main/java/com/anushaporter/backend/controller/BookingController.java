@@ -1800,9 +1800,10 @@ public class BookingController {
         response.put("paymentConfirmationPending", isPaymentPending);
 
         Order orderInstance = orderOpt.orElse(null);
-        boolean isInitialSearchingStage = "searching".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
+        boolean isInitialSearchingStage = ("searching".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
                 || "created".equalsIgnoreCase(status) || "placed".equalsIgnoreCase(status) || "unassigned".equalsIgnoreCase(status)
-                || "requested".equalsIgnoreCase(status) || !hasAssignedDriver;
+                || "requested".equalsIgnoreCase(status))
+                || (!hasAssignedDriver && (status == null || "assigned".equalsIgnoreCase(status) || "searching".equalsIgnoreCase(status)));
 
         boolean canCancel;
         if (isInitialSearchingStage) {
@@ -1821,7 +1822,7 @@ public class BookingController {
             if ("cancelled".equalsIgnoreCase(status)) blockedReason = "Booking is already cancelled";
             else if (isDelivered) blockedReason = "Order has been delivered";
             else if (isOtpVerified) blockedReason = "Delivery OTP has been verified";
-            else if (driverEntity != null && orderInstance != null && isDriverNearDropLocation(orderInstance, driverEntity)) {
+            else if (orderInstance != null && isDriverNearDropLocation(orderInstance, driverEntity)) {
                 blockedReason = "Driver has arrived near drop location";
             }
             response.put("cancellationBlockedReason", blockedReason);
