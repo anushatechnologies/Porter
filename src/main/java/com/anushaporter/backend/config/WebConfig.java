@@ -95,6 +95,15 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOrigins(AppConfig.ALLOWED_ORIGINS.toArray(new String[0]))
+                .allowedOriginPatterns(AppConfig.ALLOWED_ORIGIN_PATTERNS.toArray(new String[0]))
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
+                .allowedHeaders("*")
+                .exposedHeaders("Authorization", "Content-Disposition")
+                .allowCredentials(true)
+                .maxAge(3600);
+
         registry.addMapping("/uploads/**")
                 .allowedOrigins("*")
                 .allowedMethods("GET")
