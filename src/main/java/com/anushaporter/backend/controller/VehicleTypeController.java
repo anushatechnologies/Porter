@@ -14,15 +14,20 @@ import java.util.stream.Collectors;
 
 /**
  * Dynamic Vehicle Types Controller
- * Provides endpoints for Driver App (onboarding), Customer App (booking/pricing), and Admin Web Dashboard.
+ * Provides endpoints for Driver App (onboarding), Customer App
+ * (booking/pricing), and Admin Web Dashboard.
  *
  * Endpoints:
- * - GET    /api/vehicle-types?status=active      — Fetch active vehicles for Driver & User apps
- * - GET    /api/admin/vehicle-types              — Fetch all vehicles (active + inactive) for Admin
- * - POST   /api/admin/vehicle-types              — Create/update vehicle category
- * - PUT    /api/admin/vehicle-types/{id}         — Update vehicle category pricing/details
- * - PATCH  /api/admin/vehicle-types/{id}/status  — Toggle/set active / inactive status
- * - DELETE /api/admin/vehicle-types/{id}         — Soft-delete / deactivate vehicle category
+ * - GET /api/vehicle-types?status=active — Fetch active vehicles for Driver &
+ * User apps
+ * - GET /api/admin/vehicle-types — Fetch all vehicles (active + inactive) for
+ * Admin
+ * - POST /api/admin/vehicle-types — Create/update vehicle category
+ * - PUT /api/admin/vehicle-types/{id} — Update vehicle category pricing/details
+ * - PATCH /api/admin/vehicle-types/{id}/status — Toggle/set active / inactive
+ * status
+ * - DELETE /api/admin/vehicle-types/{id} — Soft-delete / deactivate vehicle
+ * category
  */
 @RestController
 @RequestMapping({
@@ -53,12 +58,14 @@ public class VehicleTypeController {
             vehicleTypeRepository.findAll().forEach(vt -> {
                 boolean changed = false;
                 if (vt.getImageUrl() != null && vt.getImageUrl().contains("poteranusha.s3.amazonaws.com")) {
-                    vt.setImageUrl(vt.getImageUrl().replace("poteranusha.s3.amazonaws.com", "poteranusha.s3.ap-south-2.amazonaws.com"));
+                    vt.setImageUrl(vt.getImageUrl().replace("poteranusha.s3.amazonaws.com",
+                            "poteranusha.s3.ap-south-2.amazonaws.com"));
                     changed = true;
                 }
                 String typeKey = (vt.getType() != null ? vt.getType() : "").toLowerCase();
                 String idKey = (vt.getId() != null ? vt.getId() : "").trim();
-                if ((typeKey.contains("cab") || "6".equals(idKey)) && (vt.getImageUrl() == null || vt.getImageUrl().isBlank() || vt.getImageUrl().contains("/vehicles/cab.png"))) {
+                if ((typeKey.contains("cab") || "6".equals(idKey)) && (vt.getImageUrl() == null
+                        || vt.getImageUrl().isBlank() || vt.getImageUrl().contains("/vehicles/cab.png"))) {
                     vt.setImageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png");
                     changed = true;
                 }
@@ -68,18 +75,20 @@ public class VehicleTypeController {
 
                 // Auto-sync passenger vehicles into passenger_vehicle_categories on startup
                 String sType = vt.getServiceType() != null ? vt.getServiceType().toUpperCase() : "";
-                if (sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB") || typeKey.contains("cab") || typeKey.contains("taxi")) {
+                if (sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB")
+                        || typeKey.contains("cab") || typeKey.contains("taxi")) {
                     syncToPassengerCategory(vt);
                 }
             });
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     private VehicleType build(String id, String name, String type, String description,
-                              String capacity, int capacityKg, String dimensions,
-                              String iconName, String imageUrl,
-                              double baseFare, double baseKm, double perKmRate,
-                              String serviceType, int priority) {
+            String capacity, int capacityKg, String dimensions,
+            String iconName, String imageUrl,
+            double baseFare, double baseKm, double perKmRate,
+            String serviceType, int priority) {
         VehicleType v = new VehicleType();
         v.setId(id);
         v.setName(name);
@@ -107,7 +116,7 @@ public class VehicleTypeController {
      * GET /api/vehicle-types?status=active&serviceType=PASSENGER
      * GET /api/admin/vehicle-types
      */
-    @GetMapping({"", "/active"})
+    @GetMapping({ "", "/active" })
     public ResponseEntity<Map<String, Object>> getVehicleTypes(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String serviceType,
@@ -140,12 +149,15 @@ public class VehicleTypeController {
         List<Map<String, Object>> vehicles = list.stream()
                 .map(this::formatVehicleType)
                 .filter(m -> {
-                    if (targetService == null || "ALL".equalsIgnoreCase(targetService)) return true;
+                    if (targetService == null || "ALL".equalsIgnoreCase(targetService))
+                        return true;
                     String st = (String) m.get("serviceType");
                     if ("PASSENGER".equalsIgnoreCase(targetService)) {
                         return "PASSENGER".equalsIgnoreCase(st) || "BOTH".equalsIgnoreCase(st);
-                    } else if ("GOODS".equalsIgnoreCase(targetService) || "OUR_SERVICES".equalsIgnoreCase(targetService)) {
-                        return "OUR_SERVICES".equalsIgnoreCase(st) || "GOODS".equalsIgnoreCase(st) || "BOTH".equalsIgnoreCase(st);
+                    } else if ("GOODS".equalsIgnoreCase(targetService)
+                            || "OUR_SERVICES".equalsIgnoreCase(targetService)) {
+                        return "OUR_SERVICES".equalsIgnoreCase(st) || "GOODS".equalsIgnoreCase(st)
+                                || "BOTH".equalsIgnoreCase(st);
                     }
                     return true;
                 })
@@ -153,9 +165,12 @@ public class VehicleTypeController {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
-        response.put("serviceType", normalizedService != null ? ("GOODS".equals(normalizedService) ? "OUR_SERVICES" : normalizedService) : "ALL");
+        response.put("serviceType",
+                normalizedService != null ? ("GOODS".equals(normalizedService) ? "OUR_SERVICES" : normalizedService)
+                        : "ALL");
         response.put("serviceCategory", normalizedService != null
-                ? ("PASSENGER".equals(normalizedService) ? "Passenger Rides" : ("GOODS".equals(normalizedService) ? "Our Services" : "All Services"))
+                ? ("PASSENGER".equals(normalizedService) ? "Passenger Rides"
+                        : ("GOODS".equals(normalizedService) ? "Our Services" : "All Services"))
                 : "All Services");
         response.put("vehicles", vehicles);
         response.put("count", vehicles.size());
@@ -173,7 +188,8 @@ public class VehicleTypeController {
             opt = vehicleTypeRepository.findByType(id);
         }
         if (opt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", false, "message", "Vehicle type not found: " + id));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Vehicle type not found: " + id));
         }
         return ResponseEntity.ok(Map.of("success", true, "vehicle", formatVehicleType(opt.get())));
     }
@@ -206,8 +222,7 @@ public class VehicleTypeController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "success", false,
-                    "message", "Failed to save vehicle category: " + e.getMessage()
-            ));
+                    "message", "Failed to save vehicle category: " + e.getMessage()));
         }
     }
 
@@ -222,15 +237,20 @@ public class VehicleTypeController {
         if (opt.isEmpty()) {
             opt = vehicleTypeRepository.findByType(id);
         }
-        if (opt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
-                    "success", false,
-                    "message", "Vehicle type not found: " + id
-            ));
+
+        VehicleType v;
+        if (opt.isPresent()) {
+            v = opt.get();
+        } else {
+            v = new VehicleType();
+            v.setId(id);
+            v.setType(id);
         }
 
-        VehicleType v = opt.get();
         populateVehicleTypeFields(v, body);
+        if (v.getType() == null || v.getType().isBlank()) {
+            v.setType(id);
+        }
         VehicleType saved = vehicleTypeRepository.save(v);
         syncToPassengerCategory(saved);
 
@@ -260,8 +280,7 @@ public class VehicleTypeController {
         if (opt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
                     "success", false,
-                    "message", "Vehicle type not found: " + id
-            ));
+                    "message", "Vehicle type not found: " + id));
         }
 
         VehicleType v = opt.get();
@@ -284,8 +303,7 @@ public class VehicleTypeController {
                 "success", true,
                 "message", "Vehicle category status updated",
                 "id", v.getId(),
-                "status", v.getStatus()
-        ));
+                "status", v.getStatus()));
     }
 
     /**
@@ -302,8 +320,7 @@ public class VehicleTypeController {
         if (opt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
                     "success", false,
-                    "message", "Vehicle type not found: " + id
-            ));
+                    "message", "Vehicle type not found: " + id));
         }
 
         VehicleType v = opt.get();
@@ -314,30 +331,33 @@ public class VehicleTypeController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Vehicle category disabled (soft-deleted)",
-                "id", v.getId()
-        ));
+                "id", v.getId()));
     }
 
     private void syncToPassengerCategory(VehicleType v) {
-        if (passengerVehicleCategoryRepository == null || v == null) return;
+        if (passengerVehicleCategoryRepository == null || v == null)
+            return;
         try {
             String sType = v.getServiceType() != null ? v.getServiceType().toUpperCase() : "";
             String t = (v.getType() != null ? v.getType() : "").toLowerCase();
             String n = (v.getName() != null ? v.getName() : "").toLowerCase();
             boolean isPassenger = sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB")
-                    || t.contains("cab") || t.contains("taxi") || n.contains("cab") || n.contains("taxi") || "6".equals(v.getId());
+                    || t.contains("cab") || t.contains("taxi") || n.contains("cab") || n.contains("taxi")
+                    || "6".equals(v.getId());
             String catCode = (v.getType() != null && !v.getType().isBlank() ? v.getType() : v.getId()).toUpperCase();
 
-            Optional<com.anushaporter.backend.model.PassengerVehicleCategory> existingOpt =
-                    passengerVehicleCategoryRepository.findByCategoryCode(catCode);
+            Optional<com.anushaporter.backend.model.PassengerVehicleCategory> existingOpt = passengerVehicleCategoryRepository
+                    .findByCategoryCode(catCode);
             if (existingOpt.isEmpty() && v.getName() != null && !v.getName().isBlank()) {
                 existingOpt = passengerVehicleCategoryRepository.findByCategoryCode(v.getName().trim().toUpperCase());
             }
 
             if (isPassenger) {
-                com.anushaporter.backend.model.PassengerVehicleCategory cat = existingOpt.orElse(new com.anushaporter.backend.model.PassengerVehicleCategory());
+                com.anushaporter.backend.model.PassengerVehicleCategory cat = existingOpt
+                        .orElse(new com.anushaporter.backend.model.PassengerVehicleCategory());
                 cat.setCategoryCode(catCode);
-                cat.setDisplayName(v.getDisplayName() != null && !v.getDisplayName().isBlank() ? v.getDisplayName() : v.getName());
+                cat.setDisplayName(
+                        v.getDisplayName() != null && !v.getDisplayName().isBlank() ? v.getDisplayName() : v.getName());
                 cat.setDescription(v.getDescription());
                 int capacity = v.getMaxPassengers() != null && v.getMaxPassengers() > 0
                         ? v.getMaxPassengers()
@@ -346,9 +366,11 @@ public class VehicleTypeController {
                 cat.setLuggageCapacity(v.getMaxLuggage() != null ? v.getMaxLuggage() : 2);
                 cat.setBaseFare(java.math.BigDecimal.valueOf(v.getBaseFare() != null ? v.getBaseFare() : 50.0));
                 cat.setPerKmRate(java.math.BigDecimal.valueOf(v.getPerKmRate() != null ? v.getPerKmRate() : 15.0));
-                cat.setMinimumFare(java.math.BigDecimal.valueOf(v.getMinFare() != null ? v.getMinFare() : (v.getBaseFare() != null ? v.getBaseFare() : 50.0)));
+                cat.setMinimumFare(java.math.BigDecimal.valueOf(
+                        v.getMinFare() != null ? v.getMinFare() : (v.getBaseFare() != null ? v.getBaseFare() : 50.0)));
                 cat.setMinimumKm(java.math.BigDecimal.valueOf(v.getBaseKm() != null ? v.getBaseKm() : 1.0));
-                cat.setDriverAllowance(java.math.BigDecimal.valueOf(v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0));
+                cat.setDriverAllowance(
+                        java.math.BigDecimal.valueOf(v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0));
                 cat.setImageUrl(v.getImageUrl());
                 cat.setDisplayOrder(v.getPriority() != null ? v.getPriority() : 1);
                 cat.setActive("active".equalsIgnoreCase(v.getStatus()));
@@ -358,17 +380,24 @@ public class VehicleTypeController {
                 cat.setActive(false);
                 passengerVehicleCategoryRepository.save(cat);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     private void populateVehicleTypeFields(VehicleType v, Map<String, Object> body) {
-        if (body.get("name") != null) v.setName(String.valueOf(body.get("name")).trim());
-        if (body.get("type") != null) v.setType(String.valueOf(body.get("type")).trim());
-        if (body.get("typeCode") != null) v.setType(String.valueOf(body.get("typeCode")).trim());
-        if (body.get("type_code") != null) v.setType(String.valueOf(body.get("type_code")).trim());
+        if (body.get("name") != null)
+            v.setName(String.valueOf(body.get("name")).trim());
+        if (body.get("type") != null)
+            v.setType(String.valueOf(body.get("type")).trim());
+        if (body.get("typeCode") != null)
+            v.setType(String.valueOf(body.get("typeCode")).trim());
+        if (body.get("type_code") != null)
+            v.setType(String.valueOf(body.get("type_code")).trim());
 
-        if (body.get("description") != null) v.setDescription(String.valueOf(body.get("description")).trim());
-        if (body.get("capacity") != null) v.setCapacity(String.valueOf(body.get("capacity")).trim());
+        if (body.get("description") != null)
+            v.setDescription(String.valueOf(body.get("description")).trim());
+        if (body.get("capacity") != null)
+            v.setCapacity(String.valueOf(body.get("capacity")).trim());
 
         if (body.get("capacityKg") != null) {
             v.setCapacityKg(parseInteger(body.get("capacityKg")));
@@ -376,7 +405,8 @@ public class VehicleTypeController {
             v.setCapacityKg(parseInteger(body.get("capacity_kg")));
         }
 
-        if (body.get("dimensions") != null) v.setDimensions(String.valueOf(body.get("dimensions")).trim());
+        if (body.get("dimensions") != null)
+            v.setDimensions(String.valueOf(body.get("dimensions")).trim());
 
         if (body.get("iconName") != null) {
             v.setIconName(String.valueOf(body.get("iconName")).trim());
@@ -408,8 +438,10 @@ public class VehicleTypeController {
             v.setPerKmRate(parseDouble(body.get("per_km_rate")));
         }
 
-        if (body.get("status") != null) v.setStatus(String.valueOf(body.get("status")).trim().toLowerCase());
-        if (body.get("priority") != null) v.setPriority(parseInteger(body.get("priority")));
+        if (body.get("status") != null)
+            v.setStatus(String.valueOf(body.get("status")).trim().toLowerCase());
+        if (body.get("priority") != null)
+            v.setPriority(parseInteger(body.get("priority")));
 
         if (body.get("serviceType") != null) {
             v.setServiceType(String.valueOf(body.get("serviceType")).trim());
@@ -521,8 +553,10 @@ public class VehicleTypeController {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", v.getId());
         map.put("name", v.getName() != null ? v.getName() : "");
-        map.put("displayName", v.getDisplayName() != null ? v.getDisplayName() : (v.getName() != null ? v.getName() : ""));
-        map.put("display_name", v.getDisplayName() != null ? v.getDisplayName() : (v.getName() != null ? v.getName() : ""));
+        map.put("displayName",
+                v.getDisplayName() != null ? v.getDisplayName() : (v.getName() != null ? v.getName() : ""));
+        map.put("display_name",
+                v.getDisplayName() != null ? v.getDisplayName() : (v.getName() != null ? v.getName() : ""));
         map.put("type", v.getType() != null ? v.getType() : "");
         map.put("typeCode", v.getType() != null ? v.getType() : "");
         map.put("type_code", v.getType() != null ? v.getType() : "");
@@ -539,9 +573,11 @@ public class VehicleTypeController {
 
         String rawImageUrl = v.getImageUrl() != null ? v.getImageUrl().trim() : "";
         if (rawImageUrl.contains("poteranusha.s3.amazonaws.com")) {
-            rawImageUrl = rawImageUrl.replace("poteranusha.s3.amazonaws.com", "poteranusha.s3.ap-south-2.amazonaws.com");
+            rawImageUrl = rawImageUrl.replace("poteranusha.s3.amazonaws.com",
+                    "poteranusha.s3.ap-south-2.amazonaws.com");
         }
-        if (rawImageUrl.isEmpty() || rawImageUrl.endsWith("/vehicles/bike.png") || rawImageUrl.endsWith("/vehicles/auto.png")) {
+        if (rawImageUrl.isEmpty() || rawImageUrl.endsWith("/vehicles/bike.png")
+                || rawImageUrl.endsWith("/vehicles/auto.png")) {
             rawImageUrl = resolveDefaultVehicleImageUrl(typeKey, nameKey, idKey);
         }
         map.put("imageUrl", rawImageUrl);
@@ -588,7 +624,8 @@ public class VehicleTypeController {
             sType = "BOTH";
             sCategory = "Both (Passenger & Courier)";
             supported = List.of("OUR_SERVICES", "GOODS", "PASSENGER");
-        } else if ("PASSENGER".equalsIgnoreCase(rawS) || typeKey.contains("cab") || nameKey.contains("cab") || idKey.equals("6")
+        } else if ("PASSENGER".equalsIgnoreCase(rawS) || typeKey.contains("cab") || nameKey.contains("cab")
+                || idKey.equals("6")
                 || typeKey.contains("bike_taxi") || typeKey.contains("auto_taxi") || idKey.startsWith("pass_")) {
             sType = "PASSENGER";
             sCategory = "Passenger Rides";
@@ -608,9 +645,11 @@ public class VehicleTypeController {
     }
 
     private Integer parseInteger(Object val) {
-        if (val == null) return null;
+        if (val == null)
+            return null;
         try {
-            if (val instanceof Number) return ((Number) val).intValue();
+            if (val instanceof Number)
+                return ((Number) val).intValue();
             return Integer.parseInt(String.valueOf(val).replaceAll("[^0-9-]", "").trim());
         } catch (Exception e) {
             return 1;
@@ -618,9 +657,11 @@ public class VehicleTypeController {
     }
 
     private Double parseDouble(Object val) {
-        if (val == null) return null;
+        if (val == null)
+            return null;
         try {
-            if (val instanceof Number) return ((Number) val).doubleValue();
+            if (val instanceof Number)
+                return ((Number) val).doubleValue();
             return Double.parseDouble(String.valueOf(val).replaceAll("[^0-9.-]", "").trim());
         } catch (Exception e) {
             return 0.0;
@@ -628,8 +669,10 @@ public class VehicleTypeController {
     }
 
     private Boolean parseBoolean(Object val) {
-        if (val == null) return null;
-        if (val instanceof Boolean) return (Boolean) val;
+        if (val == null)
+            return null;
+        if (val instanceof Boolean)
+            return (Boolean) val;
         String s = String.valueOf(val).trim().toLowerCase();
         return "true".equals(s) || "1".equals(s) || "yes".equals(s);
     }
@@ -639,20 +682,23 @@ public class VehicleTypeController {
         String n = (nameKey != null ? nameKey : "").toLowerCase();
         String id = (idKey != null ? idKey : "").toLowerCase();
 
-        if (t.contains("cab") || id.equals("6") || t.contains("car") || t.contains("hatchback") || n.contains("cab") || n.contains("car") || n.contains("hatchback")) {
+        if (t.contains("cab") || id.equals("6") || t.contains("car") || t.contains("hatchback") || n.contains("cab")
+                || n.contains("car") || n.contains("hatchback")) {
             return "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png";
-        } else if (t.contains("bike") || t.contains("scooter") || n.contains("bike") || n.contains("scooter") || id.contains("bike") || id.contains("scooter")) {
+        } else if (t.contains("bike") || t.contains("scooter") || n.contains("bike") || n.contains("scooter")
+                || id.contains("bike") || id.contains("scooter")) {
             return "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=400&q=80";
         } else if (t.contains("auto") || t.contains("rickshaw") || n.contains("auto") || id.contains("auto")) {
             return "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400&q=80";
-        } else if (t.contains("tata") || t.contains("ace") || t.contains("mini") || n.contains("tata") || n.contains("mini") || id.contains("tata") || id.contains("mini")) {
+        } else if (t.contains("tata") || t.contains("ace") || t.contains("mini") || n.contains("tata")
+                || n.contains("mini") || id.contains("tata") || id.contains("mini")) {
             return "https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=400&q=80";
         } else if (t.contains("pickup") || n.contains("pickup") || id.contains("pickup")) {
             return "https://images.unsplash.com/photo-1559297434-fae8a1916a79?w=400&q=80";
-        } else if (t.contains("407") || t.contains("truck") || t.contains("heavy") || t.contains("lpt") || n.contains("407") || n.contains("truck") || n.contains("lpt")) {
+        } else if (t.contains("407") || t.contains("truck") || t.contains("heavy") || t.contains("lpt")
+                || n.contains("407") || n.contains("truck") || n.contains("lpt")) {
             return "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=400&q=80";
         }
         return "https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=400&q=80";
     }
 }
-

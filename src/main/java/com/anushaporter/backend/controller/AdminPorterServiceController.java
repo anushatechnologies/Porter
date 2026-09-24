@@ -18,7 +18,8 @@ public class AdminPorterServiceController {
 
     /**
      * GET /api/admin/services
-     * Returns list of all services (Active & Inactive) with search, category filter, and sort.
+     * Returns list of all services (Active & Inactive) with search, category
+     * filter, and sort.
      */
     @GetMapping
     public ResponseEntity<?> getAllServices(
@@ -61,8 +62,7 @@ public class AdminPorterServiceController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "count", formatted.size(),
-                "services", formatted
-        ));
+                "services", formatted));
     }
 
     /**
@@ -75,8 +75,7 @@ public class AdminPorterServiceController {
         if (service == null) {
             return ResponseEntity.status(404).body(Map.of(
                     "success", false,
-                    "message", "Service not found with identifier: " + id
-            ));
+                    "message", "Service not found with identifier: " + id));
         }
         return ResponseEntity.ok(Map.of("success", true, "service", formatServiceForAdmin(service)));
     }
@@ -110,8 +109,7 @@ public class AdminPorterServiceController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Service created successfully",
-                "service", formatServiceForAdmin(saved)
-        ));
+                "service", formatServiceForAdmin(saved)));
     }
 
     /**
@@ -122,20 +120,23 @@ public class AdminPorterServiceController {
     public ResponseEntity<?> updateService(@PathVariable String id, @RequestBody Map<String, Object> payload) {
         PorterService service = findServiceByIdOrSlug(id);
         if (service == null) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "success", false,
-                    "message", "Service not found with identifier: " + id
-            ));
+            // Defensive Upsert: If frontend calls PUT /api/admin/services/suv and it doesn't exist, create it!
+            service = new PorterService();
+            service.setServiceId(id.trim().toLowerCase());
+            long count = serviceRepository.count();
+            service.setDisplayOrder((int) count + 1);
         }
 
         mapServiceFromPayload(payload, service);
+        if (service.getServiceId() == null || service.getServiceId().isBlank()) {
+            service.setServiceId(id.trim().toLowerCase());
+        }
         PorterService saved = serviceRepository.save(service);
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Service updated successfully",
-                "service", formatServiceForAdmin(saved)
-        ));
+                "service", formatServiceForAdmin(saved)));
     }
 
     /**
@@ -151,8 +152,7 @@ public class AdminPorterServiceController {
         if (service == null) {
             return ResponseEntity.status(404).body(Map.of(
                     "success", false,
-                    "message", "Service not found with identifier: " + id
-            ));
+                    "message", "Service not found with identifier: " + id));
         }
 
         if (payload != null && payload.containsKey("isActive")) {
@@ -167,7 +167,8 @@ public class AdminPorterServiceController {
             if (raw instanceof Boolean) {
                 service.setIsActive((Boolean) raw);
             } else if (raw != null) {
-                service.setIsActive("active".equalsIgnoreCase(raw.toString()) || "true".equalsIgnoreCase(raw.toString()));
+                service.setIsActive(
+                        "active".equalsIgnoreCase(raw.toString()) || "true".equalsIgnoreCase(raw.toString()));
             }
         } else {
             // Toggle boolean
@@ -177,16 +178,17 @@ public class AdminPorterServiceController {
         PorterService saved = serviceRepository.save(service);
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Service status updated to " + (Boolean.TRUE.equals(saved.getIsActive()) ? "Active" : "Inactive"),
+                "message",
+                "Service status updated to " + (Boolean.TRUE.equals(saved.getIsActive()) ? "Active" : "Inactive"),
                 "isActive", saved.getIsActive(),
-                "service", formatServiceForAdmin(saved)
-        ));
+                "service", formatServiceForAdmin(saved)));
     }
 
     /**
      * PATCH /api/admin/services/reorder
      * Updates display order via drag-and-drop list of IDs.
-     * Request body: { "serviceIds": ["two-wheeler", "mini-truck", "packers-movers"] }
+     * Request body: { "serviceIds": ["two-wheeler", "mini-truck", "packers-movers"]
+     * }
      */
     @PatchMapping("/reorder")
     public ResponseEntity<?> reorderServices(@RequestBody Map<String, Object> payload) {
@@ -195,8 +197,7 @@ public class AdminPorterServiceController {
         if (serviceIds == null || serviceIds.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
-                    "message", "serviceIds array is required"
-            ));
+                    "message", "serviceIds array is required"));
         }
 
         int order = 1;
@@ -218,8 +219,7 @@ public class AdminPorterServiceController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Services reordered successfully",
-                "services", formatted
-        ));
+                "services", formatted));
     }
 
     /**
@@ -232,15 +232,13 @@ public class AdminPorterServiceController {
         if (service == null) {
             return ResponseEntity.status(404).body(Map.of(
                     "success", false,
-                    "message", "Service not found with identifier: " + id
-            ));
+                    "message", "Service not found with identifier: " + id));
         }
 
         serviceRepository.delete(service);
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Service deleted successfully"
-        ));
+                "message", "Service deleted successfully"));
     }
 
     public Map<String, Object> formatServiceForAdmin(PorterService s) {
@@ -254,7 +252,8 @@ public class AdminPorterServiceController {
         map.put("categoryId", s.getCategoryId() != null ? s.getCategoryId() : "");
         map.put("categoryName", s.getCategoryName() != null ? s.getCategoryName() : "");
         map.put("subtitle", s.getSubtitle() != null ? s.getSubtitle() : "");
-        map.put("description", s.getDescription() != null ? s.getDescription() : (s.getSubtitle() != null ? s.getSubtitle() : ""));
+        map.put("description",
+                s.getDescription() != null ? s.getDescription() : (s.getSubtitle() != null ? s.getSubtitle() : ""));
         map.put("baseFare", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
         map.put("basePrice", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
         map.put("baseKm", s.getBaseKm() != null ? s.getBaseKm() : 2.0);
@@ -262,7 +261,8 @@ public class AdminPorterServiceController {
         map.put("pricePerKm", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
         map.put("helperRate", s.getHelperRate() != null ? s.getHelperRate() : 0.0);
         map.put("capacityKg", s.getCapacityKg() != null ? s.getCapacityKg() : 0);
-        map.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
+        map.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel()
+                : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
         map.put("capacityLabel", s.getCapacityLabel() != null ? s.getCapacityLabel() : "");
         map.put("dimensions", s.getDimensions());
         map.put("eta", s.getEtaLabel() != null ? s.getEtaLabel() : "10-15 mins");
@@ -281,7 +281,8 @@ public class AdminPorterServiceController {
     }
 
     private PorterService findServiceByIdOrSlug(String identifier) {
-        if (identifier == null || identifier.isBlank()) return null;
+        if (identifier == null || identifier.isBlank())
+            return null;
         String clean = identifier.trim();
 
         // 1. Try numeric ID
@@ -289,13 +290,16 @@ public class AdminPorterServiceController {
             try {
                 Long numId = Long.parseLong(clean);
                 Optional<PorterService> opt = serviceRepository.findById(numId);
-                if (opt.isPresent()) return opt.get();
-            } catch (Exception ignored) {}
+                if (opt.isPresent())
+                    return opt.get();
+            } catch (Exception ignored) {
+            }
         }
 
         // 2. Try serviceId / slug
         Optional<PorterService> slugOpt = serviceRepository.findFirstByServiceIdIgnoreCase(clean);
-        if (slugOpt.isPresent()) return slugOpt.get();
+        if (slugOpt.isPresent())
+            return slugOpt.get();
 
         // 3. Try name match
         for (PorterService s : serviceRepository.findAll()) {
@@ -310,7 +314,8 @@ public class AdminPorterServiceController {
     private void mapServiceFromPayload(Map<String, Object> payload, PorterService target) {
         if (payload.containsKey("serviceId") && payload.get("serviceId") != null) {
             target.setServiceId(payload.get("serviceId").toString().trim());
-        } else if (payload.containsKey("id") && payload.get("id") != null && !payload.get("id").toString().matches("^\\d+$")) {
+        } else if (payload.containsKey("id") && payload.get("id") != null
+                && !payload.get("id").toString().matches("^\\d+$")) {
             target.setServiceId(payload.get("id").toString().trim());
         }
         if (payload.containsKey("name") && payload.get("name") != null) {
@@ -323,7 +328,8 @@ public class AdminPorterServiceController {
         }
         if (payload.containsKey("category") && payload.get("category") != null) {
             String rawCat = payload.get("category").toString().trim().toLowerCase();
-            if (rawCat.equals("bike") || rawCat.equals("scooter") || rawCat.contains("2_wheel") || rawCat.contains("two_wheel")) {
+            if (rawCat.equals("bike") || rawCat.equals("scooter") || rawCat.contains("2_wheel")
+                    || rawCat.contains("two_wheel")) {
                 rawCat = "two_wheeler";
             }
             target.setCategory(rawCat);
@@ -332,7 +338,8 @@ public class AdminPorterServiceController {
             String catId = payload.get("categoryId").toString().trim();
             target.setCategoryId(catId);
             if ("2".equals(catId)) {
-                if (target.getCategory() == null || target.getCategory().isBlank() || target.getCategory().equals("bike") || target.getCategory().equals("scooter")) {
+                if (target.getCategory() == null || target.getCategory().isBlank()
+                        || target.getCategory().equals("bike") || target.getCategory().equals("scooter")) {
                     target.setCategory("two_wheeler");
                 }
                 if (target.getCategoryName() == null || target.getCategoryName().isBlank()) {
@@ -364,7 +371,8 @@ public class AdminPorterServiceController {
             target.setSubtitle(payload.get("subtitle") != null ? payload.get("subtitle").toString().trim() : null);
         }
         if (payload.containsKey("description")) {
-            target.setDescription(payload.get("description") != null ? payload.get("description").toString().trim() : null);
+            target.setDescription(
+                    payload.get("description") != null ? payload.get("description").toString().trim() : null);
         }
         if (payload.containsKey("baseFare") && payload.get("baseFare") != null) {
             target.setBaseFare(parseDouble(payload.get("baseFare")));
@@ -386,7 +394,8 @@ public class AdminPorterServiceController {
             target.setCapacityKg(parseInt(payload.get("capacityKg")));
         }
         if (payload.containsKey("capacityLabel")) {
-            target.setCapacityLabel(payload.get("capacityLabel") != null ? payload.get("capacityLabel").toString() : null);
+            target.setCapacityLabel(
+                    payload.get("capacityLabel") != null ? payload.get("capacityLabel").toString() : null);
         } else if (payload.containsKey("capacity")) {
             target.setCapacityLabel(payload.get("capacity") != null ? payload.get("capacity").toString() : null);
         }
@@ -409,7 +418,8 @@ public class AdminPorterServiceController {
         if (payload.containsKey("isActive") && payload.get("isActive") != null) {
             target.setIsActive(Boolean.parseBoolean(payload.get("isActive").toString()));
         } else if (payload.containsKey("status") && payload.get("status") != null) {
-            target.setIsActive("active".equalsIgnoreCase(payload.get("status").toString()) || "true".equalsIgnoreCase(payload.get("status").toString()));
+            target.setIsActive("active".equalsIgnoreCase(payload.get("status").toString())
+                    || "true".equalsIgnoreCase(payload.get("status").toString()));
         }
         if (payload.containsKey("displayOrder") && payload.get("displayOrder") != null) {
             target.setDisplayOrder(parseInt(payload.get("displayOrder")));
@@ -422,7 +432,8 @@ public class AdminPorterServiceController {
     }
 
     private Double parseDouble(Object val) {
-        if (val == null) return null;
+        if (val == null)
+            return null;
         try {
             return Double.parseDouble(val.toString().replaceAll("[^0-9.]", "").trim());
         } catch (Exception e) {
@@ -431,7 +442,8 @@ public class AdminPorterServiceController {
     }
 
     private Integer parseInt(Object val) {
-        if (val == null) return null;
+        if (val == null)
+            return null;
         try {
             return Integer.parseInt(val.toString().replaceAll("[^0-9]", "").trim());
         } catch (Exception e) {

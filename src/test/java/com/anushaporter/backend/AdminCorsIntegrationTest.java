@@ -116,4 +116,41 @@ public class AdminCorsIntegrationTest {
                 .andExpect(header().string("Access-Control-Allow-Origin", "https://admin.anushaporter.com"))
                 .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
     }
+
+    @Test
+    void testPutVehicleTypeSuvUpsertsSuccessfully() throws Exception {
+        String payload = "{\"name\":\"SUV Cab\",\"type\":\"suv\",\"serviceType\":\"PASSENGER\",\"baseFare\":250.0,\"perKmRate\":20.0}";
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/vehicle-types/suv")
+                .header("Origin", "http://localhost:5173")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.success").value(true))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.vehicle.type").value("suv"));
+    }
+
+    @Test
+    void testPutServicesSuvUpsertsSuccessfully() throws Exception {
+        String payload = "{\"name\":\"SUV Premium\",\"baseFare\":300.0,\"perKmRate\":25.0}";
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/services/suv")
+                .header("Origin", "http://localhost:5173")
+                .header("Authorization", adminToken)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void testPreflightOptionsForUploadImage() throws Exception {
+        mockMvc.perform(options("/api/upload/image")
+                .header("Origin", "http://localhost:5173")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "authorization,content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
 }

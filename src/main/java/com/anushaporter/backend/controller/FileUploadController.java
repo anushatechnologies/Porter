@@ -15,21 +15,25 @@ public class FileUploadController {
     @Autowired
     private S3ImageService s3ImageService;
 
-    @PostMapping("/image")
-    public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file,
+    @PostMapping(value = {"", "/image"})
+    public ResponseEntity<?> uploadImage(@RequestParam(value = "file", required = false) MultipartFile file,
+                                         @RequestParam(value = "image", required = false) MultipartFile image,
                                          @RequestParam(value = "category", defaultValue = "misc") String category) {
-        if (file == null || file.isEmpty()) {
+        MultipartFile targetFile = file != null ? file : image;
+        if (targetFile == null || targetFile.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "No file provided", "success", false));
         }
 
         try {
-            String fileUrl = s3ImageService.uploadImage(file, category);
+            String fileUrl = s3ImageService.uploadImage(targetFile, category);
             return ResponseEntity.ok(Map.of(
                     "success", true,
-                    "url", fileUrl
-            ));
+                    "url", fileUrl,
+                    "fileUrl", fileUrl,
+                    "imageUrl", fileUrl));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("success", false, "error", "Failed to save file: " + e.getMessage()));
+            return ResponseEntity.status(500)
+                    .body(Map.of("success", false, "error", "Failed to save file: " + e.getMessage()));
         }
     }
 }
