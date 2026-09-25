@@ -266,16 +266,26 @@ public class PricingController {
 
             List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepo.findByIsActiveTrueOrderByDisplayOrderAsc();
             if (!dynamicServices.isEmpty()) {
-                double globalGstRate = 18.0;
+                double globalGstRate = 0.0;
+                String enableGst = "false";
                 try {
-                    var gs = settingsRepo.findBySettingKey("GST_PERCENTAGE");
-                    if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("gst_percentage");
-                    if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("GST_RATE");
-                    if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("gst_rate");
-                    if (gs.isPresent() && gs.get().getSettingValue() != null && !gs.get().getSettingValue().isBlank()) {
-                        globalGstRate = Double.parseDouble(gs.get().getSettingValue().trim());
+                    var eg = settingsRepo.findBySettingKey("ENABLE_GST");
+                    if (eg.isPresent() && eg.get().getSettingValue() != null) {
+                        enableGst = eg.get().getSettingValue().trim();
                     }
                 } catch (Exception ignored) {}
+
+                if ("true".equalsIgnoreCase(enableGst)) {
+                    try {
+                        var gs = settingsRepo.findBySettingKey("GST_PERCENTAGE");
+                        if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("gst_percentage");
+                        if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("GST_RATE");
+                        if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("gst_rate");
+                        if (gs.isPresent() && gs.get().getSettingValue() != null && !gs.get().getSettingValue().isBlank()) {
+                            globalGstRate = Double.parseDouble(gs.get().getSettingValue().trim());
+                        }
+                    } catch (Exception ignored) {}
+                }
 
                 for (var s : dynamicServices) {
                     double baseFare = s.getBaseFare() != null ? s.getBaseFare() : 100.0;
@@ -289,7 +299,7 @@ public class PricingController {
                     double subtotal = baseFare + distanceFare + helperCharge;
 
                     double gstRate = globalGstRate;
-                    if (s.getServiceId() != null) {
+                    if ("true".equalsIgnoreCase(enableGst) && s.getServiceId() != null) {
                         PricingVehicle matchedPv = vehicleRepo.findByVehicleId(s.getServiceId());
                         if (matchedPv != null && matchedPv.getGstPercentage() != null && matchedPv.getGstPercentage() >= 0.0) {
                             gstRate = matchedPv.getGstPercentage();

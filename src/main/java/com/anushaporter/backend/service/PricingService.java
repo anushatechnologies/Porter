@@ -171,20 +171,23 @@ public class PricingService {
             platformFee = subtotal * (pct / 100.0);
         }
 
-        // Dynamic GST rate resolution (vehicle override -> global setting -> 18.0% default)
-        double gstRate = 18.0;
-        PricingVehicle resolvedVehicle = (vehicle != null) ? vehicle : resolvePricingVehicle(requestedId);
-        if (resolvedVehicle != null && resolvedVehicle.getGstPercentage() != null && resolvedVehicle.getGstPercentage() >= 0.0) {
-            gstRate = resolvedVehicle.getGstPercentage();
-        } else {
-            String val = settings.get("GST_PERCENTAGE");
-            if (val == null) val = settings.get("gst_percentage");
-            if (val == null) val = settings.get("GST_RATE");
-            if (val == null) val = settings.get("gst_rate");
-            if (val != null && !val.isBlank()) {
-                try {
-                    gstRate = Double.parseDouble(val.trim());
-                } catch (Exception ignored) {}
+        // GST calculation (disabled/removed from backend: 0.0% GST unless explicitly enabled)
+        double gstRate = 0.0;
+        String enableGst = settings.getOrDefault("ENABLE_GST", "false");
+        if ("true".equalsIgnoreCase(enableGst)) {
+            PricingVehicle resolvedVehicle = (vehicle != null) ? vehicle : resolvePricingVehicle(requestedId);
+            if (resolvedVehicle != null && resolvedVehicle.getGstPercentage() != null && resolvedVehicle.getGstPercentage() >= 0.0) {
+                gstRate = resolvedVehicle.getGstPercentage();
+            } else {
+                String val = settings.get("GST_PERCENTAGE");
+                if (val == null) val = settings.get("gst_percentage");
+                if (val == null) val = settings.get("GST_RATE");
+                if (val == null) val = settings.get("gst_rate");
+                if (val != null && !val.isBlank()) {
+                    try {
+                        gstRate = Double.parseDouble(val.trim());
+                    } catch (Exception ignored) {}
+                }
             }
         }
 

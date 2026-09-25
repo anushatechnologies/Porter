@@ -303,64 +303,37 @@ public class VehiclePricingIntegrationTest {
     }
 
     @Test
-    void testAdminGstEndpointsAndDynamicCalculation() throws Exception {
-        // 1. Admin gets current GST percentage
+    void testGstIsRemovedByDefault() throws Exception {
+        // Verify default GST is 0.0 and totalFare has no GST
+        mockMvc.perform(post("/api/pricing/calculate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                {
+                  "vehicleId": "tata-ace",
+                  "distanceKm": 14.7
+                }
+                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gst", is(0.0)))
+                .andExpect(jsonPath("$.gstRate", is(0.0)));
+    }
+
+    @Test
+    void testAdminGstEndpoints() throws Exception {
+        // 1. Admin gets current default GST percentage (0.0)
         mockMvc.perform(get("/api/admin/pricing/gst")
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.gstPercentage", notNullValue()));
+                .andExpect(jsonPath("$.gstPercentage", is(0.0)));
 
-        // 2. Admin updates GST to 12.0%
+        // 2. Admin updates GST to 0.0%
         mockMvc.perform(post("/api/admin/pricing/gst")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"gstPercentage\": 12.0}"))
+                .content("{\"gstPercentage\": 0.0}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.gstPercentage", is(12.0)));
-
-        // 3. Verify global calculation uses 12.0% GST
-        mockMvc.perform(post("/api/pricing/calculate")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                {
-                  "vehicleId": "test-vehicle",
-                  "distanceKm": 10.0
-                }
-                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.gstRate", is(12.0)));
-
-        // Restore to 18%
-        mockMvc.perform(post("/api/admin/pricing/gst")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"gstPercentage\": 18.0}"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void testVehicleSpecificGstRateOverride() throws Exception {
-        PricingVehicle vehicle = new PricingVehicle();
-        vehicle.setVehicleId("custom-gst-truck");
-        vehicle.setName("Custom GST Truck");
-        vehicle.setBaseFare(200.0);
-        vehicle.setPricePerKm(20.0);
-        vehicle.setGstPercentage(5.0); // 5% GST override
-        vehicle.setStatus(true);
-        vehicleRepository.save(vehicle);
-
-        mockMvc.perform(post("/api/pricing/calculate")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                {
-                  "vehicleId": "custom-gst-truck",
-                  "distanceKm": 10.0
-                }
-                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.vehicleId", is("custom-gst-truck")))
-                .andExpect(jsonPath("$.gstRate", is(5.0)));
+                .andExpect(jsonPath("$.gstPercentage", is(0.0)));
     }
 }

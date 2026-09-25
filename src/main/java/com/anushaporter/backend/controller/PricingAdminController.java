@@ -174,7 +174,7 @@ public class PricingAdminController {
             }
         }
         if (!result.containsKey("GST_PERCENTAGE")) {
-            result.put("GST_PERCENTAGE", "18.0");
+            result.put("GST_PERCENTAGE", "0.0");
         }
         return result;
     }
@@ -206,7 +206,7 @@ public class PricingAdminController {
     // --- DEDICATED GST MANAGEMENT ---
     @GetMapping("/gst")
     public ResponseEntity<?> getGst() {
-        double gstPercentage = 18.0;
+        double gstPercentage = 0.0;
         Optional<GlobalSettings> gs = settingsRepo.findBySettingKey("GST_PERCENTAGE");
         if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("gst_percentage");
         if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("GST_RATE");
