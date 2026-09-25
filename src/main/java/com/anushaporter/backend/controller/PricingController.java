@@ -39,6 +39,12 @@ public class PricingController {
     @Autowired
     private com.anushaporter.backend.repository.PorterServiceRepository porterServiceRepo;
 
+    @Autowired
+    private com.anushaporter.backend.repository.GlobalSettingsRepository settingsRepo;
+
+    @Autowired
+    private com.anushaporter.backend.service.AdminAuthService adminAuthService;
+
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     // ─── Customer-facing ─────────────────────────────────────────────────────
@@ -218,7 +224,17 @@ public class PricingController {
     }
 
     @PostMapping("/city-overrides")
-    public ResponseEntity<?> updateCityOverride(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> updateCityOverride(
+            @RequestBody Map<String, Object> payload,
+            jakarta.servlet.http.HttpServletRequest request) {
+        var authResult = adminAuthService.verifyAdmin(request);
+        if (!authResult.isAuthorized()) {
+            return ResponseEntity.status(authResult.getStatusCode()).body(Map.of(
+                    "success", false,
+                    "error", authResult.getStatusCode() == 401 ? "Unauthorized" : "Forbidden",
+                    "message", authResult.getMessage()
+            ));
+        }
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "City pricing override updated successfully",
@@ -250,6 +266,17 @@ public class PricingController {
 
             List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepo.findByIsActiveTrueOrderByDisplayOrderAsc();
             if (!dynamicServices.isEmpty()) {
+                double globalGstRate = 18.0;
+                try {
+                    var gs = settingsRepo.findBySettingKey("GST_PERCENTAGE");
+                    if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("gst_percentage");
+                    if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("GST_RATE");
+                    if (gs.isEmpty()) gs = settingsRepo.findBySettingKey("gst_rate");
+                    if (gs.isPresent() && gs.get().getSettingValue() != null && !gs.get().getSettingValue().isBlank()) {
+                        globalGstRate = Double.parseDouble(gs.get().getSettingValue().trim());
+                    }
+                } catch (Exception ignored) {}
+
                 for (var s : dynamicServices) {
                     double baseFare = s.getBaseFare() != null ? s.getBaseFare() : 100.0;
                     double baseKm = s.getBaseKm() != null ? s.getBaseKm() : 2.0;
@@ -260,7 +287,16 @@ public class PricingController {
                     double distanceFare = Math.round((extraKm * perKm) * 100.0) / 100.0;
                     double helperCharge = helperCount > 0 ? Math.round((helperCount * helperRate) * 100.0) / 100.0 : 0.0;
                     double subtotal = baseFare + distanceFare + helperCharge;
-                    double gst = Math.round((subtotal * 0.18) * 100.0) / 100.0;
+
+                    double gstRate = globalGstRate;
+                    if (s.getServiceId() != null) {
+                        PricingVehicle matchedPv = vehicleRepo.findByVehicleId(s.getServiceId());
+                        if (matchedPv != null && matchedPv.getGstPercentage() != null && matchedPv.getGstPercentage() >= 0.0) {
+                            gstRate = matchedPv.getGstPercentage();
+                        }
+                    }
+
+                    double gst = Math.round((subtotal * (gstRate / 100.0)) * 100.0) / 100.0;
                     double totalFare = Math.round((subtotal + gst) * 100.0) / 100.0;
 
                     String lengthFt = null, widthFt = null, heightFt = null;
@@ -299,6 +335,7 @@ public class PricingController {
                     item.put("distanceFare", distanceFare);
                     item.put("helperCharge", helperCharge);
                     item.put("gst", gst);
+                    item.put("gstRate", gstRate);
                     item.put("eta", etaText);
                     item.put("etaLabel", etaText);
                     item.put("etaMinutes", etaBase);
@@ -354,6 +391,7 @@ public class PricingController {
                 item.put("distanceFare",   calc.getDistanceFare());
                 item.put("helperCharge",   calc.getHelperCharge());
                 item.put("gst",            calc.getGst());
+                item.put("gstRate",        calc.getGstRate());
                 item.put("eta",            etaBase + " mins");
                 item.put("etaMinutes",     etaBase);
                 item.put("currency",       "INR");
@@ -391,7 +429,18 @@ public class PricingController {
     }
 
     @PostMapping({"", "/", "/vehicle", "/vehicles"})
-    public ResponseEntity<?> addVehiclePricing(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> addVehiclePricing(
+            @RequestBody Map<String, Object> payload,
+            jakarta.servlet.http.HttpServletRequest request) {
+        var authResult = adminAuthService.verifyAdmin(request);
+        if (!authResult.isAuthorized()) {
+            return ResponseEntity.status(authResult.getStatusCode()).body(Map.of(
+                    "success", false,
+                    "error", authResult.getStatusCode() == 401 ? "Unauthorized" : "Forbidden",
+                    "message", authResult.getMessage()
+            ));
+        }
+
         String vId = parseString(payload, "vehicleId", "vehicle_id");
         if (vId == null || vId.isBlank()) {
             String name = parseString(payload, "name", "vehicleName");
@@ -415,7 +464,18 @@ public class PricingController {
 
     @PutMapping({"/vehicle/{vehicleId}", "/vehicles/{vehicleId}", "/{vehicleId}"})
     public ResponseEntity<?> updateVehiclePricing(
-            @PathVariable String vehicleId, @RequestBody Map<String, Object> payload) {
+            @PathVariable String vehicleId,
+            @RequestBody Map<String, Object> payload,
+            jakarta.servlet.http.HttpServletRequest request) {
+        var authResult = adminAuthService.verifyAdmin(request);
+        if (!authResult.isAuthorized()) {
+            return ResponseEntity.status(authResult.getStatusCode()).body(Map.of(
+                    "success", false,
+                    "error", authResult.getStatusCode() == 401 ? "Unauthorized" : "Forbidden",
+                    "message", authResult.getMessage()
+            ));
+        }
+
         PricingVehicle vehicle = findVehicleByIdOrVehicleId(vehicleId);
         if (vehicle == null) {
             vehicle = new PricingVehicle();
@@ -432,7 +492,18 @@ public class PricingController {
     }
 
     @DeleteMapping({"/{vehicleId}", "/vehicle/{vehicleId}", "/vehicles/{vehicleId}"})
-    public ResponseEntity<?> deleteVehiclePricing(@PathVariable String vehicleId) {
+    public ResponseEntity<?> deleteVehiclePricing(
+            @PathVariable String vehicleId,
+            jakarta.servlet.http.HttpServletRequest request) {
+        var authResult = adminAuthService.verifyAdmin(request);
+        if (!authResult.isAuthorized()) {
+            return ResponseEntity.status(authResult.getStatusCode()).body(Map.of(
+                    "success", false,
+                    "error", authResult.getStatusCode() == 401 ? "Unauthorized" : "Forbidden",
+                    "message", authResult.getMessage()
+            ));
+        }
+
         PricingVehicle vehicle = findVehicleByIdOrVehicleId(vehicleId);
         if (vehicle == null) {
             return ResponseEntity.status(404).body(Map.of("success", false, "message", "Vehicle pricing not found for: " + vehicleId));

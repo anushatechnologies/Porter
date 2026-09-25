@@ -171,7 +171,24 @@ public class PricingService {
             platformFee = subtotal * (pct / 100.0);
         }
 
-        double gst = subtotal * 0.18; // 18% GST
+        // Dynamic GST rate resolution (vehicle override -> global setting -> 18.0% default)
+        double gstRate = 18.0;
+        PricingVehicle resolvedVehicle = (vehicle != null) ? vehicle : resolvePricingVehicle(requestedId);
+        if (resolvedVehicle != null && resolvedVehicle.getGstPercentage() != null && resolvedVehicle.getGstPercentage() >= 0.0) {
+            gstRate = resolvedVehicle.getGstPercentage();
+        } else {
+            String val = settings.get("GST_PERCENTAGE");
+            if (val == null) val = settings.get("gst_percentage");
+            if (val == null) val = settings.get("GST_RATE");
+            if (val == null) val = settings.get("gst_rate");
+            if (val != null && !val.isBlank()) {
+                try {
+                    gstRate = Double.parseDouble(val.trim());
+                } catch (Exception ignored) {}
+            }
+        }
+
+        double gst = Math.round((subtotal * (gstRate / 100.0)) * 100.0) / 100.0;
         double totalFare = subtotal + platformFee + gst - discount;
 
         PricingResponse response = new PricingResponse();
@@ -185,13 +202,13 @@ public class PricingService {
         response.setTollCharge(Math.round(tollCharge * 100.0) / 100.0);
         response.setPlatformFee(Math.round(platformFee * 100.0) / 100.0);
         response.setDiscount(Math.round(discount * 100.0) / 100.0);
-        response.setGst(Math.round(gst * 100.0) / 100.0);
+        response.setGst(gst);
         response.setTotalFare(Math.round(totalFare * 100.0) / 100.0);
         response.setVehicleId(vehicleId);
         response.setVehicleName(vehicleName);
         response.setHelperCount(helperCount);
         response.setDistanceKm(Math.round(distanceKm * 100.0) / 100.0);
-        response.setGstRate(18.0);
+        response.setGstRate(gstRate);
 
         return response;
     }

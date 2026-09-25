@@ -265,4 +265,102 @@ public class VehiclePricingIntegrationTest {
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.error", is("Method Not Allowed")));
     }
+
+    @Test
+    void testPostPricingFailsWithoutAuthorization() throws Exception {
+        String payload = """
+        {
+          "vehicleId": "unauthorized-bike",
+          "name": "Unauthorized Bike",
+          "baseFare": 50
+        }
+        """;
+
+        mockMvc.perform(post("/api/pricing")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success", is(false)));
+    }
+
+    @Test
+    void testPostPricingFailsForNonAdminUser() throws Exception {
+        String customerToken = jwtUtil.generateToken("customer999@gmail.com");
+        String payload = """
+        {
+          "vehicleId": "customer-attempt",
+          "name": "Customer Attempt",
+          "baseFare": 50
+        }
+        """;
+
+        mockMvc.perform(post("/api/pricing")
+                .header("Authorization", "Bearer " + customerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success", is(false)));
+    }
+
+    @Test
+    void testAdminGstEndpointsAndDynamicCalculation() throws Exception {
+        // 1. Admin gets current GST percentage
+        mockMvc.perform(get("/api/admin/pricing/gst")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.gstPercentage", notNullValue()));
+
+        // 2. Admin updates GST to 12.0%
+        mockMvc.perform(post("/api/admin/pricing/gst")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"gstPercentage\": 12.0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.gstPercentage", is(12.0)));
+
+        // 3. Verify global calculation uses 12.0% GST
+        mockMvc.perform(post("/api/pricing/calculate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                {
+                  "vehicleId": "test-vehicle",
+                  "distanceKm": 10.0
+                }
+                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gstRate", is(12.0)));
+
+        // Restore to 18%
+        mockMvc.perform(post("/api/admin/pricing/gst")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"gstPercentage\": 18.0}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void testVehicleSpecificGstRateOverride() throws Exception {
+        PricingVehicle vehicle = new PricingVehicle();
+        vehicle.setVehicleId("custom-gst-truck");
+        vehicle.setName("Custom GST Truck");
+        vehicle.setBaseFare(200.0);
+        vehicle.setPricePerKm(20.0);
+        vehicle.setGstPercentage(5.0); // 5% GST override
+        vehicle.setStatus(true);
+        vehicleRepository.save(vehicle);
+
+        mockMvc.perform(post("/api/pricing/calculate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                {
+                  "vehicleId": "custom-gst-truck",
+                  "distanceKm": 10.0
+                }
+                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vehicleId", is("custom-gst-truck")))
+                .andExpect(jsonPath("$.gstRate", is(5.0)));
+    }
 }
