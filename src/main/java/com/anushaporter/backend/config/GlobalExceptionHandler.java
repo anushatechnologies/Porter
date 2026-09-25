@@ -50,6 +50,37 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<?> handleMethodNotSupported(org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(Map.of(
+                        "success", false,
+                        "error", "Method Not Allowed",
+                        "message", ex.getMessage() != null ? ex.getMessage() : "Request method is not supported for this endpoint.",
+                        "supportedMethods", ex.getSupportedMethods() != null ? ex.getSupportedMethods() : new String[0]
+                ));
+    }
+
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<?> handleMissingParam(org.springframework.web.bind.MissingServletRequestParameterException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of(
+                        "success", false,
+                        "error", "Bad Request",
+                        "message", "Required query parameter '" + ex.getParameterName() + "' is missing."
+                ));
+    }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<?> handleMessageNotReadable(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of(
+                        "success", false,
+                        "error", "Bad Request",
+                        "message", "Malformed request body or invalid JSON format."
+                ));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleAllExceptions(Exception ex) {
         ex.printStackTrace();

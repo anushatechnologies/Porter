@@ -155,11 +155,9 @@ public class LocationService {
 
         // 4. Dynamic area-aware fallback if still empty
         if (predictionsList.isEmpty()) {
-            String customId = "ChIJ_custom_" + Math.abs(query.hashCode());
-            customPlaceIdToQuery.put(customId, query);
-
-            // Pre-calculate smart area coordinates
             double[] coords = findHyderabadAreaCoordinates(query);
+            String customId = "coord_" + coords[0] + "_" + coords[1];
+            customPlaceIdToQuery.put(customId, query);
             cacheLocation(customId, query, query + ", Hyderabad, Telangana", coords[0], coords[1]);
 
             predictionsList.add(createPrediction(customId, query, "Hyderabad, Telangana", query + ", Hyderabad, Telangana"));
@@ -171,24 +169,47 @@ public class LocationService {
     }
 
     public Map<String, Object> getPlaceDetails(String placeId) {
+        return getPlaceDetails(placeId, null, null, null);
+    }
+
+    public Map<String, Object> getPlaceDetails(String placeId, String nameHint, Double hintLat, Double hintLng) {
         Map<String, Object> responseMap = new LinkedHashMap<>();
 
-        if (placeId == null || placeId.trim().isEmpty()) {
-            responseMap.put("success", false);
-            responseMap.put("message", "placeId query parameter is required");
+        // 1. Direct coordinate hints from request
+        if (hintLat != null && hintLng != null) {
+            String name = (nameHint != null && !nameHint.isBlank()) ? nameHint : "Selected Location";
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("placeId", placeId != null ? placeId : ("coord_" + hintLat + "_" + hintLng));
+            data.put("name", name);
+            data.put("formattedAddress", name + ", Hyderabad, Telangana");
+            data.put("lat", hintLat);
+            data.put("lng", hintLng);
+            responseMap.put("success", true);
+            responseMap.put("data", data);
             return responseMap;
         }
 
-        // 1. Direct coordinate support: "coord_17.4325_78.4072"
+        if (placeId == null || placeId.trim().isEmpty()) {
+            if (nameHint != null && !nameHint.isBlank()) {
+                placeId = nameHint;
+            } else {
+                responseMap.put("success", false);
+                responseMap.put("message", "placeId or location query parameter is required");
+                return responseMap;
+            }
+        }
+
+        // 2. Direct coordinate format: "coord_17.4325_78.4072"
         if (placeId.startsWith("coord_")) {
             try {
                 String[] parts = placeId.substring(6).split("_");
                 double lat = Double.parseDouble(parts[0]);
                 double lng = Double.parseDouble(parts[1]);
+                String name = (nameHint != null && !nameHint.isBlank()) ? nameHint : extractNameFromPlaceId(placeId);
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("placeId", placeId);
-                data.put("name", "Custom Location");
-                data.put("formattedAddress", String.format("Location (%.4f, %.4f), Hyderabad", lat, lng));
+                data.put("name", name);
+                data.put("formattedAddress", String.format("%s (%.4f, %.4f), Hyderabad", name, lat, lng));
                 data.put("lat", lat);
                 data.put("lng", lng);
                 responseMap.put("success", true);
@@ -197,14 +218,36 @@ public class LocationService {
             } catch (Exception ignored) {}
         }
 
-        // 2. Check in-memory coordinate cache first
+        // 3. Embedded OSM coordinates format: "osm_<id>_<lat>_<lon>"
+        if (placeId.startsWith("osm_")) {
+            String[] parts = placeId.split("_");
+            if (parts.length >= 4) {
+                try {
+                    double lat = Double.parseDouble(parts[2]);
+                    double lng = Double.parseDouble(parts[3]);
+                    String name = (nameHint != null && !nameHint.isBlank()) ? nameHint : extractNameFromPlaceId(placeId);
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    data.put("placeId", placeId);
+                    data.put("name", name);
+                    data.put("formattedAddress", name + ", Hyderabad, Telangana, India");
+                    data.put("lat", lat);
+                    data.put("lng", lng);
+                    placeDetailsCache.put(placeId, data);
+                    responseMap.put("success", true);
+                    responseMap.put("data", data);
+                    return responseMap;
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // 4. Check in-memory coordinate cache
         if (placeDetailsCache.containsKey(placeId)) {
             responseMap.put("success", true);
             responseMap.put("data", placeDetailsCache.get(placeId));
             return responseMap;
         }
 
-        // 3. Try Google Places Details API if key exists and placeId is standard
+        // 5. Try Google Places Details API if key exists and placeId is standard
         if (apiKey != null && !apiKey.isBlank() && !apiKey.startsWith("YOUR_") && !placeId.startsWith("osm_") && !placeId.startsWith("ChIJ_custom_")) {
             try {
                 String url = UriComponentsBuilder.fromUriString("https://maps.googleapis.com/maps/api/place/details/json")
@@ -245,8 +288,39 @@ public class LocationService {
             }
         }
 
-        // 4. Intelligent Fallback with distinct geographic coordinates
-        Map<String, Object> data = getFallbackDetails(placeId);
+        // 6. Query OpenStreetMap Nominatim for accurate coordinates if Google failed or place is OSM
+        if (placeId.startsWith("osm_")) {
+            Map<String, Object> osmById = fetchNominatimById(placeId);
+            if (osmById != null) {
+                placeDetailsCache.put(placeId, osmById);
+                responseMap.put("success", true);
+                responseMap.put("data", osmById);
+                return responseMap;
+            }
+        }
+
+        String queryForOsm = null;
+        if (nameHint != null && !nameHint.isBlank()) {
+            queryForOsm = nameHint.trim();
+        } else if (customPlaceIdToQuery.containsKey(placeId)) {
+            queryForOsm = customPlaceIdToQuery.get(placeId);
+        } else if (!placeId.startsWith("ChIJ") && !placeId.startsWith("osm_")) {
+            queryForOsm = placeId.replace("-", " ").replace("_", " ").trim();
+        }
+
+        if (queryForOsm != null && !queryForOsm.isBlank()) {
+            Map<String, Object> osmResult = searchNominatimForDetails(queryForOsm);
+            if (osmResult != null) {
+                osmResult.put("placeId", placeId);
+                placeDetailsCache.put(placeId, osmResult);
+                responseMap.put("success", true);
+                responseMap.put("data", osmResult);
+                return responseMap;
+            }
+        }
+
+        // 7. Intelligent Fallback with distinct geographic coordinates
+        Map<String, Object> data = getFallbackDetails(placeId, nameHint);
         placeDetailsCache.put(placeId, data);
         responseMap.put("success", true);
         responseMap.put("data", data);
@@ -274,17 +348,23 @@ public class LocationService {
                 JsonNode root = objectMapper.readTree(response.getBody());
                 if (root.isArray()) {
                     for (JsonNode node : root) {
-                        String osmId = "osm_" + node.path("place_id").asText();
-                        String displayName = node.path("display_name").asText();
                         double lat = Double.parseDouble(node.path("lat").asText());
                         double lon = Double.parseDouble(node.path("lon").asText());
+                        String osmPlaceId = node.path("place_id").asText();
+                        String osmIdWithCoords = "osm_" + osmPlaceId + "_" + lat + "_" + lon;
+                        String shortOsmId = "osm_" + osmPlaceId;
+                        String displayName = node.path("display_name").asText();
 
                         String primary = node.has("name") && !node.path("name").asText().isBlank()
                                 ? node.path("name").asText() : extractPrimary(displayName);
                         String secondary = extractSecondary(displayName);
 
-                        cacheLocation(osmId, primary, displayName, lat, lon);
-                        list.add(createPrediction(osmId, primary, secondary, displayName));
+                        cacheLocation(osmIdWithCoords, primary, displayName, lat, lon);
+                        cacheLocation(shortOsmId, primary, displayName, lat, lon);
+                        customPlaceIdToQuery.put(osmIdWithCoords, primary);
+                        customPlaceIdToQuery.put(shortOsmId, primary);
+
+                        list.add(createPrediction(osmIdWithCoords, primary, secondary, displayName));
                     }
                 }
             }
@@ -292,6 +372,86 @@ public class LocationService {
             log.debug("Nominatim search failed for '{}': {}", query, e.getMessage());
         }
         return list;
+    }
+
+    public Map<String, Object> searchNominatimForDetails(String query) {
+        if (query == null || query.isBlank()) return null;
+        try {
+            String url = UriComponentsBuilder.fromUriString("https://nominatim.openstreetmap.org/search")
+                    .queryParam("q", query + ", Hyderabad, Telangana")
+                    .queryParam("format", "json")
+                    .queryParam("countrycodes", "in")
+                    .queryParam("limit", 1)
+                    .build()
+                    .toUriString();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "PorterDeliveryPlatform/1.0 (contact@anushaporter.com)");
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                JsonNode root = objectMapper.readTree(response.getBody());
+                if (root.isArray() && root.size() > 0) {
+                    JsonNode node = root.get(0);
+                    double lat = Double.parseDouble(node.path("lat").asText());
+                    double lon = Double.parseDouble(node.path("lon").asText());
+                    String displayName = node.path("display_name").asText();
+                    String name = node.has("name") && !node.path("name").asText().isBlank()
+                            ? node.path("name").asText() : extractPrimary(displayName);
+
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    data.put("placeId", "osm_" + node.path("place_id").asText() + "_" + lat + "_" + lon);
+                    data.put("name", name);
+                    data.put("formattedAddress", displayName);
+                    data.put("lat", lat);
+                    data.put("lng", lon);
+                    return data;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Nominatim single lookup failed for '{}': {}", query, e.getMessage());
+        }
+        return null;
+    }
+
+    public Map<String, Object> fetchNominatimById(String osmPlaceId) {
+        if (osmPlaceId == null || osmPlaceId.isBlank()) return null;
+        try {
+            String cleanId = osmPlaceId.replace("osm_", "").split("_")[0];
+            String url = UriComponentsBuilder.fromUriString("https://nominatim.openstreetmap.org/details")
+                    .queryParam("place_id", cleanId)
+                    .queryParam("format", "json")
+                    .build()
+                    .toUriString();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "PorterDeliveryPlatform/1.0 (contact@anushaporter.com)");
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                JsonNode root = objectMapper.readTree(response.getBody());
+                if (root.has("centroid")) {
+                    JsonNode coords = root.path("centroid").path("coordinates");
+                    if (coords.isArray() && coords.size() >= 2) {
+                        double lon = coords.get(0).asDouble();
+                        double lat = coords.get(1).asDouble();
+                        String name = root.path("localname").asText(root.path("names").path("name").asText("Selected Location"));
+                        Map<String, Object> data = new LinkedHashMap<>();
+                        data.put("placeId", "osm_" + cleanId + "_" + lat + "_" + lon);
+                        data.put("name", name);
+                        data.put("formattedAddress", name + ", Hyderabad, Telangana, India");
+                        data.put("lat", lat);
+                        data.put("lng", lon);
+                        return data;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Nominatim details lookup failed for '{}': {}", osmPlaceId, e.getMessage());
+        }
+        return null;
     }
 
     public ResponseEntity<String> searchRaw(String query) {
@@ -360,6 +520,7 @@ public class LocationService {
     }
 
     private String extractNameFromPlaceId(String placeId) {
+        if (placeId == null || placeId.isBlank()) return "Selected Location";
         if (customPlaceIdToQuery.containsKey(placeId)) {
             return customPlaceIdToQuery.get(placeId);
         }
@@ -368,10 +529,17 @@ public class LocationService {
                 return fb.get("primaryText");
             }
         }
+        if (!placeId.startsWith("ChIJ") && !placeId.startsWith("osm_") && !placeId.startsWith("coord_")) {
+            return placeId.replace("-", " ").replace("_", " ").trim();
+        }
         return "Selected Location";
     }
 
     private Map<String, Object> getFallbackDetails(String placeId) {
+        return getFallbackDetails(placeId, null);
+    }
+
+    private Map<String, Object> getFallbackDetails(String placeId, String nameHint) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("placeId", placeId);
 
@@ -401,10 +569,13 @@ public class LocationService {
             data.put("lat", 17.4344);
             data.put("lng", 78.3867);
         } else {
-            String name = extractNameFromPlaceId(placeId);
-            double[] coords = findHyderabadAreaCoordinates(name);
-            data.put("name", name);
-            data.put("formattedAddress", name + ", Hyderabad, Telangana, India");
+            String name = (nameHint != null && !nameHint.isBlank()) ? nameHint : extractNameFromPlaceId(placeId);
+            if (("Selected Location".equalsIgnoreCase(name) || name.isBlank()) && placeId != null && !placeId.startsWith("ChIJ")) {
+                name = placeId.replace("-", " ").replace("_", " ").trim();
+            }
+            double[] coords = findHyderabadAreaCoordinates(name != null && !name.isBlank() ? name : placeId);
+            data.put("name", name != null && !name.isBlank() ? name : "Selected Location");
+            data.put("formattedAddress", (name != null && !name.isBlank() ? name : "Selected Location") + ", Hyderabad, Telangana, India");
             data.put("lat", coords[0]);
             data.put("lng", coords[1]);
         }
@@ -498,17 +669,52 @@ public class LocationService {
         if (lower.contains("lingampally") || lower.contains("bhel") || lower.contains("chandanagar")) {
             return new double[]{17.4933, 78.3182};
         }
-        // Uppal
-        if (lower.contains("uppal") || lower.contains("stadium") || lower.contains("habsiguda")) {
+        // Uppal / Habsiguda / Tarnaka
+        if (lower.contains("uppal") || lower.contains("stadium") || lower.contains("habsiguda") || lower.contains("tarnaka") || lower.contains("nacharam") || lower.contains("malkajgiri")) {
             return new double[]{17.4019, 78.5602};
         }
-        // Dilsukhnagar / LB Nagar
-        if (lower.contains("dilsukhnagar") || lower.contains("lb nagar") || lower.contains("kothapet")) {
+        // Dilsukhnagar / LB Nagar / Kothapet
+        if (lower.contains("dilsukhnagar") || lower.contains("lb nagar") || lower.contains("kothapet") || lower.contains("nagole") || lower.contains("vanasthalipuram")) {
             return new double[]{17.3688, 78.5247};
         }
+        // Kokapet / Gandipet / Narsingi / Tellapur
+        if (lower.contains("kokapet") || lower.contains("gandipet") || lower.contains("narsingi") || lower.contains("tellapur") || lower.contains("neopolis")) {
+            return new double[]{17.3912, 78.3245};
+        }
+        // Tolichowki / Shaikpet / Golconda
+        if (lower.contains("tolichowki") || lower.contains("shaikpet") || lower.contains("golconda") || lower.contains("seven tombs")) {
+            return new double[]{17.4022, 78.4089};
+        }
+        // Abids / Koti / Lakdikapul / Khairatabad / Himayatnagar
+        if (lower.contains("abids") || lower.contains("koti") || lower.contains("lakdikapul") || lower.contains("khairatabad") || lower.contains("himayatnagar") || lower.contains("basheerbagh") || lower.contains("secretariat")) {
+            return new double[]{17.3989, 78.4735};
+        }
+        // Kompally / Suchitra / Alwal / Bowenpally
+        if (lower.contains("kompally") || lower.contains("suchitra") || lower.contains("alwal") || lower.contains("bowenpally") || lower.contains("medchal")) {
+            return new double[]{17.5312, 78.4876};
+        }
+        // Nizampet / Pragathi Nagar / Bachupally
+        if (lower.contains("nizampet") || lower.contains("pragathi") || lower.contains("bachupally") || lower.contains("mallampet")) {
+            return new double[]{17.5186, 78.3789};
+        }
+        // Hafeezpet / Allwyn
+        if (lower.contains("hafeezpet") || lower.contains("allwyn colony")) {
+            return new double[]{17.4812, 78.3478};
+        }
+        // Madhapur / Hitec City
+        if (lower.contains("madhapur") || lower.contains("hitec") || lower.contains("aaspire") || lower.contains("cyber")) {
+            return new double[]{17.4486, 78.3808};
+        }
 
-        // Hitec City / Madhapur center as standard baseline
-        return new double[]{17.4486, 78.3808};
+        // For any other search query, produce distinct, distributed coordinates across the Hyderabad metro region
+        // preventing collapse to a single dummy hub coordinate
+        int hash = Math.abs(text.trim().toLowerCase().hashCode());
+        double offsetLat = ((hash % 100) - 50) / 1000.0;
+        double offsetLng = (((hash / 100) % 100) - 50) / 1000.0;
+        return new double[]{
+                Math.round((17.4250 + offsetLat) * 10000.0) / 10000.0,
+                Math.round((78.4200 + offsetLng) * 10000.0) / 10000.0
+        };
     }
 }
 

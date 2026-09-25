@@ -109,9 +109,21 @@ public class PricingController {
      *   "tollCharge":  0.0         // optional
      * }
      */
+    /**
+     * POST /api/pricing/calculate
+     * Calculates real-time itemised price for a given vehicle + distance + helpers.
+     */
     @PostMapping({"/calculate", "/preview"})
     public ResponseEntity<?> calculatePricing(@RequestBody PricingRequest request) {
         try {
+            if ((request.getDistanceKm() == null || request.getDistanceKm() <= 0.0)
+                    && request.getPickupLat() != null && request.getPickupLng() != null
+                    && request.getDropLat() != null && request.getDropLng() != null) {
+                request.setDistanceKm(calculateHaversineDistanceKm(
+                        request.getPickupLat(), request.getPickupLng(),
+                        request.getDropLat(), request.getDropLng()
+                ));
+            }
             PricingResponse response = pricingService.calculatePricing(request);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
@@ -125,6 +137,72 @@ public class PricingController {
                     "message", "Pricing calculation failed: " + e.getMessage()
             ));
         }
+    }
+
+    /**
+     * POST or GET /api/pricing/estimate, /api/pricing/estimates
+     * Unified freight estimate endpoint supporting both single vehicle and multi-vehicle requests.
+     */
+    @RequestMapping(value = {"/estimate", "/estimates"}, method = {RequestMethod.POST, RequestMethod.GET})
+    public ResponseEntity<?> estimatePricing(
+            @RequestBody(required = false) PricingRequest bodyRequest,
+            @RequestParam(name = "distanceKm", required = false) Double distanceKm,
+            @RequestParam(name = "distance", required = false) Double distance,
+            @RequestParam(name = "vehicleId", required = false) String vehicleId,
+            @RequestParam(name = "serviceId", required = false) String serviceId,
+            @RequestParam(name = "helperCount", required = false) Integer helperCount,
+            @RequestParam(name = "pickupLat", required = false) Double pickupLat,
+            @RequestParam(name = "pickupLng", required = false) Double pickupLng,
+            @RequestParam(name = "dropLat", required = false) Double dropLat,
+            @RequestParam(name = "dropLng", required = false) Double dropLng) {
+
+        PricingRequest req = bodyRequest != null ? bodyRequest : new PricingRequest();
+        if (req.getDistanceKm() == null) {
+            req.setDistanceKm(distanceKm != null ? distanceKm : distance);
+        }
+        if (req.getVehicleId() == null && vehicleId != null) {
+            req.setVehicleId(vehicleId);
+        }
+        if (req.getVehicleId() == null && serviceId != null) {
+            req.setVehicleId(serviceId);
+        }
+        if (req.getHelperCount() == null && helperCount != null) {
+            req.setHelperCount(helperCount);
+        }
+        if (req.getPickupLat() == null && pickupLat != null) req.setPickupLat(pickupLat);
+        if (req.getPickupLng() == null && pickupLng != null) req.setPickupLng(pickupLng);
+        if (req.getDropLat() == null && dropLat != null) req.setDropLat(dropLat);
+        if (req.getDropLng() == null && dropLng != null) req.setDropLng(dropLng);
+
+        if ((req.getDistanceKm() == null || req.getDistanceKm() <= 0.0)
+                && req.getPickupLat() != null && req.getPickupLng() != null
+                && req.getDropLat() != null && req.getDropLng() != null) {
+            req.setDistanceKm(calculateHaversineDistanceKm(
+                    req.getPickupLat(), req.getPickupLng(),
+                    req.getDropLat(), req.getDropLng()
+            ));
+        }
+
+        if (req.getVehicleId() != null && !req.getVehicleId().isBlank()) {
+            try {
+                PricingResponse response = pricingService.calculatePricing(req);
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("success", true);
+                map.put("fare", response.getTotalFare());
+                map.put("totalFare", response.getTotalFare());
+                map.put("estimatedFare", response.getTotalFare());
+                map.put("estimatedPrice", response.getTotalFare());
+                map.put("baseFare", response.getBaseFare());
+                map.put("distanceFare", response.getDistanceFare());
+                map.put("distanceKm", response.getDistanceKm());
+                map.put("vehicleId", response.getVehicleId());
+                map.put("vehicleName", response.getVehicleName());
+                map.put("breakdown", response);
+                return ResponseEntity.ok(map);
+            } catch (Exception ignored) {}
+        }
+
+        return estimateAll(req);
     }
 
     @GetMapping("/city-overrides")
@@ -158,6 +236,14 @@ public class PricingController {
     public ResponseEntity<Map<String, Object>> estimateAll(@RequestBody PricingRequest request) {
         try {
             double distanceKm = request.getDistanceKm() != null ? request.getDistanceKm() : 0.0;
+            if (distanceKm <= 0.0 && request.getPickupLat() != null && request.getPickupLng() != null
+                    && request.getDropLat() != null && request.getDropLng() != null) {
+                distanceKm = calculateHaversineDistanceKm(
+                        request.getPickupLat(), request.getPickupLng(),
+                        request.getDropLat(), request.getDropLng()
+                );
+                request.setDistanceKm(distanceKm);
+            }
             int helperCount = request.getHelperCount() != null ? request.getHelperCount() : 0;
             List<Map<String, Object>> vehiclesList = new ArrayList<>();
             int etaBase = 8; // base ETA in minutes
@@ -510,5 +596,19 @@ public class PricingController {
         v.setPricePerKm(perKm);
         v.setStatus(true);
         return v;
+    }
+
+    private double calculateHaversineDistanceKm(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371; // Radius of the earth in km
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        double distance = R * c;
+        // Apply road route curvature factor (~1.25x direct distance)
+        distance = distance * 1.25;
+        return Math.max(1.0, Math.round(distance * 10.0) / 10.0);
     }
 }

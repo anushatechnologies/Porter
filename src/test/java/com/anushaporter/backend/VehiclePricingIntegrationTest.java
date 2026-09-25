@@ -218,4 +218,51 @@ public class VehiclePricingIntegrationTest {
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void testPostPricingEstimateAll() throws Exception {
+        String payload = """
+        {
+          "distanceKm": 5.2,
+          "helperCount": 0
+        }
+        """;
+
+        mockMvc.perform(post("/api/pricing/estimate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.vehicles", notNullValue()))
+                .andExpect(jsonPath("$.estimates", notNullValue()));
+    }
+
+    @Test
+    void testPostPricingEstimateWithCoordinates() throws Exception {
+        String payload = """
+        {
+          "pickupLat": 17.4483,
+          "pickupLng": 78.3915,
+          "dropLat": 17.4930,
+          "dropLng": 78.4054
+        }
+        """;
+
+        mockMvc.perform(post("/api/pricing/estimate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.distanceKm", greaterThan(0.0)))
+                .andExpect(jsonPath("$.vehicles", notNullValue()));
+    }
+
+    @Test
+    void testMethodNotSupportedReturns405Not500() throws Exception {
+        mockMvc.perform(patch("/api/pricing/estimate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.error", is("Method Not Allowed")));
+    }
 }
