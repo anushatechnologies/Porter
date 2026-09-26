@@ -16,6 +16,9 @@ public class AdminPorterServiceController {
     @Autowired
     private PorterServiceRepository serviceRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.FleetSyncService fleetSyncService;
+
     /**
      * GET /api/admin/services
      * Returns list of all services (Active & Inactive) with search, category
@@ -106,6 +109,9 @@ public class AdminPorterServiceController {
         }
 
         PorterService saved = serviceRepository.save(service);
+        if (fleetSyncService != null) {
+            fleetSyncService.syncPorterService(saved);
+        }
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Service created successfully",
@@ -120,7 +126,8 @@ public class AdminPorterServiceController {
     public ResponseEntity<?> updateService(@PathVariable String id, @RequestBody Map<String, Object> payload) {
         PorterService service = findServiceByIdOrSlug(id);
         if (service == null) {
-            // Defensive Upsert: If frontend calls PUT /api/admin/services/suv and it doesn't exist, create it!
+            // Defensive Upsert: If frontend calls PUT /api/admin/services/suv and it
+            // doesn't exist, create it!
             service = new PorterService();
             service.setServiceId(id.trim().toLowerCase());
             long count = serviceRepository.count();
@@ -132,6 +139,9 @@ public class AdminPorterServiceController {
             service.setServiceId(id.trim().toLowerCase());
         }
         PorterService saved = serviceRepository.save(service);
+        if (fleetSyncService != null) {
+            fleetSyncService.syncPorterService(saved);
+        }
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -176,6 +186,9 @@ public class AdminPorterServiceController {
         }
 
         PorterService saved = serviceRepository.save(service);
+        if (fleetSyncService != null) {
+            fleetSyncService.syncPorterService(saved);
+        }
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message",
@@ -211,6 +224,10 @@ public class AdminPorterServiceController {
             }
         }
 
+        if (fleetSyncService != null) {
+            fleetSyncService.syncAllFromPorterServices();
+        }
+
         List<PorterService> updated = serviceRepository.findAllByOrderByDisplayOrderAsc();
         List<Map<String, Object>> formatted = updated.stream()
                 .map(this::formatServiceForAdmin)
@@ -235,6 +252,9 @@ public class AdminPorterServiceController {
                     "message", "Service not found with identifier: " + id));
         }
 
+        if (fleetSyncService != null) {
+            fleetSyncService.deletePorterService(service);
+        }
         serviceRepository.delete(service);
         return ResponseEntity.ok(Map.of(
                 "success", true,

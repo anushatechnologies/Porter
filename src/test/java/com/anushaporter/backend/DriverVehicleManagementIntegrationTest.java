@@ -84,6 +84,25 @@ public class DriverVehicleManagementIntegrationTest {
         user.setRole("driver");
         appUserRepository.save(user);
 
+        if (vehicleTypeRepository.count() == 0) {
+            VehicleType v = new VehicleType();
+            v.setId("1");
+            v.setName("2 Wheeler");
+            v.setType("two_wheeler");
+            v.setDescription("Best for documents & small packages");
+            v.setCapacity("Load: Up to 20kg");
+            v.setCapacityKg(20);
+            v.setDimensions("Documents & food parcels");
+            v.setIconName("bike");
+            v.setBaseFare(40.0);
+            v.setBaseKm(1.0);
+            v.setPerKmRate(12.0);
+            v.setStatus("active");
+            v.setPriority(1);
+            v.setServiceType("OUR_SERVICES");
+            vehicleTypeRepository.save(v);
+        }
+
         testToken = "Bearer " + jwtUtil.generateToken(testEmail);
     }
 
@@ -110,9 +129,9 @@ public class DriverVehicleManagementIntegrationTest {
         payload.put("ifscCode", "SBIN0006788");
 
         mockMvc.perform(post("/api/drivers/register")
-                        .header("Authorization", testToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(payload)))
+                .header("Authorization", testToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.vehicle").value("Scooter"))
@@ -137,7 +156,7 @@ public class DriverVehicleManagementIntegrationTest {
         driverRepository.save(d);
 
         mockMvc.perform(get("/api/drivers")
-                        .header("Authorization", testToken))
+                .header("Authorization", testToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].vehicle").value("Tata Ace"))
                 .andExpect(jsonPath("$[0].vehicleType").value("Tata Ace"));
@@ -157,7 +176,7 @@ public class DriverVehicleManagementIntegrationTest {
         Driver saved = driverRepository.save(d);
 
         mockMvc.perform(get("/api/drivers/" + saved.getId())
-                        .header("Authorization", testToken))
+                .header("Authorization", testToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.vehicle").value("2 Wheeler"))
                 .andExpect(jsonPath("$.vehicleType").value("2 Wheeler"));
@@ -227,9 +246,9 @@ public class DriverVehicleManagementIntegrationTest {
         newVehicle.put("priority", 10);
 
         mockMvc.perform(post("/api/admin/vehicle-types")
-                        .header("Authorization", testToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newVehicle)))
+                .header("Authorization", testToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(newVehicle)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.vehicle.name").value("Electric Scooter"))
@@ -241,17 +260,17 @@ public class DriverVehicleManagementIntegrationTest {
         updatePayload.put("perKmRate", 11.0);
 
         mockMvc.perform(put("/api/admin/vehicle-types/veh_electric_99")
-                        .header("Authorization", testToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatePayload)))
+                .header("Authorization", testToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updatePayload)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.vehicle.baseFare").value(38.0));
 
         // 4. Toggle status to inactive (Admin)
         mockMvc.perform(patch("/api/admin/vehicle-types/veh_electric_99/status")
-                        .header("Authorization", testToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("status", "inactive"))))
+                .header("Authorization", testToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("status", "inactive"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("inactive"));
 

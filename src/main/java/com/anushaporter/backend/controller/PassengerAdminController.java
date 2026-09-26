@@ -40,6 +40,9 @@ public class PassengerAdminController {
     private final PassengerPricingVersionService versionService;
     private final PassengerBookingService bookingService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.anushaporter.backend.service.FleetSyncService fleetSyncService;
+
     // --- 1. SERVICES MANAGEMENT ---
     @GetMapping("/services")
     public ResponseEntity<List<PassengerServiceEntity>> getAllServices() {
@@ -50,15 +53,18 @@ public class PassengerAdminController {
     public ResponseEntity<PassengerServiceEntity> createService(@RequestBody PassengerServiceEntity svc) {
         PassengerServiceEntity saved = serviceRepository.save(svc);
         versionService.logAudit(versionService.getActiveVersion().getVersionNumber(), "SERVICE", saved.getId(),
-                "Admin", "admin@anushaporter.com", "CREATE", "serviceCode", "-", saved.getServiceCode(), "Added new service");
+                "Admin", "admin@anushaporter.com", "CREATE", "serviceCode", "-", saved.getServiceCode(),
+                "Added new service");
         return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/services/{id}")
-    public ResponseEntity<PassengerServiceEntity> updateService(@PathVariable Long id, @RequestBody PassengerServiceEntity updated) {
+    public ResponseEntity<PassengerServiceEntity> updateService(@PathVariable Long id,
+            @RequestBody PassengerServiceEntity updated) {
         return serviceRepository.findById(id).map(s -> {
             versionService.logAudit(versionService.getActiveVersion().getVersionNumber(), "SERVICE", id,
-                    "Admin", "admin@anushaporter.com", "UPDATE", "displayName", s.getDisplayName(), updated.getDisplayName(), "Updated service details");
+                    "Admin", "admin@anushaporter.com", "UPDATE", "displayName", s.getDisplayName(),
+                    updated.getDisplayName(), "Updated service details");
             updated.setId(id);
             return ResponseEntity.ok(serviceRepository.save(updated));
         }).orElse(ResponseEntity.notFound().build());
@@ -73,19 +79,29 @@ public class PassengerAdminController {
     @PostMapping("/vehicle-categories")
     public ResponseEntity<PassengerVehicleCategory> createVehicleCategory(@RequestBody PassengerVehicleCategory cat) {
         PassengerVehicleCategory saved = vehicleCategoryRepository.save(cat);
+        if (fleetSyncService != null) {
+            fleetSyncService.syncPassengerCategory(saved);
+        }
         versionService.logAudit(versionService.getActiveVersion().getVersionNumber(), "VEHICLE_CATEGORY", saved.getId(),
-                "Admin", "admin@anushaporter.com", "CREATE", "categoryCode", "-", saved.getCategoryCode(), "Added vehicle category");
+                "Admin", "admin@anushaporter.com", "CREATE", "categoryCode", "-", saved.getCategoryCode(),
+                "Added vehicle category");
         return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/vehicle-categories/{id}")
-    public ResponseEntity<PassengerVehicleCategory> updateVehicleCategory(@PathVariable Long id, @RequestBody PassengerVehicleCategory updated) {
+    public ResponseEntity<PassengerVehicleCategory> updateVehicleCategory(@PathVariable Long id,
+            @RequestBody PassengerVehicleCategory updated) {
         return vehicleCategoryRepository.findById(id).map(cat -> {
             versionService.logAudit(versionService.getActiveVersion().getVersionNumber(), "VEHICLE_CATEGORY", id,
                     "Admin", "admin@anushaporter.com", "UPDATE", "perKmRate",
-                    String.valueOf(cat.getPerKmRate()), String.valueOf(updated.getPerKmRate()), "Updated vehicle rates");
+                    String.valueOf(cat.getPerKmRate()), String.valueOf(updated.getPerKmRate()),
+                    "Updated vehicle rates");
             updated.setId(id);
-            return ResponseEntity.ok(vehicleCategoryRepository.save(updated));
+            PassengerVehicleCategory saved = vehicleCategoryRepository.save(updated);
+            if (fleetSyncService != null) {
+                fleetSyncService.syncPassengerCategory(saved);
+            }
+            return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -102,16 +118,19 @@ public class PassengerAdminController {
         rule.setPricingVersionId(active.getVersionNumber());
         PassengerPricingRule saved = ruleRepository.save(rule);
         versionService.logAudit(active.getVersionNumber(), "PRICING_RULE", saved.getId(),
-                "Admin", "admin@anushaporter.com", "SAVE", "baseFare", "-", String.valueOf(saved.getBaseFare()), "Saved pricing rule");
+                "Admin", "admin@anushaporter.com", "SAVE", "baseFare", "-", String.valueOf(saved.getBaseFare()),
+                "Saved pricing rule");
         return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/pricing/{id}")
-    public ResponseEntity<PassengerPricingRule> updatePricingRule(@PathVariable Long id, @RequestBody PassengerPricingRule updated) {
+    public ResponseEntity<PassengerPricingRule> updatePricingRule(@PathVariable Long id,
+            @RequestBody PassengerPricingRule updated) {
         return ruleRepository.findById(id).map(r -> {
             versionService.logAudit(r.getPricingVersionId(), "PRICING_RULE", id,
                     "Admin", "admin@anushaporter.com", "UPDATE", "perKmRate",
-                    String.valueOf(r.getPerKmRate()), String.valueOf(updated.getPerKmRate()), "Updated pricing rule values");
+                    String.valueOf(r.getPerKmRate()), String.valueOf(updated.getPerKmRate()),
+                    "Updated pricing rule values");
             updated.setId(id);
             return ResponseEntity.ok(ruleRepository.save(updated));
         }).orElse(ResponseEntity.notFound().build());
@@ -124,10 +143,10 @@ public class PassengerAdminController {
 
     @PostMapping("/pricing/versions/publish")
     public ResponseEntity<PassengerPricingVersion> publishNewVersion(
-            @RequestBody(required = false) Map<String, String> payload
-    ) {
+            @RequestBody(required = false) Map<String, String> payload) {
         String adminName = (payload != null && payload.containsKey("adminName")) ? payload.get("adminName") : "Admin";
-        String notes = (payload != null && payload.containsKey("notes")) ? payload.get("notes") : "Published new dynamic pricing release";
+        String notes = (payload != null && payload.containsKey("notes")) ? payload.get("notes")
+                : "Published new dynamic pricing release";
         PassengerPricingVersion version = versionService.publishNewVersion(adminName, "admin@anushaporter.com", notes);
         return ResponseEntity.ok(version);
     }
@@ -139,7 +158,8 @@ public class PassengerAdminController {
 
     // --- 4. MANDATORY PRICING PREVIEW TOOL ---
     @PostMapping("/pricing/preview")
-    public ResponseEntity<PassengerFareEstimateResponse> previewPricing(@RequestBody PassengerFareEstimateRequest request) {
+    public ResponseEntity<PassengerFareEstimateResponse> previewPricing(
+            @RequestBody PassengerFareEstimateRequest request) {
         PassengerFareEstimateResponse preview = pricingEngine.calculateFare(request);
         return ResponseEntity.ok(preview);
     }
@@ -156,7 +176,8 @@ public class PassengerAdminController {
     }
 
     @PutMapping("/rental-packages/{id}")
-    public ResponseEntity<RentalPackage> updateRentalPackage(@PathVariable Long id, @RequestBody RentalPackage updated) {
+    public ResponseEntity<RentalPackage> updateRentalPackage(@PathVariable Long id,
+            @RequestBody RentalPackage updated) {
         return rentalPackageRepository.findById(id).map(pkg -> {
             updated.setId(id);
             return ResponseEntity.ok(rentalPackageRepository.save(updated));
@@ -187,13 +208,13 @@ public class PassengerAdminController {
     public ResponseEntity<List<PassengerBooking>> getBookings(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String serviceType,
-            @RequestParam(required = false) String vehicleCategory
-    ) {
+            @RequestParam(required = false) String vehicleCategory) {
         PassengerBookingStatus bookingStatus = null;
         if (status != null && !status.isBlank()) {
             try {
                 bookingStatus = PassengerBookingStatus.valueOf(status.toUpperCase());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         return ResponseEntity.ok(bookingRepository.filterBookings(bookingStatus, serviceType, vehicleCategory));
     }
@@ -201,8 +222,7 @@ public class PassengerAdminController {
     @PostMapping("/bookings/{id}/assign-driver")
     public ResponseEntity<PassengerBooking> assignDriver(
             @PathVariable Long id,
-            @RequestBody PassengerDriverAssignRequest req
-    ) {
+            @RequestBody PassengerDriverAssignRequest req) {
         PassengerBooking assigned = bookingService.assignDriver(id, req.getDriverId(), req.getAdminNotes());
         return ResponseEntity.ok(assigned);
     }
@@ -210,8 +230,7 @@ public class PassengerAdminController {
     @PostMapping("/bookings/{id}/reassign-driver")
     public ResponseEntity<PassengerBooking> reassignDriver(
             @PathVariable Long id,
-            @RequestBody PassengerDriverAssignRequest req
-    ) {
+            @RequestBody PassengerDriverAssignRequest req) {
         PassengerBooking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + id));
         booking.setStatus(PassengerBookingStatus.DRIVER_SEARCHING);
@@ -223,8 +242,7 @@ public class PassengerAdminController {
     @PostMapping("/bookings/{id}/status")
     public ResponseEntity<PassengerBooking> updateBookingStatus(
             @PathVariable Long id,
-            @RequestBody Map<String, String> payload
-    ) {
+            @RequestBody Map<String, String> payload) {
         String statusStr = payload.get("status");
         PassengerBookingStatus nextStatus = PassengerBookingStatus.valueOf(statusStr.toUpperCase());
         PassengerBooking updated = bookingService.updateBookingStatus(id, nextStatus);
@@ -264,12 +282,19 @@ public class PassengerAdminController {
     public ResponseEntity<byte[]> exportBookingsCsv() {
         List<PassengerBooking> bookings = bookingRepository.findAllByOrderByCreatedAtDesc();
         StringBuilder csv = new StringBuilder();
-        csv.append("BookingNumber,CustomerName,CustomerPhone,Service,Vehicle,DistanceKm,TotalFare,DriverEarnings,Commission,PaymentStatus,Status,CreatedAt\n");
+        csv.append(
+                "BookingNumber,CustomerName,CustomerPhone,Service,Vehicle,DistanceKm,TotalFare,DriverEarnings,Commission,PaymentStatus,Status,CreatedAt\n");
 
         for (PassengerBooking b : bookings) {
-            BigDecimal fare = (b.getFareBreakdown() != null && b.getFareBreakdown().getTotalFare() != null) ? b.getFareBreakdown().getTotalFare() : BigDecimal.ZERO;
-            BigDecimal earnings = (b.getFareBreakdown() != null && b.getFareBreakdown().getDriverEarnings() != null) ? b.getFareBreakdown().getDriverEarnings() : BigDecimal.ZERO;
-            BigDecimal comm = (b.getFareBreakdown() != null && b.getFareBreakdown().getCompanyCommission() != null) ? b.getFareBreakdown().getCompanyCommission() : BigDecimal.ZERO;
+            BigDecimal fare = (b.getFareBreakdown() != null && b.getFareBreakdown().getTotalFare() != null)
+                    ? b.getFareBreakdown().getTotalFare()
+                    : BigDecimal.ZERO;
+            BigDecimal earnings = (b.getFareBreakdown() != null && b.getFareBreakdown().getDriverEarnings() != null)
+                    ? b.getFareBreakdown().getDriverEarnings()
+                    : BigDecimal.ZERO;
+            BigDecimal comm = (b.getFareBreakdown() != null && b.getFareBreakdown().getCompanyCommission() != null)
+                    ? b.getFareBreakdown().getCompanyCommission()
+                    : BigDecimal.ZERO;
 
             csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
                     b.getBookingNumber(),
@@ -294,7 +319,8 @@ public class PassengerAdminController {
     }
 
     private String cleanCsv(String val) {
-        if (val == null) return "";
+        if (val == null)
+            return "";
         return val.replace(",", " ").replace("\"", "'");
     }
 }

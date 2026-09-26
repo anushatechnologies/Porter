@@ -50,9 +50,13 @@ public class VehicleTypeController {
     @Autowired(required = false)
     private com.anushaporter.backend.repository.PassengerVehicleCategoryRepository passengerVehicleCategoryRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.FleetSyncService fleetSyncService;
+
     @PostConstruct
     public void initVehicleTypes() {
-        // Default dummy seeding disabled: only admin-created vehicles will show.
+        // Auto-sync delivery and freight services into vehicle_types
+        syncFromPorterServices();
         // Heal legacy S3 image URLs if existing records are present.
         try {
             vehicleTypeRepository.findAll().forEach(vt -> {
@@ -81,6 +85,12 @@ public class VehicleTypeController {
                 }
             });
         } catch (Exception ignored) {
+        }
+    }
+
+    public void syncFromPorterServices() {
+        if (fleetSyncService != null) {
+            fleetSyncService.syncAll();
         }
     }
 
@@ -141,6 +151,8 @@ public class VehicleTypeController {
             }
         }
 
+        syncFromPorterServices();
+
         List<VehicleType> list = "active".equalsIgnoreCase(effectiveStatus)
                 ? vehicleTypeRepository.findByStatusOrderByPriorityAsc("active")
                 : vehicleTypeRepository.findAllByOrderByPriorityAsc();
@@ -188,7 +200,8 @@ public class VehicleTypeController {
             opt = vehicleTypeRepository.findByType(id);
         }
         if (opt.isEmpty() && id != null) {
-            String cleanId = id.toLowerCase().startsWith("veh_") ? id.substring(4) : (id.toLowerCase().startsWith("veh-") ? id.substring(4) : id);
+            String cleanId = id.toLowerCase().startsWith("veh_") ? id.substring(4)
+                    : (id.toLowerCase().startsWith("veh-") ? id.substring(4) : id);
             opt = vehicleTypeRepository.findById(cleanId);
             if (opt.isEmpty()) {
                 opt = vehicleTypeRepository.findByType(cleanId);

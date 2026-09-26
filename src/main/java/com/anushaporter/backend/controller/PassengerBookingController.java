@@ -41,6 +41,9 @@ public class PassengerBookingController {
     private final AppUserRepository appUserRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.anushaporter.backend.service.FleetSyncService fleetSyncService;
+
     @PostMapping({"/fare-estimate", "/fares/estimate"})
     public ResponseEntity<PassengerFareEstimateResponse> getFareEstimate(@RequestBody PassengerFareEstimateRequest request) {
         ensurePassengerCategoriesSynced();
@@ -363,6 +366,9 @@ public class PassengerBookingController {
     @PostMapping({"/admin/vehicles", "/admin/categories"})
     public ResponseEntity<Map<String, Object>> saveAdminVehicleCategory(@RequestBody PassengerVehicleCategory category) {
         PassengerVehicleCategory saved = vehicleCategoryRepository.save(category);
+        if (fleetSyncService != null) {
+            fleetSyncService.syncPassengerCategory(saved);
+        }
         return ResponseEntity.ok(Map.of("success", true, "message", "Category saved successfully", "vehicle", saved));
     }
 
@@ -400,6 +406,9 @@ public class PassengerBookingController {
             c.setActive(Boolean.parseBoolean(updates.get("active").toString()));
         }
         PassengerVehicleCategory saved = vehicleCategoryRepository.save(c);
+        if (fleetSyncService != null) {
+            fleetSyncService.syncPassengerCategory(saved);
+        }
         return ResponseEntity.ok(Map.of("success", true, "message", "Category updated successfully", "vehicle", saved));
     }
 
@@ -412,6 +421,9 @@ public class PassengerBookingController {
         PassengerVehicleCategory c = existingOpt.get();
         c.setActive(!Boolean.TRUE.equals(c.getActive()));
         PassengerVehicleCategory saved = vehicleCategoryRepository.save(c);
+        if (fleetSyncService != null) {
+            fleetSyncService.syncPassengerCategory(saved);
+        }
         return ResponseEntity.ok(Map.of("success", true, "active", saved.getActive(), "vehicle", saved));
     }
 
