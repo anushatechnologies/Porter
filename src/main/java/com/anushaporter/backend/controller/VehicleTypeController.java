@@ -187,6 +187,22 @@ public class VehicleTypeController {
         if (opt.isEmpty()) {
             opt = vehicleTypeRepository.findByType(id);
         }
+        if (opt.isEmpty() && id != null) {
+            String cleanId = id.toLowerCase().startsWith("veh_") ? id.substring(4) : (id.toLowerCase().startsWith("veh-") ? id.substring(4) : id);
+            opt = vehicleTypeRepository.findById(cleanId);
+            if (opt.isEmpty()) {
+                opt = vehicleTypeRepository.findByType(cleanId);
+            }
+            if (opt.isEmpty()) {
+                String cClean = id.toLowerCase().replaceAll("[^a-z0-9]", "");
+                opt = vehicleTypeRepository.findAll().stream().filter(v -> {
+                    String vType = (v.getType() != null ? v.getType() : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+                    String vName = (v.getName() != null ? v.getName() : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+                    String vId = (v.getId() != null ? v.getId() : "").toLowerCase().replaceAll("[^a-z0-9]", "");
+                    return cClean.equals(vType) || cClean.equals(vName) || cClean.equals(vId);
+                }).findFirst();
+            }
+        }
         if (opt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("success", false, "message", "Vehicle type not found: " + id));

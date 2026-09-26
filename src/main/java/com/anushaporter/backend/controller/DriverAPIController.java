@@ -360,8 +360,8 @@ public class DriverAPIController {
             if (newVehicleType == null) newVehicleType = text(payload, "vehicleName");
             String vehicleId = text(payload, "vehicleId");
 
-            if (vehicleId != null && !vehicleId.isBlank() && vehicleTypeRepository != null) {
-                VehicleType vt = vehicleTypeRepository.findById(vehicleId).orElse(null);
+            if (vehicleTypeRepository != null) {
+                VehicleType vt = resolveVehicleType(vehicleId, newVehicle != null ? newVehicle : newVehicleType);
                 if (vt != null) {
                     if (newVehicle == null && newVehicleType == null) {
                         newVehicle = vt.getName();
@@ -1503,19 +1503,6 @@ public class DriverAPIController {
             pan = cleanPan;
         }
 
-        // ── Vehicle type validation ──────────────────────────────────────────
-        String vehicleId = text(payload, "vehicleId");
-        if (vehicleId != null && !vehicleId.isBlank() && vehicleTypeRepository != null) {
-            boolean isValid = vehicleTypeRepository
-                    .findByIdAndStatus(vehicleId, "active")
-                    .isPresent();
-            if (!isValid) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "success", false,
-                        "message", "Selected vehicle type is no longer available."));
-            }
-        }
-
         // Resolve unified vehicle string
         String vehicleVal = text(payload, "vehicle");
         String vehicleTypeVal = text(payload, "vehicleType");
@@ -1525,6 +1512,51 @@ public class DriverAPIController {
                 : (vehicleTypeVal != null ? vehicleTypeVal
                         : (vehicle_typeVal != null ? vehicle_typeVal
                                 : (vehicleNameVal != null ? vehicleNameVal : null)));
+
+        // ── Vehicle type validation ──────────────────────────────────────────
+        String vehicleId = text(payload, "vehicleId");
+        VehicleType matchedVt = resolveVehicleType(vehicleId, resolvedVehicle);
+
+        if (matchedVt != null) {
+            // Reject ONLY if this vehicle exists in DB and was explicitly deactivated/disabled by Admin
+            if (matchedVt.getStatus() != null &&
+                    ("inactive".equalsIgnoreCase(matchedVt.getStatus()) || "disabled".equalsIgnoreCase(matchedVt.getStatus()))) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "Selected vehicle type is no longer available."));
+            }
+            if (resolvedVehicle == null || resolvedVehicle.isBlank() || resolvedVehicle.equalsIgnoreCase(vehicleId)) {
+                resolvedVehicle = matchedVt.getName() != null ? matchedVt.getName() : matchedVt.getType();
+            }
+        } else if (vehicleId != null && !vehicleId.isBlank()) {
+            // Vehicle not in DB table: check if it's a known valid platform category
+            boolean isKnownCategory = false;
+            if (driverEligibilityService != null) {
+                String cat1 = driverEligibilityService.normalizeVehicleCategory(vehicleId, "OUR_SERVICES");
+                String cat2 = driverEligibilityService.normalizeVehicleCategory(vehicleId, "PASSENGER");
+                if (!"UNKNOWN".equals(cat1) || !"UNKNOWN".equals(cat2)) {
+                    isKnownCategory = true;
+                }
+            }
+            if (!isKnownCategory && resolvedVehicle != null && !resolvedVehicle.isBlank()) {
+                if (driverEligibilityService != null) {
+                    String cat1 = driverEligibilityService.normalizeVehicleCategory(resolvedVehicle, "OUR_SERVICES");
+                    String cat2 = driverEligibilityService.normalizeVehicleCategory(resolvedVehicle, "PASSENGER");
+                    if (!"UNKNOWN".equals(cat1) || !"UNKNOWN".equals(cat2)) {
+                        isKnownCategory = true;
+                    }
+                }
+            }
+            // If DB vehicle types exist and this input is neither found nor a known category, reject
+            if (!isKnownCategory && vehicleTypeRepository != null && vehicleTypeRepository.count() > 0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "Selected vehicle type is no longer available."));
+            }
+            if (resolvedVehicle == null || resolvedVehicle.isBlank()) {
+                resolvedVehicle = vehicleId;
+            }
+        }
 
         // Non-destructive field updates (preserve existing data across steps)
         if (phone != null && !phone.isBlank()) driver.setPhone(phone);
@@ -1568,25 +1600,15 @@ public class DriverAPIController {
             }
         } else {
             // Check vehicleId or resolvedVehicle from vehicleTypeRepository if available
-            if (vehicleTypeRepository != null) {
-                VehicleType vt = null;
-                if (vehicleId != null && !vehicleId.isBlank()) {
-                    vt = vehicleTypeRepository.findById(vehicleId).orElse(null);
-                }
-                if (vt == null && resolvedVehicle != null && !resolvedVehicle.isBlank()) {
-                    vt = vehicleTypeRepository.findAll().stream()
-                            .filter(v -> resolvedVehicle.equalsIgnoreCase(v.getName()) || resolvedVehicle.equalsIgnoreCase(v.getType()) || resolvedVehicle.equalsIgnoreCase(v.getId()))
-                            .findFirst().orElse(null);
-                }
-                if (vt != null && vt.getServiceType() != null && !vt.getServiceType().isBlank()) {
-                    String vtService = vt.getServiceType().trim().toUpperCase();
-                    if (vtService.contains("PASSENGER")) {
-                        driver.setServiceType("PASSENGER");
-                    } else if (vtService.contains("BOTH")) {
-                        driver.setServiceType("BOTH");
-                    } else {
-                        driver.setServiceType("OUR_SERVICES");
-                    }
+            VehicleType vt = matchedVt != null ? matchedVt : resolveVehicleType(vehicleId, resolvedVehicle);
+            if (vt != null && vt.getServiceType() != null && !vt.getServiceType().isBlank()) {
+                String vtService = vt.getServiceType().trim().toUpperCase();
+                if (vtService.contains("PASSENGER")) {
+                    driver.setServiceType("PASSENGER");
+                } else if (vtService.contains("BOTH")) {
+                    driver.setServiceType("BOTH");
+                } else {
+                    driver.setServiceType("OUR_SERVICES");
                 }
             }
             if (driver.getServiceType() == null || driver.getServiceType().isBlank() || "BOTH".equalsIgnoreCase(driver.getServiceType())) {
@@ -2190,5 +2212,92 @@ public class DriverAPIController {
         response.put("amount", amount);
         response.put("status", "pending_approval");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Resilient vehicle resolution matching primary key ID, type slug, display name,
+     * normalized labels (e.g. "veh_2_wheeler" -> "2_wheeler" -> "two_wheeler"), or standard platform categories.
+     */
+    private VehicleType resolveVehicleType(String vehicleId, String vehicleName) {
+        if (vehicleTypeRepository == null) return null;
+        List<String> candidates = new ArrayList<>();
+        if (vehicleId != null && !vehicleId.isBlank()) {
+            String vId = vehicleId.trim();
+            candidates.add(vId);
+            if (vId.toLowerCase().startsWith("veh_") && vId.length() > 4) {
+                candidates.add(vId.substring(4).trim());
+            }
+            if (vId.toLowerCase().startsWith("veh-") && vId.length() > 4) {
+                candidates.add(vId.substring(4).trim());
+            }
+        }
+        if (vehicleName != null && !vehicleName.isBlank()) {
+            candidates.add(vehicleName.trim());
+        }
+
+        // 1. Direct ID or Type lookup
+        for (String c : candidates) {
+            Optional<VehicleType> opt = vehicleTypeRepository.findById(c);
+            if (opt.isPresent()) return opt.get();
+            opt = vehicleTypeRepository.findByType(c);
+            if (opt.isPresent()) return opt.get();
+        }
+
+        // 2. Fuzzy / Normalized lookup across all vehicle types in repository
+        List<VehicleType> all = vehicleTypeRepository.findAll();
+        for (String c : candidates) {
+            String cClean = c.toLowerCase().replaceAll("[^a-z0-9]", "");
+            for (VehicleType vt : all) {
+                if (c.equalsIgnoreCase(vt.getId()) || c.equalsIgnoreCase(vt.getType()) || c.equalsIgnoreCase(vt.getName())) {
+                    return vt;
+                }
+                String vtType = vt.getType() != null ? vt.getType().toLowerCase().replaceAll("[^a-z0-9]", "") : "";
+                String vtName = vt.getName() != null ? vt.getName().toLowerCase().replaceAll("[^a-z0-9]", "") : "";
+                String vtId = vt.getId() != null ? vt.getId().toLowerCase().replaceAll("[^a-z0-9]", "") : "";
+
+                if (!cClean.isEmpty() && (cClean.equals(vtType) || cClean.equals(vtName) || cClean.equals(vtId))) {
+                    return vt;
+                }
+                // Match 2 Wheeler / Bike / Scooter
+                if (cClean.contains("2wheel") || cClean.contains("twowheel") || cClean.contains("bike") || cClean.contains("scooter") || "1".equals(cClean)) {
+                    if (vtType.contains("2wheel") || vtType.contains("twowheel") || vtType.contains("bike") || vtType.contains("scooter")
+                            || vtName.contains("2wheel") || vtName.contains("twowheel") || vtName.contains("bike") || vtName.contains("scooter") || "1".equals(vtId)) {
+                        return vt;
+                    }
+                }
+                // Match 3 Wheeler / Auto / Rickshaw
+                if (cClean.contains("3wheel") || cClean.contains("threewheel") || cClean.contains("auto") || cClean.contains("rickshaw") || "2".equals(cClean)) {
+                    if (vtType.contains("3wheel") || vtType.contains("threewheel") || vtType.contains("auto") || vtType.contains("rickshaw")
+                            || vtName.contains("3wheel") || vtName.contains("threewheel") || vtName.contains("auto") || vtName.contains("rickshaw") || "2".equals(vtId)) {
+                        return vt;
+                    }
+                }
+                // Match Tata Ace / Chota Hathi
+                if (cClean.contains("tataace") || cClean.contains("ace") || cClean.contains("chotahathi") || "3".equals(cClean)) {
+                    if (vtType.contains("ace") || vtName.contains("ace") || vtType.contains("tataace") || vtName.contains("tataace") || "3".equals(vtId)) {
+                        return vt;
+                    }
+                }
+                // Match Pickup 8ft
+                if (cClean.contains("8ft") || cClean.contains("pickup") || cClean.contains("bolero") || "4".equals(cClean)) {
+                    if (vtType.contains("pickup") || vtName.contains("pickup") || vtType.contains("8ft") || vtName.contains("8ft") || "4".equals(vtId)) {
+                        return vt;
+                    }
+                }
+                // Match Tata 407
+                if (cClean.contains("407") || cClean.contains("tata407") || cClean.contains("truck") || "5".equals(cClean)) {
+                    if (vtType.contains("407") || vtName.contains("407") || "5".equals(vtId)) {
+                        return vt;
+                    }
+                }
+                // Match Cab / Sedan / Taxi / Car
+                if (cClean.contains("cab") || cClean.contains("sedan") || cClean.contains("taxi") || cClean.contains("car") || "6".equals(cClean)) {
+                    if (vtType.contains("cab") || vtName.contains("cab") || vtType.contains("taxi") || vtName.contains("taxi") || "6".equals(vtId)) {
+                        return vt;
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

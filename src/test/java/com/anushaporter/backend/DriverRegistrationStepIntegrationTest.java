@@ -469,4 +469,53 @@ public class DriverRegistrationStepIntegrationTest {
         assertEquals(5, healed.getRegistrationStep());
         assertTrue(healed.isFullyRegistered());
     }
+
+    @Test
+    public void testDriverRegistration_WithFallbackVehicleId_Succeeds() throws Exception {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("vehicleId", "veh_2_wheeler");
+        payload.put("vehicleType", "2 Wheeler");
+        payload.put("vehicle_type", "2_wheeler");
+        payload.put("serviceType", "OUR_SERVICES");
+        payload.put("name", "Test Two Wheeler Driver");
+        payload.put("saveAndNext", true);
+        payload.put("step", 2);
+
+        mockMvc.perform(post("/api/drivers/register")
+                        .header("Authorization", testToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        Driver saved = driverRepository.findByPhone(testPhone).orElseThrow();
+        assertEquals("2 Wheeler", saved.getVehicle());
+        assertEquals("OUR_SERVICES", saved.getServiceType());
+    }
+
+    @Test
+    public void testDriverRegistration_WhenVehicleMarkedInactive_Returns400() throws Exception {
+        com.anushaporter.backend.repository.VehicleTypeRepository vRepo =
+                webApplicationContext.getBean(com.anushaporter.backend.repository.VehicleTypeRepository.class);
+        com.anushaporter.backend.model.VehicleType inactiveV = new com.anushaporter.backend.model.VehicleType();
+        inactiveV.setId("veh_special_inactive");
+        inactiveV.setName("Inactive Special Truck");
+        inactiveV.setType("special_inactive");
+        inactiveV.setStatus("inactive");
+        vRepo.save(inactiveV);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("vehicleId", "veh_special_inactive");
+        payload.put("vehicleType", "Inactive Special Truck");
+        payload.put("saveAndNext", true);
+        payload.put("step", 2);
+
+        mockMvc.perform(post("/api/drivers/register")
+                        .header("Authorization", testToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.message", is("Selected vehicle type is no longer available.")));
+    }
 }
