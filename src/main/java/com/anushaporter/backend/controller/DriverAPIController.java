@@ -523,9 +523,20 @@ public class DriverAPIController {
         if (fcmToken == null || fcmToken.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "fcmToken is required"));
         }
+        String trimmedToken = fcmToken.trim();
+        if (driver != null) {
+            driver.setFcmToken(trimmedToken);
+            driverRepository.save(driver);
+        }
         if (appUser != null) {
-            appUser.setFcmToken(fcmToken.trim());
-            appUserRepository.save(appUser);
+            if (appUser.getRole() != null && ("driver".equalsIgnoreCase(appUser.getRole()) || "partner".equalsIgnoreCase(appUser.getRole()))) {
+                appUser.setFcmToken(trimmedToken);
+                appUserRepository.save(appUser);
+            } else if (trimmedToken.equals(appUser.getFcmToken())) {
+                // If this is a customer account that previously held this driver device token, detach it
+                appUser.setFcmToken(null);
+                appUserRepository.save(appUser);
+            }
         }
         return ResponseEntity.ok(Map.of("success", true, "message", "Device token registered"));
     }

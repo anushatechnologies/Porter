@@ -55,19 +55,7 @@ public class PushNotificationService {
         }
     }
 
-    public void notifyUser(AppUser user, String bookingId, String type, String title, String message) {
-        if (user == null) return;
-        Notification notification = new Notification();
-        notification.setUserId(user.getId());
-        notification.setBookingId(bookingId);
-        notification.setNotificationType(type);
-        notification.setTitle(title);
-        notification.setMessage(message);
-        notification.setAudience(user.getRole() != null ? user.getRole() : "driver");
-        notification.setTarget(user.getEmail() != null ? user.getEmail() : user.getPhone());
-        notificationRepository.save(notification);
-
-        String token = user.getFcmToken();
+    public void sendPush(String token, String title, String message, String bookingId, String type) {
         if (token == null || token.isBlank()) return;
         try {
             if (token.startsWith("ExpoPushToken[")) {
@@ -96,7 +84,82 @@ public class PushNotificationService {
                 safeSendFirebase(push);
             }
         } catch (Exception e) {
-            logger.warn("Push delivery failed for user {}: {}", user.getId(), e.getMessage());
+            logger.warn("Push delivery failed for token {}: {}", token, e.getMessage());
+        }
+    }
+
+    private void saveNotificationRecord(Long userId, String bookingId, String type, String title, String message, String audience, String target) {
+        try {
+            Notification notification = new Notification();
+            notification.setUserId(userId != null ? userId : 0L);
+            notification.setBookingId(bookingId);
+            notification.setNotificationType(type);
+            notification.setTitle(title);
+            notification.setMessage(message);
+            notification.setAudience(audience != null ? audience : "customer");
+            notification.setTarget(target != null ? target : "");
+            notificationRepository.save(notification);
+        } catch (Exception e) {
+            logger.warn("Failed to save notification record: {}", e.getMessage());
+        }
+    }
+
+    public String resolveDriverToken(Driver driver) {
+        if (driver == null) return null;
+        if (driver.getFcmToken() != null && !driver.getFcmToken().isBlank()) {
+            return driver.getFcmToken().trim();
+        }
+        AppUser driverUser = resolveDriverUser(driver);
+        if (driverUser != null && driverUser.getFcmToken() != null && !driverUser.getFcmToken().isBlank()) {
+            return driverUser.getFcmToken().trim();
+        }
+        return null;
+    }
+
+    private AppUser resolveDriverUser(Driver driver) {
+        if (driver == null) return null;
+        AppUser driverUser = null;
+        if (driver.getEmail() != null && !driver.getEmail().isBlank()) {
+            driverUser = userRepository.findFirstByEmailOrderByIdDesc(driver.getEmail()).orElse(null);
+        }
+        if (driverUser == null && driver.getPhone() != null && !driver.getPhone().isBlank()) {
+            driverUser = userRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone()).orElse(null);
+            if (driverUser == null) {
+                String cleanPhone = driver.getPhone().replaceAll("\\D+", "");
+                if (cleanPhone.length() > 10) cleanPhone = cleanPhone.substring(cleanPhone.length() - 10);
+                if (!cleanPhone.isEmpty()) {
+                    driverUser = userRepository.findFirstByPhoneOrderByIdDesc(cleanPhone).orElse(null);
+                }
+            }
+        }
+        if (driverUser == null && driver.getId() != null) {
+            driverUser = userRepository.findById(driver.getId()).orElse(null);
+        }
+        return driverUser;
+    }
+
+    public void notifyDriver(Driver driver, String bookingId, String type, String title, String message) {
+        if (driver == null) return;
+        AppUser driverUser = resolveDriverUser(driver);
+        Long userId = driver.getId() != null ? driver.getId() : (driverUser != null ? driverUser.getId() : 0L);
+        String target = driver.getEmail() != null ? driver.getEmail() : (driver.getPhone() != null ? driver.getPhone() : "");
+        saveNotificationRecord(userId, bookingId, type, title, message, "driver", target);
+
+        String token = resolveDriverToken(driver);
+        if (token != null && !token.isBlank()) {
+            sendPush(token, title, message, bookingId, type);
+        }
+    }
+
+    public void notifyUser(AppUser user, String bookingId, String type, String title, String message) {
+        if (user == null) return;
+        saveNotificationRecord(user.getId(), bookingId, type, title, message,
+                user.getRole() != null ? user.getRole() : "customer",
+                user.getEmail() != null ? user.getEmail() : user.getPhone());
+
+        String token = user.getFcmToken();
+        if (token != null && !token.isBlank()) {
+            sendPush(token, title, message, bookingId, type);
         }
     }
 
@@ -128,11 +191,49 @@ public class PushNotificationService {
             type = "CANCELLED";
         } else return;
 
-        userRepository.findFirstByEmailOrderByIdDesc(order.getUserEmail())
-                .ifPresent(user -> notifyUser(user, order.getBookingId(), type, title, message));
-        if (type.equals("CANCELLED") && order.getDriverEmail() != null) {
-            userRepository.findFirstByEmailOrderByIdDesc(order.getDriverEmail())
-                    .ifPresent(user -> notifyUser(user, order.getBookingId(), type, title, message));
+        // 1. Notify Customer (Strictly skip dispatch if the token belongs to a driver device)
+        if (order.getUserEmail() != null && !order.getUserEmail().isBlank()) {
+            userRepository.findFirstByEmailOrderByIdDesc(order.getUserEmail())
+                    .ifPresent(customerUser -> {
+                        String customerToken = customerUser.getFcmToken();
+                        boolean isDriverDevice = false;
+                        if (customerToken != null && !customerToken.isBlank() && driverRepository != null) {
+                            try {
+                                if (driverRepository.findFirstByFcmToken(customerToken.trim()).isPresent()) {
+                                    isDriverDevice = true;
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                        if (isDriverDevice) {
+                            logger.warn("Skipping customer push notification '{}' to token {} because it is registered to a driver device", type, customerToken);
+                            saveNotificationRecord(customerUser.getId(), order.getBookingId(), type, title, message, "customer", customerUser.getEmail());
+                        } else {
+                            notifyUser(customerUser, order.getBookingId(), type, title, message);
+                        }
+                    });
+        }
+
+        // 2. If cancelled, also notify the assigned driver if one was assigned
+        if (type.equals("CANCELLED")) {
+            Driver assignedDriver = null;
+            if (driverRepository != null) {
+                if (order.getDriverId() != null && !order.getDriverId().isBlank()) {
+                    try {
+                        assignedDriver = driverRepository.findById(Long.parseLong(order.getDriverId())).orElse(null);
+                    } catch (Exception ignored) {}
+                }
+                if (assignedDriver == null && order.getDriverPhone() != null && !order.getDriverPhone().isBlank()) {
+                    try {
+                        assignedDriver = driverRepository.findByPhone(order.getDriverPhone()).orElse(null);
+                    } catch (Exception ignored) {}
+                }
+            }
+            if (assignedDriver != null) {
+                notifyDriver(assignedDriver, order.getBookingId(), type, title, message);
+            } else if (order.getDriverEmail() != null && !order.getDriverEmail().isBlank()) {
+                userRepository.findFirstByEmailOrderByIdDesc(order.getDriverEmail())
+                        .ifPresent(user -> notifyUser(user, order.getBookingId(), type, title, message));
+            }
         }
     }
 
@@ -167,52 +268,24 @@ public class PushNotificationService {
                     order.getAmount() != null ? order.getAmount() : 0.0);
         }
 
-        AppUser driverUser = resolveDriverUser(driver);
-        if (driverUser != null) {
-            notifyUser(driverUser, order.getBookingId(), "DRIVER_OFFER", title, message);
-        } else {
-            Notification notification = new Notification();
-            notification.setUserId(driver.getId());
-            notification.setBookingId(order.getBookingId());
-            notification.setNotificationType("DRIVER_OFFER");
-            notification.setTitle(title);
-            notification.setMessage(message);
-            notification.setAudience("driver");
-            notification.setTarget(driver.getEmail() != null ? driver.getEmail() : driver.getPhone());
-            notificationRepository.save(notification);
-        }
+        notifyDriver(driver, order.getBookingId(), "DRIVER_OFFER", title, message);
     }
 
     public void notifyDriverOffer(Driver driver, String bookingId, String pickup, String drop, Double fare) {
         if (driver == null) return;
-        AppUser driverUser = resolveDriverUser(driver);
-
         String title = "New Delivery Offer! 🚚";
         String message = String.format("Pickup: %s → Drop: %s (₹%.0f)",
                 safe(pickup, "Near you"),
                 safe(drop, "Destination"),
                 fare != null ? fare : 0.0);
 
-        if (driverUser != null) {
-            notifyUser(driverUser, bookingId, "DRIVER_OFFER", title, message);
-        } else {
-            Notification notification = new Notification();
-            notification.setUserId(driver.getId());
-            notification.setBookingId(bookingId);
-            notification.setNotificationType("DRIVER_OFFER");
-            notification.setTitle(title);
-            notification.setMessage(message);
-            notification.setAudience("driver");
-            notification.setTarget(driver.getEmail() != null ? driver.getEmail() : driver.getPhone());
-            notificationRepository.save(notification);
-        }
+        notifyDriver(driver, bookingId, "DRIVER_OFFER", title, message);
     }
 
     public void notifyOfferTaken(Driver driver, String bookingId) {
         if (driver == null) return;
-        AppUser driverUser = resolveDriverUser(driver);
-        if (driverUser != null && driverUser.getFcmToken() != null && !driverUser.getFcmToken().isBlank()) {
-            String token = driverUser.getFcmToken();
+        String token = resolveDriverToken(driver);
+        if (token != null && !token.isBlank()) {
             String title = "Order Accepted";
             String message = "Another driver partner has accepted this order.";
             try {
@@ -239,9 +312,8 @@ public class PushNotificationService {
 
     public void notifyOfferAcceptedBySelf(Driver driver, String bookingId) {
         if (driver == null) return;
-        AppUser driverUser = resolveDriverUser(driver);
-        if (driverUser != null && driverUser.getFcmToken() != null && !driverUser.getFcmToken().isBlank()) {
-            String token = driverUser.getFcmToken();
+        String token = resolveDriverToken(driver);
+        if (token != null && !token.isBlank()) {
             String title = "Booking Confirmed! 🚚";
             String message = "You have accepted booking #" + bookingId;
             try {
@@ -268,9 +340,8 @@ public class PushNotificationService {
 
     public void notifyOfferDismissedForDriver(Driver driver, String bookingId) {
         if (driver == null) return;
-        AppUser driverUser = resolveDriverUser(driver);
-        if (driverUser != null && driverUser.getFcmToken() != null && !driverUser.getFcmToken().isBlank()) {
-            String token = driverUser.getFcmToken();
+        String token = resolveDriverToken(driver);
+        if (token != null && !token.isBlank()) {
             try {
                 if (token.startsWith("ExpoPushToken[")) {
                     sendExpoStopOffer(token, "Offer Dismissed", "Offer dismissed", bookingId, "REJECTED_BY_YOU");
@@ -293,47 +364,32 @@ public class PushNotificationService {
         }
     }
 
-    private AppUser resolveDriverUser(Driver driver) {
-        if (driver == null) return null;
-        AppUser driverUser = null;
-        if (driver.getEmail() != null && !driver.getEmail().isBlank()) {
-            driverUser = userRepository.findFirstByEmailOrderByIdDesc(driver.getEmail()).orElse(null);
-        }
-        if (driverUser == null && driver.getPhone() != null && !driver.getPhone().isBlank()) {
-            driverUser = userRepository.findFirstByPhoneOrderByIdDesc(driver.getPhone()).orElse(null);
-            if (driverUser == null) {
-                String cleanPhone = driver.getPhone().replaceAll("\\D+", "");
-                if (cleanPhone.length() > 10) cleanPhone = cleanPhone.substring(cleanPhone.length() - 10);
-                if (!cleanPhone.isEmpty()) {
-                    driverUser = userRepository.findFirstByPhoneOrderByIdDesc(cleanPhone).orElse(null);
-                }
-            }
-        }
-        if (driverUser == null && driver.getId() != null) {
-            driverUser = userRepository.findById(driver.getId()).orElse(null);
-        }
-        return driverUser;
-    }
-
     public void notifyDriverAssignment(String driverIdentifier, String bookingId, String pickup, String drop) {
         if (driverIdentifier == null || driverIdentifier.isBlank()) return;
-        AppUser driverUser = userRepository.findFirstByEmailOrderByIdDesc(driverIdentifier)
-                .or(() -> userRepository.findFirstByPhoneOrderByIdDesc(driverIdentifier))
-                .orElse(null);
-
-        if (driverUser == null && driverRepository != null) {
-            try {
-                Long dId = Long.parseLong(driverIdentifier.replaceAll("[^0-9]", ""));
-                Driver d = driverRepository.findById(dId).orElse(null);
-                if (d != null) {
-                    driverUser = resolveDriverUser(d);
-                }
-            } catch (Exception ignored) {}
-        }
-
         String title = "New Delivery Offer! 📦";
         String message = "Pickup: " + safe(pickup, "Near you") + " → Drop: " + safe(drop, "Destination");
 
+        Driver d = null;
+        if (driverRepository != null) {
+            try {
+                Long dId = Long.parseLong(driverIdentifier.replaceAll("[^0-9]", ""));
+                d = driverRepository.findById(dId).orElse(null);
+            } catch (Exception ignored) {}
+            if (d == null) {
+                d = driverRepository.findByPhone(driverIdentifier).orElse(null);
+            }
+            if (d == null) {
+                d = driverRepository.findByEmailIgnoreCase(driverIdentifier).orElse(null);
+            }
+        }
+        if (d != null) {
+            notifyDriver(d, bookingId, "DRIVER_OFFER", title, message);
+            return;
+        }
+
+        AppUser driverUser = userRepository.findFirstByEmailOrderByIdDesc(driverIdentifier)
+                .or(() -> userRepository.findFirstByPhoneOrderByIdDesc(driverIdentifier))
+                .orElse(null);
         if (driverUser != null) {
             notifyUser(driverUser, bookingId, "DRIVER_OFFER", title, message);
         }

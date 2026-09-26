@@ -89,6 +89,12 @@ public class Driver {
     @Column(name = "wallet_balance")
     private Double walletBalance = 0.0;
 
+    @Column(name = "fcm_token")
+    private String fcmToken;
+
+    public String getFcmToken() { return fcmToken; }
+    public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
