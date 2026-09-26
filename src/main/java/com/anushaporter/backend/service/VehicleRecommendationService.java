@@ -36,10 +36,19 @@ public class VehicleRecommendationService {
         String goodsCategory = request.getGoodsCategory() != null ? request.getGoodsCategory().toLowerCase() : "general";
         String houseSize = request.getHouseSize() != null ? request.getHouseSize().toLowerCase() : "";
 
-        // Fetch active vehicles created by admin
+        // Fetch active goods/freight delivery vehicles
         List<VehicleType> availableVehicles = (vehicleTypeRepository != null)
-                ? vehicleTypeRepository.findByStatusOrderByPriorityAsc("active")
+                ? vehicleTypeRepository.findByStatusOrderByPriorityAsc("active").stream()
+                        .filter(v -> {
+                            String st = v.getServiceType() != null ? v.getServiceType().toUpperCase() : "";
+                            return !"PASSENGER".equalsIgnoreCase(st);
+                        })
+                        .toList()
                 : List.of();
+
+        if (availableVehicles.isEmpty()) {
+            availableVehicles = getDefaultVehicleTypes();
+        }
 
         // Evaluate all vehicle options
         for (VehicleType v : availableVehicles) {

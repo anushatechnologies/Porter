@@ -245,15 +245,30 @@ public class DriverEligibilityService {
                     || s.equals("1")) {
                 return "TWO_WHEELER";
             }
-            if (s.contains("3wheel") || s.contains("threewheel") || s.contains("auto") || s.contains("rickshaw")
-                    || s.contains("cng") || s.contains("loader") || s.equals("2")) {
+            if (s.contains("3wheel") || s.contains("threewheel") || s.contains("mini3w") || s.contains("minitruck")
+                    || s.contains("auto") || s.contains("rickshaw") || s.contains("cng") || s.contains("loader") || s.equals("2")) {
                 return "THREE_WHEELER";
             }
             if (s.contains("tataace") || s.contains("ace") || s.contains("chotahathi") || s.equals("3")) {
                 return "TATA_ACE";
             }
-            if (s.contains("8ft") || s.contains("pickup") || s.contains("bolero") || s.contains("dost") || s.equals("4")) {
+            if (s.contains("8ft") || s.contains("9ft") || s.contains("pickup") || s.contains("bolero") || s.contains("dost") || s.equals("4")) {
                 return "PICKUP_8FT";
+            }
+            if (s.contains("40ft")) {
+                return "TRUCK_40FT";
+            }
+            if (s.contains("32ft")) {
+                return "TRUCK_32FT";
+            }
+            if (s.contains("24ft")) {
+                return "TRUCK_24FT";
+            }
+            if (s.contains("20ft")) {
+                return "TRUCK_20FT";
+            }
+            if (s.contains("17ft") || s.contains("1109") || s.contains("lpt")) {
+                return "TRUCK_17FT";
             }
             if (s.contains("407") || s.contains("tata407") || s.contains("14ft") || s.contains("truck") || s.contains("eicher") || s.contains("large") || s.equals("5")) {
                 return "TATA_407";

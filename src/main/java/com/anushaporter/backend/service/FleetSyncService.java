@@ -96,8 +96,17 @@ public class FleetSyncService {
             if (existingOpt.isEmpty()) {
                 existingOpt = vehicleTypeRepository.findByType(svcId);
             }
-            if (existingOpt.isEmpty() && s.getCategory() != null && !s.getCategory().isBlank()) {
-                existingOpt = vehicleTypeRepository.findByType(s.getCategory().trim());
+            if (existingOpt.isEmpty()) {
+                String legacyId = resolveLegacyDeliveryId(svcId);
+                if (legacyId != null) {
+                    existingOpt = vehicleTypeRepository.findById(legacyId);
+                }
+            }
+            if (existingOpt.isEmpty() && s.getName() != null && !s.getName().isBlank()) {
+                final String sName = s.getName().trim();
+                existingOpt = vehicleTypeRepository.findAll().stream()
+                        .filter(v -> v.getName() != null && v.getName().trim().equalsIgnoreCase(sName))
+                        .findFirst();
             }
 
             VehicleType vt;
@@ -229,6 +238,12 @@ public class FleetSyncService {
             if (existingOpt.isEmpty()) {
                 existingOpt = vehicleTypeRepository.findByType(code);
             }
+            if (existingOpt.isEmpty()) {
+                String legacyPassengerId = resolveLegacyPassengerId(code);
+                if (legacyPassengerId != null) {
+                    existingOpt = vehicleTypeRepository.findById(legacyPassengerId);
+                }
+            }
 
             VehicleType vt;
             if (existingOpt.isEmpty()) {
@@ -339,5 +354,26 @@ public class FleetSyncService {
         if (c.contains("BIKE") || c.contains("MOTO")) return "bike";
         if (c.contains("AUTO")) return "rickshaw";
         return "car";
+    }
+
+    private String resolveLegacyDeliveryId(String svcId) {
+        if (svcId == null) return null;
+        String s = svcId.toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (s.equals("pickup8ft") || s.equals("pickup")) return "veh_pickup_04";
+        if (s.equals("mini3w") || s.equals("minitruck")) return "veh_minitruck_05";
+        if (s.equals("tataace")) return "veh_tataace_06";
+        if (s.equals("scooter")) return "veh_scooter_02";
+        if (s.equals("14ft") || s.equals("407truck") || s.equals("407")) return "veh_407_07";
+        if (s.equals("17ft") || s.equals("lpt1109") || s.equals("1109")) return "veh_lpt1109_08";
+        return null;
+    }
+
+    private String resolveLegacyPassengerId(String code) {
+        if (code == null) return null;
+        String s = code.toUpperCase();
+        if (s.contains("BIKE")) return "pass_bike";
+        if (s.contains("AUTO")) return "pass_auto";
+        if (s.contains("CAB") || s.contains("SEDAN") || s.contains("HATCHBACK")) return "6";
+        return null;
     }
 }

@@ -55,6 +55,23 @@ public class VehicleTypeController {
 
     @PostConstruct
     public void initVehicleTypes() {
+        // Ensure baseline passenger vehicle types exist
+        if (vehicleTypeRepository.findById("6").isEmpty()) {
+            vehicleTypeRepository.save(build("6", "Cab", "cab",
+                    "Comfortable 4-seater AC cab", "4 Passengers", 350, "4 Passengers + 2 Luggage",
+                    "car", "https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png", 150.00, 2.0, 15.00, "PASSENGER", 6));
+        }
+        if (vehicleTypeRepository.findById("pass_bike").isEmpty() && vehicleTypeRepository.findByType("bike_taxi").isEmpty()) {
+            vehicleTypeRepository.save(build("pass_bike", "Bike Taxi (Passenger)", "bike_taxi",
+                    "Quick & affordable 1-passenger bike ride", "1 Passenger", 80, "1 Helmet Provided",
+                    "bike", "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=400&q=80", 30.00, 1.0, 10.00, "PASSENGER", 7));
+        }
+        if (vehicleTypeRepository.findById("pass_auto").isEmpty() && vehicleTypeRepository.findByType("auto_taxi").isEmpty()) {
+            vehicleTypeRepository.save(build("pass_auto", "Auto Taxi (Passenger)", "auto_taxi",
+                    "Convenient city auto ride for up to 3 passengers", "3 Passengers", 250, "Up to 3 Passengers",
+                    "rickshaw", "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400&q=80", 50.00, 1.5, 15.00, "PASSENGER", 8));
+        }
+
         // Auto-sync delivery and freight services into vehicle_types
         syncFromPorterServices();
         // Heal legacy S3 image URLs if existing records are present.
