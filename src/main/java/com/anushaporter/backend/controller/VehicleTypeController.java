@@ -74,6 +74,17 @@ public class VehicleTypeController {
 
         // Auto-sync delivery and freight services into vehicle_types
         syncFromPorterServices();
+
+        // Purge non-vehicle artifacts (One-Way Ride, Porter Trucks & Fleet, Scooter Model, scooty, etc.)
+        try {
+            vehicleTypeRepository.findAll().forEach(vt -> {
+                if (com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getName(), vt.getId())
+                        || com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getDisplayName(), vt.getType())) {
+                    vehicleTypeRepository.delete(vt);
+                }
+            });
+        } catch (Exception ignored) {}
+
         // Heal legacy S3 image URLs if existing records are present.
         try {
             vehicleTypeRepository.findAll().forEach(vt -> {
@@ -176,6 +187,8 @@ public class VehicleTypeController {
 
         final String targetService = normalizedService;
         List<Map<String, Object>> vehicles = list.stream()
+                .filter(vt -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getName(), vt.getId())
+                        && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getDisplayName(), vt.getType()))
                 .map(this::formatVehicleType)
                 .filter(m -> {
                     if (targetService == null || "ALL".equalsIgnoreCase(targetService))

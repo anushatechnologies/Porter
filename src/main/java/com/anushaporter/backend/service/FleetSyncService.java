@@ -72,6 +72,15 @@ public class FleetSyncService {
      */
     public VehicleType syncPorterService(PorterService s) {
         if (s == null || vehicleTypeRepository == null) return null;
+        if (isNonVehicleArtifact(s.getName(), s.getServiceId())) {
+            String svcId = s.getServiceId() != null && !s.getServiceId().isBlank()
+                    ? s.getServiceId().trim()
+                    : (s.getId() != null ? String.valueOf(s.getId()) : s.getName());
+            if (svcId != null) {
+                vehicleTypeRepository.findById(svcId).ifPresent(vehicleTypeRepository::delete);
+            }
+            return null;
+        }
         try {
             String cat = s.getCategory() != null ? s.getCategory().toLowerCase().trim() : "";
             String name = s.getName() != null ? s.getName().toLowerCase().trim() : "";
@@ -230,6 +239,13 @@ public class FleetSyncService {
      */
     public VehicleType syncPassengerCategory(PassengerVehicleCategory c) {
         if (c == null || vehicleTypeRepository == null) return null;
+        if (isNonVehicleArtifact(c.getDisplayName(), c.getCategoryCode())) {
+            String code = c.getCategoryCode() != null ? c.getCategoryCode().trim().toUpperCase() : "";
+            if (!code.isBlank()) {
+                vehicleTypeRepository.findById(code).ifPresent(vehicleTypeRepository::delete);
+            }
+            return null;
+        }
         try {
             String code = c.getCategoryCode() != null ? c.getCategoryCode().trim().toUpperCase() : "";
             if (code.isBlank()) return null;
@@ -375,5 +391,19 @@ public class FleetSyncService {
         if (s.contains("AUTO")) return "pass_auto";
         if (s.contains("CAB") || s.contains("SEDAN") || s.contains("HATCHBACK")) return "6";
         return null;
+    }
+
+    public static boolean isNonVehicleArtifact(String name, String id) {
+        if (name == null && id == null) return false;
+        String n = (name != null ? name : "").toLowerCase().trim();
+        String i = (id != null ? id : "").toLowerCase().trim();
+        return n.equals("one-way ride") || n.equals("round trip") || n.equals("local rental")
+                || n.equals("airport transfer") || n.equals("porter trucks & fleet")
+                || n.equals("2 wheeler / bike") || n.equals("scooter model")
+                || n.equals("scooty") || n.equals("vehicle")
+                || i.equals("one_way") || i.equals("round_trip") || i.equals("rental")
+                || i.equals("airport_transfer") || i.equals("porter-trucks-fleet")
+                || i.equals("2-wheeler-bike") || i.equals("one-way") || i.equals("round-trip")
+                || i.equals("local-rental") || i.equals("airport-transfer");
     }
 }

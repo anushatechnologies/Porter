@@ -60,7 +60,9 @@ public class PorterServiceController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String city) {
 
-        List<PorterService> services = serviceRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
+        List<PorterService> services = serviceRepository.findByIsActiveTrueOrderByDisplayOrderAsc().stream()
+                .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId()))
+                .collect(Collectors.toList());
         if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
             services = services.stream()
                     .filter(s -> matchesCategoryFilter(s, category))
