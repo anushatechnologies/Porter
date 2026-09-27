@@ -427,6 +427,21 @@ public class PassengerBookingController {
         return ResponseEntity.ok(Map.of("success", true, "active", saved.getActive(), "vehicle", saved));
     }
 
+    @DeleteMapping({"/admin/vehicles/{id}", "/admin/categories/{id}"})
+    public ResponseEntity<Map<String, Object>> deleteAdminVehicleCategory(@PathVariable Long id) {
+        Optional<PassengerVehicleCategory> existingOpt = vehicleCategoryRepository.findById(id);
+        if (existingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        PassengerVehicleCategory c = existingOpt.get();
+        c.setActive(false);
+        PassengerVehicleCategory saved = vehicleCategoryRepository.save(c);
+        if (fleetSyncService != null) {
+            fleetSyncService.deletePassengerCategory(c);
+        }
+        return ResponseEntity.ok(Map.of("success", true, "message", "Category deactivated successfully", "active", false, "vehicle", saved));
+    }
+
     private Optional<PassengerBooking> findBookingByIdOrNumber(String id) {
         try {
             Long num = Long.parseLong(id);
@@ -572,7 +587,7 @@ public class PassengerBookingController {
                             String t = (vt.getType() != null ? vt.getType() : "").toLowerCase();
                             String n = (vt.getName() != null ? vt.getName() : "").toLowerCase();
                             return sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB")
-                                    || t.contains("cab") || t.contains("taxi") || n.contains("cab") || n.contains("taxi") || "6".equals(vt.getId());
+                                    || t.contains("cab") || t.contains("taxi") || n.contains("cab") || n.contains("taxi");
                         })
                         .toList();
                 for (VehicleType vt : passengerTypes) {

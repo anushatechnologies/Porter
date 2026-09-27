@@ -255,6 +255,19 @@ public class FleetSyncService {
                 existingOpt = vehicleTypeRepository.findByType(code);
             }
             if (existingOpt.isEmpty()) {
+                existingOpt = vehicleTypeRepository.findByType(code.toLowerCase());
+            }
+            if (existingOpt.isEmpty()) {
+                String clean = code.replaceAll("[^A-Za-z0-9]", "").toLowerCase();
+                String cName = (c.getDisplayName() != null ? c.getDisplayName() : "").replaceAll("[^A-Za-z0-9]", "").toLowerCase();
+                existingOpt = vehicleTypeRepository.findAll().stream().filter(v -> {
+                    String vType = (v.getType() != null ? v.getType() : "").replaceAll("[^A-Za-z0-9]", "").toLowerCase();
+                    String vId = (v.getId() != null ? v.getId() : "").replaceAll("[^A-Za-z0-9]", "").toLowerCase();
+                    String vName = (v.getName() != null ? v.getName() : "").replaceAll("[^A-Za-z0-9]", "").toLowerCase();
+                    return vType.equals(clean) || vId.equals(clean) || (!cName.isEmpty() && vName.equals(cName));
+                }).findFirst();
+            }
+            if (existingOpt.isEmpty()) {
                 String legacyPassengerId = resolveLegacyPassengerId(code);
                 if (legacyPassengerId != null) {
                     existingOpt = vehicleTypeRepository.findById(legacyPassengerId);

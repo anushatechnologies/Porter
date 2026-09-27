@@ -126,6 +126,22 @@ public class DriverOnboardingAndOfferFixIntegrationTest {
 
     @Test
     public void testPassengerVehicleTypes_IncludesBikeTaxiAndAutoTaxi() throws Exception {
+        if (vehicleTypeRepository.findById("6").isEmpty()) {
+            VehicleType v = new VehicleType();
+            v.setId("6"); v.setName("Cab"); v.setType("cab"); v.setServiceType("PASSENGER"); v.setStatus("active");
+            vehicleTypeRepository.save(v);
+        }
+        if (vehicleTypeRepository.findById("pass_bike").isEmpty()) {
+            VehicleType v = new VehicleType();
+            v.setId("pass_bike"); v.setName("Bike Taxi (Passenger)"); v.setType("bike_taxi"); v.setServiceType("PASSENGER"); v.setStatus("active");
+            vehicleTypeRepository.save(v);
+        }
+        if (vehicleTypeRepository.findById("pass_auto").isEmpty()) {
+            VehicleType v = new VehicleType();
+            v.setId("pass_auto"); v.setName("Auto Taxi (Passenger)"); v.setType("auto_taxi"); v.setServiceType("PASSENGER"); v.setStatus("active");
+            vehicleTypeRepository.save(v);
+        }
+
         mockMvc.perform(get("/api/vehicle-types")
                         .param("status", "active")
                         .param("serviceType", "PASSENGER"))

@@ -38,7 +38,9 @@ public class VehicleController {
             @RequestParam(required = false) String serviceType) {
         if ("PASSENGER".equalsIgnoreCase(serviceType)) {
             List<com.anushaporter.backend.model.PassengerVehicleCategory> categories = passengerVehicleCategoryRepository != null
-                    ? passengerVehicleCategoryRepository.findAllByOrderByDisplayOrderAsc()
+                    ? ("active".equalsIgnoreCase(status)
+                            ? passengerVehicleCategoryRepository.findByActiveTrueOrderByDisplayOrderAsc()
+                            : passengerVehicleCategoryRepository.findAllByOrderByDisplayOrderAsc())
                     : Collections.emptyList();
             List<Map<String, Object>> items = categories.stream().map(c -> {
                 Map<String, Object> map = new LinkedHashMap<>();

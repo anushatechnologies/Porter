@@ -105,6 +105,21 @@ public class PassengerAdminController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @DeleteMapping("/vehicle-categories/{id}")
+    public ResponseEntity<?> deleteVehicleCategory(@PathVariable Long id) {
+        return vehicleCategoryRepository.findById(id).map(cat -> {
+            cat.setActive(false);
+            PassengerVehicleCategory saved = vehicleCategoryRepository.save(cat);
+            if (fleetSyncService != null) {
+                fleetSyncService.deletePassengerCategory(cat);
+            }
+            versionService.logAudit(versionService.getActiveVersion().getVersionNumber(), "VEHICLE_CATEGORY", id,
+                    "Admin", "admin@anushaporter.com", "DELETE", "active", "true", "false",
+                    "Deactivated vehicle category");
+            return ResponseEntity.ok(Map.of("success", true, "message", "Vehicle category deactivated successfully", "id", id, "vehicle", saved));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
     // --- 3. DYNAMIC PRICING RULES & VERSION CONTROL ---
     @GetMapping("/pricing")
     public ResponseEntity<List<PassengerPricingRule>> getActivePricingRules() {
