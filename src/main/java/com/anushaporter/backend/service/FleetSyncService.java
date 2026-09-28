@@ -128,9 +128,11 @@ public class FleetSyncService {
                 vt.setDescription(s.getDescription() != null ? s.getDescription() : s.getSubtitle());
                 vt.setCapacity(s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? "Up to " + s.getCapacityKg() + " kg" : ""));
                 vt.setCapacityKg(s.getCapacityKg() != null ? s.getCapacityKg() : 20);
-                vt.setDimensions(s.getDimensions() != null ? s.getDimensions() : "");
-                vt.setIconName(resolveDeliveryIcon(s.getCategory(), s.getName()));
-                vt.setImageUrl(s.getIconUrl() != null && !s.getIconUrl().isBlank() ? s.getIconUrl() : "");
+                String img = s.getIconUrl() != null && !s.getIconUrl().isBlank() ? s.getIconUrl() : "";
+                if (img.isEmpty() || img.contains("api.anushaporter.com/assets")) {
+                    img = com.anushaporter.backend.controller.VehicleTypeController.resolveDefaultVehicleImageUrl(s.getCategory(), s.getName(), svcId);
+                }
+                vt.setImageUrl(img);
                 vt.setBaseFare(s.getBaseFare() != null ? s.getBaseFare() : 40.0);
                 vt.setBaseKm(s.getBaseKm() != null ? s.getBaseKm() : 1.0);
                 vt.setPerKmRate(s.getPerKmRate() != null ? s.getPerKmRate() : 12.0);
@@ -161,7 +163,11 @@ public class FleetSyncService {
                     vt.setDimensions(s.getDimensions());
                 }
                 if (s.getIconUrl() != null && !s.getIconUrl().isBlank()) {
-                    vt.setImageUrl(s.getIconUrl());
+                    String img = s.getIconUrl().trim();
+                    if (img.contains("api.anushaporter.com/assets")) {
+                        img = com.anushaporter.backend.controller.VehicleTypeController.resolveDefaultVehicleImageUrl(vt.getType(), vt.getName(), vt.getId());
+                    }
+                    vt.setImageUrl(img);
                 }
                 if (s.getBaseFare() != null) {
                     vt.setBaseFare(s.getBaseFare());
@@ -287,7 +293,11 @@ public class FleetSyncService {
                 vt.setMaxPassengers(c.getPassengerCapacity() != null ? c.getPassengerCapacity() : 4);
                 vt.setMaxLuggage(c.getLuggageCapacity() != null ? c.getLuggageCapacity() : 2);
                 vt.setIconName(resolvePassengerIcon(code));
-                vt.setImageUrl(c.getImageUrl() != null ? c.getImageUrl() : "");
+                String pImg = c.getImageUrl() != null && !c.getImageUrl().isBlank() ? c.getImageUrl() : "";
+                if (pImg.isEmpty() || pImg.contains("api.anushaporter.com/assets")) {
+                    pImg = com.anushaporter.backend.controller.VehicleTypeController.resolveDefaultVehicleImageUrl(code, c.getDisplayName(), code);
+                }
+                vt.setImageUrl(pImg);
                 vt.setBaseFare(c.getBaseFare() != null ? c.getBaseFare().doubleValue() : 50.0);
                 vt.setBaseKm(c.getMinimumKm() != null ? c.getMinimumKm().doubleValue() : 1.0);
                 vt.setPerKmRate(c.getPerKmRate() != null ? c.getPerKmRate().doubleValue() : 15.0);
@@ -314,7 +324,11 @@ public class FleetSyncService {
                     vt.setCapacityKg(c.getLuggageCapacity() * 20);
                 }
                 if (c.getImageUrl() != null && !c.getImageUrl().isBlank()) {
-                    vt.setImageUrl(c.getImageUrl());
+                    String pImg = c.getImageUrl().trim();
+                    if (pImg.contains("api.anushaporter.com/assets")) {
+                        pImg = com.anushaporter.backend.controller.VehicleTypeController.resolveDefaultVehicleImageUrl(code, c.getDisplayName(), code);
+                    }
+                    vt.setImageUrl(pImg);
                 }
                 if (c.getBaseFare() != null) {
                     vt.setBaseFare(c.getBaseFare().doubleValue());

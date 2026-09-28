@@ -83,6 +83,11 @@ public class VehicleTypeController {
                 }
                 String typeKey = (vt.getType() != null ? vt.getType() : "").toLowerCase();
                 String idKey = (vt.getId() != null ? vt.getId() : "").trim();
+                String nameKey = (vt.getName() != null ? vt.getName() : "").trim();
+                if (vt.getImageUrl() != null && vt.getImageUrl().contains("api.anushaporter.com/assets")) {
+                    vt.setImageUrl(resolveDefaultVehicleImageUrl(typeKey, nameKey, idKey));
+                    changed = true;
+                }
                 if ((typeKey.contains("cab") || "6".equals(idKey)) && (vt.getImageUrl() == null
                         || vt.getImageUrl().isBlank() || vt.getImageUrl().contains("/vehicles/cab.png"))) {
                     vt.setImageUrl("https://poteranusha.s3.ap-south-2.amazonaws.com/vehicles/cab.png");
@@ -416,8 +421,11 @@ public class VehicleTypeController {
                 cat.setMinimumFare(java.math.BigDecimal.valueOf(
                         v.getMinFare() != null ? v.getMinFare() : (v.getBaseFare() != null ? v.getBaseFare() : 50.0)));
                 cat.setMinimumKm(java.math.BigDecimal.valueOf(v.getBaseKm() != null ? v.getBaseKm() : 1.0));
-                cat.setDriverAllowance(java.math.BigDecimal.ZERO);
-                cat.setImageUrl(v.getImageUrl());
+                String img = v.getImageUrl() != null ? v.getImageUrl().trim() : "";
+                if (img.isEmpty() || img.contains("api.anushaporter.com/assets")) {
+                    img = resolveDefaultVehicleImageUrl(v.getType(), v.getName(), v.getId());
+                }
+                cat.setImageUrl(img);
                 cat.setDisplayOrder(v.getPriority() != null ? v.getPriority() : 1);
                 cat.setActive("active".equalsIgnoreCase(v.getStatus()));
                 passengerVehicleCategoryRepository.save(cat);
@@ -479,12 +487,18 @@ public class VehicleTypeController {
             s.setCapacityLabel(v.getCapacity() != null && !v.getCapacity().isBlank() ? v.getCapacity() : (v.getCapacityKg() != null ? v.getCapacityKg() + " Kg" : ""));
             s.setDimensions(v.getDimensions() != null ? v.getDimensions() : "");
             if (v.getImageUrl() != null && !v.getImageUrl().isBlank()) {
-                s.setIconUrl(v.getImageUrl());
+                String img = v.getImageUrl().trim();
+                if (img.contains("api.anushaporter.com/assets")) {
+                    img = resolveDefaultVehicleImageUrl(v.getType(), v.getName(), v.getId());
+                }
+                s.setIconUrl(img);
+            } else {
+                s.setIconUrl(resolveDefaultVehicleImageUrl(v.getType(), v.getName(), v.getId()));
             }
             s.setCustomerAppVisible(v.getCustomerAppVisible() != null ? v.getCustomerAppVisible() : true);
             s.setIsActive("active".equalsIgnoreCase(v.getStatus()));
             s.setDisplayOrder(v.getPriority() != null ? v.getPriority() : 1);
-            s.setAvailableCities(v.getAvailableCities() != null ? v.getAvailableCities() : "ALL");
+            s.setAvailableCities(v.getAvailableCities() != null && !v.getAvailableCities().isBlank() ? v.getAvailableCities() : "[\"ALL\"]");
 
             porterServiceRepository.save(s);
         } catch (Exception ignored) {
@@ -683,7 +697,8 @@ public class VehicleTypeController {
             rawImageUrl = rawImageUrl.replace("poteranusha.s3.amazonaws.com",
                     "poteranusha.s3.ap-south-2.amazonaws.com");
         }
-        if (rawImageUrl.isEmpty() || rawImageUrl.endsWith("/vehicles/bike.png")
+        if (rawImageUrl.isEmpty() || rawImageUrl.contains("api.anushaporter.com/assets")
+                || rawImageUrl.endsWith("/vehicles/bike.png")
                 || rawImageUrl.endsWith("/vehicles/auto.png")) {
             rawImageUrl = resolveDefaultVehicleImageUrl(typeKey, nameKey, idKey);
         }

@@ -105,10 +105,12 @@ public class HomeFeedController {
                 item.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
                 item.put("capacityLabel", s.getCapacityLabel() != null ? s.getCapacityLabel() : "");
                 item.put("dimensions", s.getDimensions());
-                item.put("eta", s.getEtaLabel() != null ? s.getEtaLabel() : "5-10 mins");
-                item.put("etaLabel", s.getEtaLabel() != null ? s.getEtaLabel() : "5-10 mins");
-                item.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
-                item.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+                String rawIcon = s.getIconUrl() != null ? s.getIconUrl().trim() : "";
+                if (rawIcon.isEmpty() || rawIcon.contains("api.anushaporter.com/assets")) {
+                    rawIcon = com.anushaporter.backend.controller.VehicleTypeController.resolveDefaultVehicleImageUrl(s.getCategory(), s.getName(), s.getServiceId());
+                }
+                item.put("imageUrl", rawIcon);
+                item.put("iconUrl", rawIcon);
                 item.put("bgTint", s.getBgTint() != null ? s.getBgTint() : "#EEF4FF");
                 item.put("customerAppVisible", !Boolean.FALSE.equals(s.getCustomerAppVisible()));
                 item.put("isActive", Boolean.TRUE.equals(s.getIsActive()));

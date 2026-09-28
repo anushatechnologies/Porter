@@ -280,7 +280,11 @@ public class PassengerBookingController {
             m.put("name", c.getDisplayName());
             m.put("displayName", c.getDisplayName());
             m.put("description", c.getDescription());
-            m.put("imageUrl", c.getImageUrl() != null ? c.getImageUrl() : "");
+            String img = c.getImageUrl() != null ? c.getImageUrl().trim() : "";
+            if (img.isEmpty() || img.contains("api.anushaporter.com/assets")) {
+                img = VehicleTypeController.resolveDefaultVehicleImageUrl(c.getCategoryCode(), c.getDisplayName(), c.getCategoryCode());
+            }
+            m.put("imageUrl", img);
             m.put("passengerCapacity", c.getPassengerCapacity());
             m.put("luggageCapacity", c.getLuggageCapacity());
             m.put("basePrice", c.getBaseFare());
@@ -597,7 +601,12 @@ public class PassengerBookingController {
                         .toList();
                 for (VehicleType vt : passengerTypes) {
                     String code = (vt.getType() != null && !vt.getType().isBlank() ? vt.getType() : vt.getId()).toUpperCase();
-                    if (vehicleCategoryRepository.findByCategoryCode(code).isEmpty()) {
+                    String img = vt.getImageUrl() != null ? vt.getImageUrl().trim() : "";
+                    if (img.isEmpty() || img.contains("api.anushaporter.com/assets")) {
+                        img = VehicleTypeController.resolveDefaultVehicleImageUrl(vt.getType(), vt.getName(), vt.getId());
+                    }
+                    var opt = vehicleCategoryRepository.findByCategoryCode(code);
+                    if (opt.isEmpty()) {
                         PassengerVehicleCategory cat = new PassengerVehicleCategory();
                         cat.setCategoryCode(code);
                         cat.setDisplayName(vt.getDisplayName() != null && !vt.getDisplayName().isBlank() ? vt.getDisplayName() : vt.getName());
@@ -610,10 +619,24 @@ public class PassengerBookingController {
                         cat.setMinimumFare(BigDecimal.valueOf(vt.getMinFare() != null ? vt.getMinFare() : (vt.getBaseFare() != null ? vt.getBaseFare() : 50.0)));
                         cat.setMinimumKm(BigDecimal.valueOf(vt.getBaseKm() != null ? vt.getBaseKm() : 1.0));
                         cat.setDriverAllowance(BigDecimal.ZERO);
-                        cat.setImageUrl(vt.getImageUrl());
+                        cat.setImageUrl(img);
                         cat.setDisplayOrder(vt.getPriority() != null ? vt.getPriority() : 1);
                         cat.setActive(true);
                         vehicleCategoryRepository.save(cat);
+                    } else {
+                        PassengerVehicleCategory cat = opt.get();
+                        boolean dirty = false;
+                        if (!Boolean.TRUE.equals(cat.getActive())) {
+                            cat.setActive(true);
+                            dirty = true;
+                        }
+                        if (cat.getImageUrl() == null || cat.getImageUrl().isBlank() || cat.getImageUrl().contains("api.anushaporter.com/assets")) {
+                            cat.setImageUrl(img);
+                            dirty = true;
+                        }
+                        if (dirty) {
+                            vehicleCategoryRepository.save(cat);
+                        }
                     }
                 }
             } catch (Exception ignored) {}

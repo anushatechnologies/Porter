@@ -44,6 +44,10 @@ public class PorterServiceController {
                         needsSave = true;
                     }
                 }
+                if (s.getIconUrl() != null && s.getIconUrl().contains("api.anushaporter.com/assets")) {
+                    s.setIconUrl(VehicleTypeController.resolveDefaultVehicleImageUrl(cat, name, svcId));
+                    needsSave = true;
+                }
                 if (needsSave) {
                     serviceRepository.save(s);
                 }
@@ -252,8 +256,12 @@ public class PorterServiceController {
         map.put("dimensions", s.getDimensions());
         map.put("eta", s.getEtaLabel() != null ? s.getEtaLabel() : "5-10 mins");
         map.put("etaLabel", s.getEtaLabel() != null ? s.getEtaLabel() : "5-10 mins");
-        map.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
-        map.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+        String rawIcon = s.getIconUrl() != null ? s.getIconUrl().trim() : "";
+        if (rawIcon.isEmpty() || rawIcon.contains("api.anushaporter.com/assets")) {
+            rawIcon = VehicleTypeController.resolveDefaultVehicleImageUrl(s.getCategory(), s.getName(), s.getServiceId());
+        }
+        map.put("iconUrl", rawIcon);
+        map.put("imageUrl", rawIcon);
         map.put("bgTint", s.getBgTint() != null ? s.getBgTint() : "#EEF4FF");
         map.put("customerAppVisible", !Boolean.FALSE.equals(s.getCustomerAppVisible()));
         map.put("isActive", Boolean.TRUE.equals(s.getIsActive()));
@@ -329,7 +337,7 @@ public class PorterServiceController {
         s1.setCapacityLabel("20 kg");
         s1.setDimensions("{\"length\":\"1.5 ft\",\"width\":\"1.5 ft\",\"height\":\"1.5 ft\"}");
         s1.setEtaLabel("3 mins");
-        s1.setIconUrl("https://api.anushaporter.com/assets/bikes/2-wheeler.png");
+        s1.setIconUrl("https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=400&q=80");
         s1.setBgTint("#EEF4FF");
         s1.setIsActive(true);
         s1.setDisplayOrder(1);
@@ -355,11 +363,11 @@ public class PorterServiceController {
         s2.setCapacityLabel("750 kg");
         s2.setDimensions("{\"length\":\"7 ft\",\"width\":\"4.5 ft\",\"height\":\"5 ft\"}");
         s2.setEtaLabel("5 mins");
-        s2.setIconUrl("https://api.anushaporter.com/assets/trucks/tata-ace.png");
+        s2.setIconUrl("https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=400&q=80");
         s2.setBgTint("#EBF5FF");
         s2.setIsActive(true);
         s2.setDisplayOrder(1);
-        s2.setAvailableCities("[\"Hyderabad\",\"Secunderabad\",\"Bangalore\"]");
+        s2.setAvailableCities("[\"ALL\"]");
         list.add(s2);
 
         // 3. Three Wheeler 500kg
@@ -381,7 +389,7 @@ public class PorterServiceController {
         s3.setCapacityLabel("500 kg");
         s3.setDimensions("{\"length\":\"5.5 ft\",\"width\":\"4 ft\",\"height\":\"4.5 ft\"}");
         s3.setEtaLabel("5 mins");
-        s3.setIconUrl("https://api.anushaporter.com/assets/trucks/3-wheeler.png");
+        s3.setIconUrl("https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=400&q=80");
         s3.setBgTint("#FEF3C7");
         s3.setIsActive(true);
         s3.setDisplayOrder(2);
@@ -407,7 +415,7 @@ public class PorterServiceController {
         s4.setCapacityLabel("1200 kg");
         s4.setDimensions("{\"length\":\"8 ft\",\"width\":\"4.8 ft\",\"height\":\"5.5 ft\"}");
         s4.setEtaLabel("12 mins");
-        s4.setIconUrl("https://api.anushaporter.com/assets/trucks/pickup-8ft.png");
+        s4.setIconUrl("https://images.unsplash.com/photo-1559297434-fae8a1916a79?w=400&q=80");
         s4.setBgTint("#F3E8FF");
         s4.setIsActive(true);
         s4.setDisplayOrder(3);
@@ -433,7 +441,7 @@ public class PorterServiceController {
         s5.setCapacityLabel("2500 kg");
         s5.setDimensions("{\"length\":\"14 ft\",\"width\":\"6 ft\",\"height\":\"6.5 ft\"}");
         s5.setEtaLabel("15 mins");
-        s5.setIconUrl("https://api.anushaporter.com/assets/trucks/tata-407.png");
+        s5.setIconUrl("https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=400&q=80");
         s5.setBgTint("#DCFCE7");
         s5.setIsActive(true);
         s5.setDisplayOrder(4);
@@ -459,11 +467,11 @@ public class PorterServiceController {
         s6.setCapacityLabel("House Shifting");
         s6.setDimensions("{\"length\":\"14 ft\",\"width\":\"6.5 ft\",\"height\":\"7 ft\"}");
         s6.setEtaLabel("Slot Booking");
-        s6.setIconUrl("https://api.anushaporter.com/assets/packers/packers.png");
+        s6.setIconUrl("https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&q=80");
         s6.setBgTint("#F1F5F9");
         s6.setIsActive(true);
         s6.setDisplayOrder(1);
-        s6.setAvailableCities("[\"Hyderabad\",\"Bangalore\",\"Chennai\"]");
+        s6.setAvailableCities("[\"ALL\"]");
         list.add(s6);
 
         return list;

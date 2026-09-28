@@ -71,9 +71,12 @@ public class PricingController {
                 item.put("pricePerKm", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
                 item.put("perKmRate", s.getPerKmRate() != null ? s.getPerKmRate() : 0.0);
                 item.put("capacityKg", s.getCapacityKg() != null ? s.getCapacityKg().doubleValue() : 0.0);
-                item.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " Kg" : ""));
-                item.put("iconUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
-                item.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+                String pImg = s.getIconUrl() != null ? s.getIconUrl().trim() : "";
+                if (pImg.isEmpty() || pImg.contains("api.anushaporter.com/assets")) {
+                    pImg = com.anushaporter.backend.controller.VehicleTypeController.resolveDefaultVehicleImageUrl(s.getCategory(), s.getName(), s.getServiceId());
+                }
+                item.put("iconUrl", pImg);
+                item.put("imageUrl", pImg);
                 item.put("minFare", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
                 item.put("isActive", true);
                 items.add(item);

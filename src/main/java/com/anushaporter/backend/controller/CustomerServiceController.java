@@ -29,7 +29,15 @@ public class CustomerServiceController {
             categoryRepository.saveAll(defaultCategories);
             System.out.println("Seeded " + defaultCategories.size() + " default Service Categories into the database.");
         }
-        // Porter services default seeding disabled: only admin-created services/vehicles will show.
+        try {
+            List<PorterService> all = serviceRepository.findAll();
+            for (PorterService s : all) {
+                if (s.getIconUrl() != null && s.getIconUrl().contains("api.anushaporter.com/assets")) {
+                    s.setIconUrl(VehicleTypeController.resolveDefaultVehicleImageUrl(s.getCategory(), s.getName(), s.getServiceId()));
+                    serviceRepository.save(s);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     /**
@@ -96,7 +104,10 @@ public class CustomerServiceController {
         }
 
         // 2. Fetch active and customer visible services
-        List<PorterService> services = serviceRepository.findByIsActiveTrueAndCustomerAppVisibleTrueOrderByDisplayOrderAsc();
+        List<PorterService> services = serviceRepository.findByIsActiveTrueOrderByDisplayOrderAsc().stream()
+                .filter(s -> !Boolean.FALSE.equals(s.getCustomerAppVisible()))
+                .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId()))
+                .collect(Collectors.toList());
         if (services.isEmpty()) {
             services = PorterServiceController.getDefaultFallbackServices().stream()
                     .filter(s -> !Boolean.FALSE.equals(s.getCustomerAppVisible()) && !Boolean.FALSE.equals(s.getIsActive()))
@@ -182,12 +193,18 @@ public class CustomerServiceController {
                 + (s.getName() != null ? s.getName() : "");
         svcCat = svcCat.toLowerCase();
 
-        if (combinedCat.contains("truck") || combinedCat.contains("fleet") || "1".equals(categoryId) || Integer.valueOf(1).equals(displayOrder)) {
-            return svcCat.contains("vehicle") || svcCat.contains("truck") || svcCat.contains("fleet") || svcCat.contains("ace") || svcCat.contains("pickup") || svcCat.contains("tata") || "1".equalsIgnoreCase(s.getCategoryId());
-        } else if (combinedCat.contains("bike") || combinedCat.contains("2-wheeler") || combinedCat.contains("two_wheeler") || "2".equals(categoryId) || Integer.valueOf(2).equals(displayOrder)) {
+        if (combinedCat.contains("bike") || combinedCat.contains("2-wheeler") || combinedCat.contains("two_wheeler") || "2".equals(categoryId) || Integer.valueOf(2).equals(displayOrder)) {
             return svcCat.contains("two_wheeler") || svcCat.contains("bike") || svcCat.contains("2_wheeler") || svcCat.contains("2 wheeler") || svcCat.contains("scooter") || "2".equalsIgnoreCase(s.getCategoryId());
         } else if (combinedCat.contains("packer") || combinedCat.contains("mover") || combinedCat.contains("shifting") || "3".equals(categoryId) || Integer.valueOf(3).equals(displayOrder)) {
             return svcCat.contains("packer") || svcCat.contains("mover") || svcCat.contains("shift") || svcCat.contains("intracity") || svcCat.contains("intercity") || "3".equalsIgnoreCase(s.getCategoryId());
+        } else if (combinedCat.contains("truck") || combinedCat.contains("fleet") || "1".equals(categoryId) || Integer.valueOf(1).equals(displayOrder)) {
+            if (svcCat.contains("two_wheeler") || svcCat.contains("bike") || svcCat.contains("scooter") || "2".equalsIgnoreCase(s.getCategoryId())) {
+                return false;
+            }
+            if (svcCat.contains("packer") || svcCat.contains("mover") || svcCat.contains("shifting") || "3".equalsIgnoreCase(s.getCategoryId())) {
+                return false;
+            }
+            return true;
         }
 
         return false;
@@ -203,7 +220,12 @@ public class CustomerServiceController {
         map.put("categoryId", effectiveCatId);
         map.put("categoryName", effectiveCatName);
         map.put("description", s.getDescription() != null ? s.getDescription() : (s.getSubtitle() != null ? s.getSubtitle() : ""));
-        map.put("imageUrl", s.getIconUrl() != null ? s.getIconUrl() : "");
+        String rawIcon = s.getIconUrl() != null ? s.getIconUrl().trim() : "";
+        if (rawIcon.isEmpty() || rawIcon.contains("api.anushaporter.com/assets")) {
+            rawIcon = VehicleTypeController.resolveDefaultVehicleImageUrl(s.getCategory(), s.getName(), s.getServiceId());
+        }
+        map.put("imageUrl", rawIcon);
+        map.put("iconUrl", rawIcon);
         map.put("capacity", s.getCapacityLabel() != null ? s.getCapacityLabel() : (s.getCapacityKg() != null ? s.getCapacityKg() + " kg" : ""));
         map.put("capacityKg", s.getCapacityKg() != null ? s.getCapacityKg() : 0);
         map.put("basePrice", s.getBaseFare() != null ? s.getBaseFare() : 0.0);
