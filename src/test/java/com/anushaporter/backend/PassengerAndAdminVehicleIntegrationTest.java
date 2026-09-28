@@ -22,6 +22,7 @@ import org.springframework.web.context.WebApplicationContext;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
@@ -186,11 +187,15 @@ public class PassengerAndAdminVehicleIntegrationTest {
         assertNotNull(bookingNumber);
         assertTrue(bookingNumber.startsWith("AP-CAR-"));
 
-        // Wait brief moment for async auto-assignment
-        Thread.sleep(600);
+        // Wait for async auto-assignment with polling retry
+        List<DriverOffer> offers = Collections.emptyList();
+        for (int retry = 0; retry < 15; retry++) {
+            Thread.sleep(200);
+            offers = driverOfferRepository.findByBookingId(bookingNumber);
+            if (!offers.isEmpty()) break;
+        }
 
         // 4. Verify Auto driver received an offer, and freight truck driver did NOT
-        List<DriverOffer> offers = driverOfferRepository.findByBookingId(bookingNumber);
         assertFalse(offers.isEmpty(), "AutoAssignment should have created offers for compatible Auto driver");
         assertTrue(offers.stream().anyMatch(o -> o.getDriverId().equals(savedAutoDriver.getId())),
                 "Auto driver must receive the passenger auto offer");
@@ -272,10 +277,15 @@ public class PassengerAndAdminVehicleIntegrationTest {
 
         String bookingNumber = objectMapper.readTree(responseStr).get("bookingNumber").asText();
 
-        Thread.sleep(600);
+        // Wait for async auto-assignment with polling retry
+        List<DriverOffer> offers = Collections.emptyList();
+        for (int retry = 0; retry < 15; retry++) {
+            Thread.sleep(200);
+            offers = driverOfferRepository.findByBookingId(bookingNumber);
+            if (!offers.isEmpty()) break;
+        }
 
         // 3. Verify Bike driver received the offer
-        List<DriverOffer> offers = driverOfferRepository.findByBookingId(bookingNumber);
         assertFalse(offers.isEmpty());
         assertTrue(offers.stream().anyMatch(o -> o.getDriverId().equals(savedBikeDriver.getId())));
 

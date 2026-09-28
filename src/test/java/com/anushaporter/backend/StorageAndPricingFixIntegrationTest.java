@@ -89,8 +89,8 @@ public class StorageAndPricingFixIntegrationTest {
         pricingVehicleRepository.save(pvBike);
 
         PricingVehicle pvScooter = new PricingVehicle();
-        pvScooter.setVehicleId("scooter-model");
-        pvScooter.setName("Scooter Model");
+        pvScooter.setVehicleId("scooter");
+        pvScooter.setName("Scooter");
         pvScooter.setBaseFare(120.0);
         pvScooter.setPricePerKm(18.0);
         pvScooter.setMinFare(120.0);
@@ -118,7 +118,7 @@ public class StorageAndPricingFixIntegrationTest {
                 .andExpect(jsonPath("$[0].baseFare", is(100.0)))
                 .andExpect(jsonPath("$[0].pricePerKm", is(15.0)))
                 .andExpect(jsonPath("$[0].capacityKg", is(500.0)))
-                .andExpect(jsonPath("$[1].vehicleId", is("scooter-model")))
+                .andExpect(jsonPath("$[1].vehicleId", is("scooter")))
                 .andExpect(jsonPath("$[1].baseFare", is(120.0)))
                 .andExpect(jsonPath("$[1].pricePerKm", is(18.0)));
     }
