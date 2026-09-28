@@ -301,4 +301,46 @@ public class Order {
     public String getVehicleType() {
         return serviceName;
     }
+
+    @Transient
+    public Double getPickupLatitude() {
+        return this.pickupLat;
+    }
+
+    @Transient
+    public Double getPickupLongitude() {
+        return this.pickupLng;
+    }
+
+    @Transient
+    public Double getDropLatitude() {
+        return this.dropLat;
+    }
+
+    @Transient
+    public Double getDropLongitude() {
+        return this.dropLng;
+    }
+
+    @Transient
+    public String getPickup() {
+        return this.pickupAddress;
+    }
+
+    public void setPickup(String pickup) {
+        if (pickup != null && !pickup.isBlank()) {
+            this.pickupAddress = pickup;
+        }
+    }
+
+    @Transient
+    public String getDrop() {
+        return this.dropAddress;
+    }
+
+    public void setDrop(String drop) {
+        if (drop != null && !drop.isBlank()) {
+            this.dropAddress = drop;
+        }
+    }
 }

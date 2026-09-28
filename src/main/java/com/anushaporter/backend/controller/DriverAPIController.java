@@ -576,7 +576,7 @@ public class DriverAPIController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Driver profile not found"));
         }
         List<String> activeStatuses = List.of("assigned", "accepted", "driver_assigned", "arriving_at_pickup",
-                "pickup_started", "picked_up", "transit", "in_transit");
+                "pickup_started", "picked_up", "transit", "in_transit", "in_progress", "ASSIGNED", "ACCEPTED", "IN_PROGRESS", "TRANSIT");
 
         String driverIdStr = driver.getId() != null ? driver.getId().toString() : "";
         List<Order> orders = Collections.emptyList();
@@ -596,6 +596,16 @@ public class DriverAPIController {
         }
 
         Order order = orders.get(0);
+        if ((order.getPickupLat() == null || order.getPickupLng() == null) && order.getBookingId() != null && passengerBookingRepository != null) {
+            try {
+                passengerBookingRepository.findByBookingNumber(order.getBookingId()).ifPresent(pb -> {
+                    if (order.getPickupLat() == null && pb.getPickupLatitude() != null) order.setPickupLat(pb.getPickupLatitude());
+                    if (order.getPickupLng() == null && pb.getPickupLongitude() != null) order.setPickupLng(pb.getPickupLongitude());
+                    if (order.getDropLat() == null && pb.getDropLatitude() != null) order.setDropLat(pb.getDropLatitude());
+                    if (order.getDropLng() == null && pb.getDropLongitude() != null) order.setDropLng(pb.getDropLongitude());
+                });
+            } catch (Exception ignored) {}
+        }
         AppUser customer = appUserRepository.findFirstByEmailOrderByIdDesc(order.getUserEmail()).orElse(null);
         String customerName = customer != null ? customer.getName() : order.getReceiverName();
         String customerPhone = customer != null ? customer.getPhone() : order.getReceiverPhone();
@@ -612,10 +622,7 @@ public class DriverAPIController {
         result.put("pickupAddress", order.getPickupAddress());
         result.put("dropAddress", order.getDropAddress());
         result.put("amount", order.getAmount());
-        // Include distance and coordinates so the driver app uses the actual route
-        // distance
-        // instead of falling back to a fare-based estimate (which clamps to 1.0 km for
-        // low fares)
+        // Include distance and coordinates so the driver app uses the actual route distance
         result.put("distance", order.getDistanceKm() != null
                 ? String.format("%.1f", order.getDistanceKm())
                 : null);
@@ -624,6 +631,10 @@ public class DriverAPIController {
         result.put("pickupLng", order.getPickupLng());
         result.put("dropLat", order.getDropLat());
         result.put("dropLng", order.getDropLng());
+        result.put("pickupLatitude", order.getPickupLat());
+        result.put("pickupLongitude", order.getPickupLng());
+        result.put("dropLatitude", order.getDropLat());
+        result.put("dropLongitude", order.getDropLng());
         result.put("deliveryOtp", order.getDeliveryOtp() != null ? order.getDeliveryOtp() : "8813");
         result.put("startOtp", order.getStartOtp() != null ? order.getStartOtp() : "8813");
         result.put("serviceType", order.getServiceType());
@@ -636,9 +647,11 @@ public class DriverAPIController {
     }
 
     private String coordinateOrAddress(Double latitude, Double longitude, String address) {
+        if (address != null && !address.trim().isEmpty())
+            return address.trim();
         if (latitude != null && longitude != null)
             return latitude + ", " + longitude;
-        return address == null ? "" : address;
+        return "";
     }
 
     @PutMapping("/driver/location")
@@ -2050,7 +2063,7 @@ public class DriverAPIController {
     }
 
     // Available rides pool for nearby drivers
-    @GetMapping({ "/driver/orders/available", "/drivers/orders/available" })
+    @GetMapping({ "/driver/orders/available", "/drivers/orders/available", "/driver/available-orders", "/drivers/available-orders" })
     public ResponseEntity<?> getAvailableOrders(
             HttpServletRequest request,
             @RequestParam(required = false) Double lat,
@@ -2109,6 +2122,18 @@ public class DriverAPIController {
                         || "pending".equalsIgnoreCase(o.getStatus()) || "created".equalsIgnoreCase(o.getStatus()))
                 .filter(o -> o.getDriverId() == null || o.getDriverId().isEmpty())
                 .filter(o -> o.getBookingId() == null || !rejectedBookingIds.contains(o.getBookingId()))
+                .peek(o -> {
+                    if ((o.getPickupLat() == null || o.getPickupLng() == null) && o.getBookingId() != null && passengerBookingRepository != null) {
+                        try {
+                            passengerBookingRepository.findByBookingNumber(o.getBookingId()).ifPresent(pb -> {
+                                if (o.getPickupLat() == null && pb.getPickupLatitude() != null) o.setPickupLat(pb.getPickupLatitude());
+                                if (o.getPickupLng() == null && pb.getPickupLongitude() != null) o.setPickupLng(pb.getPickupLongitude());
+                                if (o.getDropLat() == null && pb.getDropLatitude() != null) o.setDropLat(pb.getDropLatitude());
+                                if (o.getDropLng() == null && pb.getDropLongitude() != null) o.setDropLng(pb.getDropLongitude());
+                            });
+                        } catch (Exception ignored) {}
+                    }
+                })
                 .filter(o -> {
                     // Auto-expire stale orders older than 15 minutes or past deadline
                     boolean isStale = (o.getCreatedAt() != null && o.getCreatedAt().isBefore(staleCutoff))
@@ -2152,12 +2177,18 @@ public class DriverAPIController {
             map.put("id", o.getId());
             map.put("bookingId", o.getBookingId() != null ? o.getBookingId() : "ORD-" + o.getId());
             map.put("serviceName", o.getServiceName() != null ? o.getServiceName() : "Standard Delivery");
+            map.put("pickup", o.getPickupAddress() != null ? o.getPickupAddress() : "");
+            map.put("drop", o.getDropAddress() != null ? o.getDropAddress() : "");
             map.put("pickupAddress", o.getPickupAddress());
             map.put("dropAddress", o.getDropAddress());
-            map.put("pickupLat", o.getPickupLat() != null ? o.getPickupLat() : 17.4483);
-            map.put("pickupLng", o.getPickupLng() != null ? o.getPickupLng() : 78.3915);
-            map.put("dropLat", o.getDropLat() != null ? o.getDropLat() : 17.4560);
-            map.put("dropLng", o.getDropLng() != null ? o.getDropLng() : 78.4000);
+            map.put("pickupLat", o.getPickupLat());
+            map.put("pickupLng", o.getPickupLng());
+            map.put("dropLat", o.getDropLat());
+            map.put("dropLng", o.getDropLng());
+            map.put("pickupLatitude", o.getPickupLat());
+            map.put("pickupLongitude", o.getPickupLng());
+            map.put("dropLatitude", o.getDropLat());
+            map.put("dropLongitude", o.getDropLng());
             map.put("amount", o.getAmount() != null ? o.getAmount() : 250.0);
             map.put("fare", o.getAmount() != null ? o.getAmount() : 250.0);
             map.put("distanceKm", o.getDistanceKm() != null ? o.getDistanceKm() : 5.0);

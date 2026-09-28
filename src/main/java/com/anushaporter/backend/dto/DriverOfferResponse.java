@@ -17,10 +17,16 @@ public class DriverOfferResponse {
     private Double offeredFare;
     private String pickupAddress;
     private String dropAddress;
+    private String pickup;
+    private String drop;
     private Double pickupLat;
     private Double pickupLng;
     private Double dropLat;
     private Double dropLng;
+    private Double pickupLatitude;
+    private Double pickupLongitude;
+    private Double dropLatitude;
+    private Double dropLongitude;
     private String serviceName;
     private String goodsCategory;
     private String serviceType;

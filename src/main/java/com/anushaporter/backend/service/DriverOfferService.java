@@ -115,6 +115,17 @@ public class DriverOfferService {
         LocalDateTime expiresAt = now.plusSeconds(timeoutSeconds > 0 ? timeoutSeconds : 60);
         List<DriverOffer> createdOffers = new ArrayList<>();
 
+        if ((order.getPickupLat() == null || order.getPickupLng() == null) && order.getBookingId() != null && passengerBookingRepository != null) {
+            try {
+                passengerBookingRepository.findByBookingNumber(order.getBookingId()).ifPresent(pb -> {
+                    if (order.getPickupLat() == null && pb.getPickupLatitude() != null) order.setPickupLat(pb.getPickupLatitude());
+                    if (order.getPickupLng() == null && pb.getPickupLongitude() != null) order.setPickupLng(pb.getPickupLongitude());
+                    if (order.getDropLat() == null && pb.getDropLatitude() != null) order.setDropLat(pb.getDropLatitude());
+                    if (order.getDropLng() == null && pb.getDropLongitude() != null) order.setDropLng(pb.getDropLongitude());
+                });
+            } catch (Exception ignored) {}
+        }
+
         double pickupLat = order.getPickupLat() != null ? order.getPickupLat() : 17.4486;
         double pickupLng = order.getPickupLng() != null ? order.getPickupLng() : 78.3908;
 
@@ -170,13 +181,31 @@ public class DriverOfferService {
                 int pCount = order.getPassengerCount() != null ? order.getPassengerCount() : 1;
                 String sLabel = "PASSENGER".equalsIgnoreCase(sType) ? ("Passenger Ride (" + pCount + " Rider" + (pCount > 1 ? "s" : "") + ")") : "Goods Delivery";
 
-                String payload = String.format("{\"bookingId\":\"%s\",\"pickupAddress\":\"%s\",\"dropAddress\":\"%s\",\"amount\":%.2f,\"distanceKm\":%.1f,\"serviceType\":\"%s\",\"serviceLabel\":\"%s\",\"passengerCount\":%d}",
-                        order.getBookingId(),
-                        order.getPickupAddress() != null ? order.getPickupAddress().replace("\"", "\\\"") : "",
-                        order.getDropAddress() != null ? order.getDropAddress().replace("\"", "\\\"") : "",
-                        order.getAmount() != null ? order.getAmount() : 0.0,
-                        order.getDistanceKm() != null ? order.getDistanceKm() : 0.0,
-                        sType, sLabel, pCount);
+                Map<String, Object> payloadMap = new LinkedHashMap<>();
+                payloadMap.put("bookingId", order.getBookingId());
+                payloadMap.put("orderId", order.getId());
+                payloadMap.put("pickup", order.getPickupAddress() != null ? order.getPickupAddress() : "");
+                payloadMap.put("drop", order.getDropAddress() != null ? order.getDropAddress() : "");
+                payloadMap.put("pickupAddress", order.getPickupAddress() != null ? order.getPickupAddress() : "");
+                payloadMap.put("dropAddress", order.getDropAddress() != null ? order.getDropAddress() : "");
+                payloadMap.put("pickupLat", order.getPickupLat());
+                payloadMap.put("pickupLng", order.getPickupLng());
+                payloadMap.put("dropLat", order.getDropLat());
+                payloadMap.put("dropLng", order.getDropLng());
+                payloadMap.put("pickupLatitude", order.getPickupLat());
+                payloadMap.put("pickupLongitude", order.getPickupLng());
+                payloadMap.put("dropLatitude", order.getDropLat());
+                payloadMap.put("dropLongitude", order.getDropLng());
+                payloadMap.put("amount", order.getAmount() != null ? order.getAmount() : 0.0);
+                payloadMap.put("offeredFare", order.getAmount() != null ? order.getAmount() : 0.0);
+                payloadMap.put("fare", order.getAmount() != null ? order.getAmount() : 0.0);
+                payloadMap.put("distanceKm", order.getDistanceKm() != null ? order.getDistanceKm() : 0.0);
+                payloadMap.put("serviceType", sType);
+                payloadMap.put("serviceLabel", sLabel);
+                payloadMap.put("serviceName", order.getServiceName());
+                payloadMap.put("passengerCount", pCount);
+
+                String payload = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payloadMap);
                 telemetryWebSocketHandler.broadcastOfferNew(order.getBookingId(), payload, targetDriverIds);
             } catch (Exception e) {
                 log.warn("Failed to broadcast WebSocket offer: {}", e.getMessage());
@@ -302,12 +331,28 @@ public class DriverOfferService {
             // Populate order details
             if (offer.getBookingId() != null) {
                 orderRepository.findByBookingId(offer.getBookingId()).ifPresent(o -> {
+                    if ((o.getPickupLat() == null || o.getPickupLng() == null) && o.getBookingId() != null && passengerBookingRepository != null) {
+                        try {
+                            passengerBookingRepository.findByBookingNumber(o.getBookingId()).ifPresent(pb -> {
+                                if (o.getPickupLat() == null && pb.getPickupLatitude() != null) o.setPickupLat(pb.getPickupLatitude());
+                                if (o.getPickupLng() == null && pb.getPickupLongitude() != null) o.setPickupLng(pb.getPickupLongitude());
+                                if (o.getDropLat() == null && pb.getDropLatitude() != null) o.setDropLat(pb.getDropLatitude());
+                                if (o.getDropLng() == null && pb.getDropLongitude() != null) o.setDropLng(pb.getDropLongitude());
+                            });
+                        } catch (Exception ignored) {}
+                    }
                     dto.setPickupAddress(o.getPickupAddress());
                     dto.setDropAddress(o.getDropAddress());
+                    dto.setPickup(o.getPickupAddress());
+                    dto.setDrop(o.getDropAddress());
                     dto.setPickupLat(o.getPickupLat());
                     dto.setPickupLng(o.getPickupLng());
                     dto.setDropLat(o.getDropLat());
                     dto.setDropLng(o.getDropLng());
+                    dto.setPickupLatitude(o.getPickupLat());
+                    dto.setPickupLongitude(o.getPickupLng());
+                    dto.setDropLatitude(o.getDropLat());
+                    dto.setDropLongitude(o.getDropLng());
                     dto.setServiceName(o.getServiceName());
                     dto.setGoodsCategory(o.getGoodsCategory());
                     dto.setHelpersCount(o.getHelpersCount());
