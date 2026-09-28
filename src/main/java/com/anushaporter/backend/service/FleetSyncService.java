@@ -292,7 +292,7 @@ public class FleetSyncService {
                 vt.setBaseKm(c.getMinimumKm() != null ? c.getMinimumKm().doubleValue() : 1.0);
                 vt.setPerKmRate(c.getPerKmRate() != null ? c.getPerKmRate().doubleValue() : 15.0);
                 vt.setMinFare(c.getMinimumFare() != null ? c.getMinimumFare().doubleValue() : 50.0);
-                vt.setDriverAllowance(c.getDriverAllowance() != null ? c.getDriverAllowance().doubleValue() : 0.0);
+                vt.setDriverAllowance(0.0);
                 vt.setStatus(Boolean.FALSE.equals(c.getActive()) ? "inactive" : "active");
                 vt.setPriority(c.getDisplayOrder() != null ? c.getDisplayOrder() : 1);
                 vt.setServiceType("PASSENGER");
@@ -328,9 +328,7 @@ public class FleetSyncService {
                 if (c.getMinimumFare() != null) {
                     vt.setMinFare(c.getMinimumFare().doubleValue());
                 }
-                if (c.getDriverAllowance() != null) {
-                    vt.setDriverAllowance(c.getDriverAllowance().doubleValue());
-                }
+                vt.setDriverAllowance(0.0);
                 if (c.getDisplayOrder() != null) {
                     vt.setPriority(c.getDisplayOrder());
                 }

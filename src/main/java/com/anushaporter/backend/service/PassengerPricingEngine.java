@@ -102,7 +102,7 @@ public class PassengerPricingEngine {
         BigDecimal baseFare = rule.getBaseFare();
         BigDecimal distanceFare = BigDecimal.ZERO;
         BigDecimal timeFare = BigDecimal.ZERO;
-        BigDecimal driverAllowance = rule.getDriverAllowance();
+        BigDecimal driverAllowance = BigDecimal.ZERO; // No allowance added from backend
         BigDecimal effectiveDistance = distanceKm;
 
         if ("ROUND_TRIP".equalsIgnoreCase(serviceCode)) {
@@ -113,9 +113,6 @@ public class PassengerPricingEngine {
             } else {
                 BigDecimal extraKm = effectiveDistance.subtract(minKm);
                 distanceFare = extraKm.multiply(rule.getPerKmRate()).setScale(2, RoundingMode.HALF_UP);
-            }
-            if (driverAllowance.compareTo(BigDecimal.ZERO) == 0) {
-                driverAllowance = new BigDecimal("300.00");
             }
         } else if ("RENTAL".equalsIgnoreCase(serviceCode)) {
             // Rental package logic
@@ -132,7 +129,6 @@ public class PassengerPricingEngine {
 
             if (rentalPackage != null) {
                 baseFare = rentalPackage.getBaseFare();
-                driverAllowance = rentalPackage.getDriverAllowance();
                 BigDecimal incDist = rentalPackage.getIncludedDistanceKm();
                 BigDecimal incHours = rentalPackage.getIncludedHours();
 
@@ -296,22 +292,16 @@ public class PassengerPricingEngine {
             }
         }
 
-        // 11. Applicable Taxes (e.g. 5% GST)
+        // 11. Applicable Taxes (0% GST - No GST added from backend)
         BigDecimal taxableAmount = subtotal.subtract(discount).max(BigDecimal.ZERO);
-        BigDecimal taxPercentage = rule.getTaxPercentage() != null ? rule.getTaxPercentage() : new BigDecimal("5.00");
-        BigDecimal tax = taxableAmount.multiply(taxPercentage)
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal tax = BigDecimal.ZERO;
 
         // 12. Final Total Customer Fare
-        BigDecimal totalFare = taxableAmount.add(tax).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalFare = taxableAmount.setScale(2, RoundingMode.HALF_UP);
 
-        // 13. Financial Distribution (Driver Earnings vs Company Commission)
-        BigDecimal commissionPercentage = rule.getDriverCommissionPercentage() != null ?
-                rule.getDriverCommissionPercentage() : new BigDecimal("20.00");
-        BigDecimal commissionableBase = totalFare.subtract(toll).subtract(parking).subtract(tax).max(BigDecimal.ZERO);
-        BigDecimal companyCommission = commissionableBase.multiply(commissionPercentage)
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        BigDecimal driverEarnings = totalFare.subtract(companyCommission).subtract(tax).subtract(toll).subtract(parking).max(BigDecimal.ZERO);
+        // 13. Financial Distribution (0% Commission - No commission deducted or added from backend)
+        BigDecimal companyCommission = BigDecimal.ZERO;
+        BigDecimal driverEarnings = totalFare.subtract(toll).subtract(parking).max(BigDecimal.ZERO);
 
         BookingFareBreakdown breakdown = BookingFareBreakdown.builder()
                 .baseFare(baseFare)
@@ -376,7 +366,7 @@ public class PassengerPricingEngine {
                 .minimumKm(cat.getMinimumKm() != null ? cat.getMinimumKm() : new BigDecimal("10.00"))
                 .perKmRate(cat.getPerKmRate() != null ? cat.getPerKmRate() : new BigDecimal("14.00"))
                 .minimumFare(cat.getMinimumFare() != null ? cat.getMinimumFare() : new BigDecimal("300.00"))
-                .driverAllowance(cat.getDriverAllowance() != null ? cat.getDriverAllowance() : BigDecimal.ZERO)
+                .driverAllowance(BigDecimal.ZERO)
                 .freeWaitingMinutes(15)
                 .waitingChargePer15Min(new BigDecimal("50.00"))
                 .waitingChargePerHour(new BigDecimal("150.00"))
@@ -387,8 +377,8 @@ public class PassengerPricingEngine {
                 .additionalStopCharge(new BigDecimal("50.00"))
                 .tollHandling("ACTUAL")
                 .parkingHandling("ACTUAL")
-                .driverCommissionPercentage(new BigDecimal("20.00"))
-                .taxPercentage(new BigDecimal("5.00"))
+                .driverCommissionPercentage(BigDecimal.ZERO)
+                .taxPercentage(BigDecimal.ZERO)
                 .build();
     }
 
@@ -416,7 +406,7 @@ public class PassengerPricingEngine {
                 cat.setPerKmRate(BigDecimal.valueOf(v.getPerKmRate() != null ? v.getPerKmRate() : 15.0));
                 cat.setMinimumFare(BigDecimal.valueOf(v.getMinFare() != null ? v.getMinFare() : (v.getBaseFare() != null ? v.getBaseFare() : 50.0)));
                 cat.setMinimumKm(BigDecimal.valueOf(v.getBaseKm() != null ? v.getBaseKm() : 1.0));
-                cat.setDriverAllowance(BigDecimal.valueOf(v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0));
+                cat.setDriverAllowance(BigDecimal.ZERO);
                 cat.setImageUrl(v.getImageUrl());
                 cat.setDisplayOrder(v.getPriority() != null ? v.getPriority() : 1);
                 cat.setActive(true);

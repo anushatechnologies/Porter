@@ -287,7 +287,7 @@ public class PassengerBookingIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.breakdown.baseFare").value(300.00))
                 .andExpect(jsonPath("$.breakdown.distanceFare").value(210.00))
-                .andExpect(jsonPath("$.breakdown.driverAllowance").value(100.00))
+                .andExpect(jsonPath("$.breakdown.driverAllowance").value(0.00))
                 .andExpect(jsonPath("$.breakdown.totalFare").isNotEmpty());
     }
 

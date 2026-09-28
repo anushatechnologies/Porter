@@ -413,8 +413,7 @@ public class VehicleTypeController {
                 cat.setMinimumFare(java.math.BigDecimal.valueOf(
                         v.getMinFare() != null ? v.getMinFare() : (v.getBaseFare() != null ? v.getBaseFare() : 50.0)));
                 cat.setMinimumKm(java.math.BigDecimal.valueOf(v.getBaseKm() != null ? v.getBaseKm() : 1.0));
-                cat.setDriverAllowance(
-                        java.math.BigDecimal.valueOf(v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0));
+                cat.setDriverAllowance(java.math.BigDecimal.ZERO);
                 cat.setImageUrl(v.getImageUrl());
                 cat.setDisplayOrder(v.getPriority() != null ? v.getPriority() : 1);
                 cat.setActive("active".equalsIgnoreCase(v.getStatus()));
@@ -638,8 +637,8 @@ public class VehicleTypeController {
         map.put("max_luggage", v.getMaxLuggage());
         map.put("perMinuteRate", v.getPerMinuteRate() != null ? v.getPerMinuteRate() : 0.0);
         map.put("per_minute_rate", v.getPerMinuteRate() != null ? v.getPerMinuteRate() : 0.0);
-        map.put("driverAllowance", v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0);
-        map.put("driver_allowance", v.getDriverAllowance() != null ? v.getDriverAllowance() : 0.0);
+        map.put("driverAllowance", 0.0);
+        map.put("driver_allowance", 0.0);
         map.put("helperRate", v.getHelperRate() != null ? v.getHelperRate() : 0.0);
         map.put("helper_rate", v.getHelperRate() != null ? v.getHelperRate() : 0.0);
         map.put("volume", v.getVolume());

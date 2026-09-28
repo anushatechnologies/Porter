@@ -289,7 +289,7 @@ public class PassengerBookingController {
             m.put("perHourRate", c.getPerHourRate());
             m.put("minimumFare", c.getMinimumFare());
             m.put("minimumKm", c.getMinimumKm());
-            m.put("driverAllowance", c.getDriverAllowance());
+            m.put("driverAllowance", BigDecimal.ZERO);
             m.put("eta", "3 mins");
             m.put("isActive", Boolean.TRUE.equals(c.getActive()));
             m.put("active", Boolean.TRUE.equals(c.getActive()));
@@ -604,7 +604,7 @@ public class PassengerBookingController {
                         cat.setPerKmRate(BigDecimal.valueOf(vt.getPerKmRate() != null ? vt.getPerKmRate() : 15.0));
                         cat.setMinimumFare(BigDecimal.valueOf(vt.getMinFare() != null ? vt.getMinFare() : (vt.getBaseFare() != null ? vt.getBaseFare() : 50.0)));
                         cat.setMinimumKm(BigDecimal.valueOf(vt.getBaseKm() != null ? vt.getBaseKm() : 1.0));
-                        cat.setDriverAllowance(BigDecimal.valueOf(vt.getDriverAllowance() != null ? vt.getDriverAllowance() : 0.0));
+                        cat.setDriverAllowance(BigDecimal.ZERO);
                         cat.setImageUrl(vt.getImageUrl());
                         cat.setDisplayOrder(vt.getPriority() != null ? vt.getPriority() : 1);
                         cat.setActive(true);

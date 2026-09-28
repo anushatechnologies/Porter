@@ -31,6 +31,9 @@ public class PassengerDataSeeder implements CommandLineRunner {
     private final CouponRepository couponRepository;
     private final PassengerPricingVersionService versionService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.anushaporter.backend.repository.VehicleTypeRepository vehicleTypeRepository;
+
     @Override
     public void run(String... args) {
         try {
@@ -41,6 +44,7 @@ public class PassengerDataSeeder implements CommandLineRunner {
             seedSurgeRules();
             seedCancellationPolicy();
             seedCoupons();
+            clearAllowanceGstCommissionFromExistingRulesAndCategories();
             log.info("[PassengerDataSeeder] Passenger car services, categories, and dynamic pricing rules initialized successfully.");
         } catch (Exception e) {
             log.warn("[PassengerDataSeeder] Seeding notice: {}", e.getMessage());
@@ -126,7 +130,7 @@ public class PassengerDataSeeder implements CommandLineRunner {
                             .includedHours(new BigDecimal("4.00"))
                             .extraKmRate(new BigDecimal("14.00"))
                             .extraHourRate(new BigDecimal("140.00"))
-                            .driverAllowance(new BigDecimal("200.00"))
+                            .driverAllowance(BigDecimal.ZERO)
                             .active(true)
                             .build(),
                     RentalPackage.builder()
@@ -137,7 +141,7 @@ public class PassengerDataSeeder implements CommandLineRunner {
                             .includedHours(new BigDecimal("8.00"))
                             .extraKmRate(new BigDecimal("18.00"))
                             .extraHourRate(new BigDecimal("150.00"))
-                            .driverAllowance(new BigDecimal("300.00"))
+                            .driverAllowance(BigDecimal.ZERO)
                             .active(true)
                             .build(),
                     RentalPackage.builder()
@@ -148,7 +152,7 @@ public class PassengerDataSeeder implements CommandLineRunner {
                             .includedHours(new BigDecimal("12.00"))
                             .extraKmRate(new BigDecimal("18.00"))
                             .extraHourRate(new BigDecimal("150.00"))
-                            .driverAllowance(new BigDecimal("400.00"))
+                            .driverAllowance(BigDecimal.ZERO)
                             .active(true)
                             .build(),
                     RentalPackage.builder()
@@ -159,7 +163,7 @@ public class PassengerDataSeeder implements CommandLineRunner {
                             .includedHours(new BigDecimal("8.00"))
                             .extraKmRate(new BigDecimal("22.00"))
                             .extraHourRate(new BigDecimal("200.00"))
-                            .driverAllowance(new BigDecimal("350.00"))
+                            .driverAllowance(BigDecimal.ZERO)
                             .active(true)
                             .build()
             ));
@@ -223,14 +227,9 @@ public class PassengerDataSeeder implements CommandLineRunner {
         BigDecimal perKm = cat.getPerKmRate();
         BigDecimal minKm = cat.getMinimumKm();
         BigDecimal minFare = cat.getMinimumFare();
-        BigDecimal allowance = cat.getDriverAllowance();
         boolean isBike = "BIKE".equalsIgnoreCase(cat.getCategoryCode());
 
-        if ("ROUND_TRIP".equals(svc)) {
-            if (!isBike) {
-                allowance = allowance.max(new BigDecimal("300.00"));
-            }
-        } else if ("AIRPORT_TRANSFER".equals(svc)) {
+        if ("AIRPORT_TRANSFER".equals(svc)) {
             if (isBike) {
                 base = base.max(new BigDecimal("80.00"));
                 minKm = minKm.max(new BigDecimal("5.00"));
@@ -245,7 +244,6 @@ public class PassengerDataSeeder implements CommandLineRunner {
         BigDecimal waitingHour = isBike ? new BigDecimal("60.00") : new BigDecimal("150.00");
         BigDecimal nightCharge = isBike ? new BigDecimal("50.00") : new BigDecimal("150.00");
         BigDecimal stopCharge = isBike ? new BigDecimal("20.00") : new BigDecimal("50.00");
-        BigDecimal commPct = isBike ? new BigDecimal("15.00") : new BigDecimal("20.00");
 
         PassengerPricingRule rule = PassengerPricingRule.builder()
                 .pricingVersionId(versionNumber)
@@ -255,7 +253,7 @@ public class PassengerDataSeeder implements CommandLineRunner {
                 .minimumKm(minKm)
                 .perKmRate(perKm)
                 .minimumFare(minFare)
-                .driverAllowance(allowance)
+                .driverAllowance(BigDecimal.ZERO)
                 .freeWaitingMinutes(freeWaiting)
                 .waitingChargePer15Min(waiting15Min)
                 .waitingChargePerHour(waitingHour)
@@ -268,10 +266,62 @@ public class PassengerDataSeeder implements CommandLineRunner {
                 .fixedTollAmount(BigDecimal.ZERO)
                 .parkingHandling("ACTUAL")
                 .fixedParkingAmount(BigDecimal.ZERO)
-                .driverCommissionPercentage(commPct)
-                .taxPercentage(new BigDecimal("5.00"))
+                .driverCommissionPercentage(BigDecimal.ZERO)
+                .taxPercentage(BigDecimal.ZERO)
                 .build();
         ruleRepository.save(rule);
+    }
+
+    private void clearAllowanceGstCommissionFromExistingRulesAndCategories() {
+        try {
+            List<PassengerVehicleCategory> categories = categoryRepository.findAll();
+            for (PassengerVehicleCategory cat : categories) {
+                if (cat.getDriverAllowance() != null && cat.getDriverAllowance().compareTo(BigDecimal.ZERO) != 0) {
+                    cat.setDriverAllowance(BigDecimal.ZERO);
+                    categoryRepository.save(cat);
+                }
+            }
+
+            List<PassengerPricingRule> rules = ruleRepository.findAll();
+            for (PassengerPricingRule r : rules) {
+                boolean changed = false;
+                if (r.getDriverAllowance() != null && r.getDriverAllowance().compareTo(BigDecimal.ZERO) != 0) {
+                    r.setDriverAllowance(BigDecimal.ZERO);
+                    changed = true;
+                }
+                if (r.getTaxPercentage() != null && r.getTaxPercentage().compareTo(BigDecimal.ZERO) != 0) {
+                    r.setTaxPercentage(BigDecimal.ZERO);
+                    changed = true;
+                }
+                if (r.getDriverCommissionPercentage() != null && r.getDriverCommissionPercentage().compareTo(BigDecimal.ZERO) != 0) {
+                    r.setDriverCommissionPercentage(BigDecimal.ZERO);
+                    changed = true;
+                }
+                if (changed) {
+                    ruleRepository.save(r);
+                }
+            }
+
+            List<RentalPackage> packages = rentalPackageRepository.findAll();
+            for (RentalPackage rp : packages) {
+                if (rp.getDriverAllowance() != null && rp.getDriverAllowance().compareTo(BigDecimal.ZERO) != 0) {
+                    rp.setDriverAllowance(BigDecimal.ZERO);
+                    rentalPackageRepository.save(rp);
+                }
+            }
+
+            if (vehicleTypeRepository != null) {
+                List<com.anushaporter.backend.model.VehicleType> vts = vehicleTypeRepository.findAll();
+                for (com.anushaporter.backend.model.VehicleType vt : vts) {
+                    if (vt.getDriverAllowance() != null && vt.getDriverAllowance() != 0.0) {
+                        vt.setDriverAllowance(0.0);
+                        vehicleTypeRepository.save(vt);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[PassengerDataSeeder] Notice while resetting allowance/gst/commission: {}", e.getMessage());
+        }
     }
 
     private void seedSurgeRules() {

@@ -118,10 +118,10 @@ public class PassengerPricingEngineTest {
         assertNotNull(res.getBreakdown());
         assertEquals(new BigDecimal("300.00"), res.getBreakdown().getBaseFare());
         assertEquals(new BigDecimal("210.00"), res.getBreakdown().getDistanceFare());
-        assertEquals(new BigDecimal("100.00"), res.getBreakdown().getDriverAllowance());
-        assertTrue(res.getBreakdown().getTotalFare().compareTo(new BigDecimal("600.00")) > 0);
+        assertEquals(BigDecimal.ZERO, res.getBreakdown().getDriverAllowance());
+        assertEquals(new BigDecimal("590.00"), res.getBreakdown().getTotalFare());
         assertTrue(res.getBreakdown().getDriverEarnings().compareTo(BigDecimal.ZERO) > 0);
-        assertTrue(res.getBreakdown().getCompanyCommission().compareTo(BigDecimal.ZERO) > 0);
+        assertEquals(BigDecimal.ZERO, res.getBreakdown().getCompanyCommission());
     }
 
     @Test
