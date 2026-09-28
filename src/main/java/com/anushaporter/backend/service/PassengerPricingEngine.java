@@ -35,13 +35,18 @@ public class PassengerPricingEngine {
     private com.anushaporter.backend.repository.VehicleTypeRepository vehicleTypeRepository;
 
     public static String normalizeCategoryCode(String code) {
-        if (code == null || code.isBlank()) return "SEDAN";
+        if (code == null || code.isBlank()) return "CAB";
         String normalized = code.trim().toUpperCase();
         if (normalized.equals("2_WHEELER") || normalized.equals("2WHEELER") ||
                 normalized.equals("TWO_WHEELER") || normalized.equals("MOTO") ||
                 normalized.equals("SCOOTER") || normalized.equals("BIKE") ||
                 normalized.equals("MOTORCYCLE")) {
             return "BIKE";
+        }
+        if (normalized.equals("SEDAN") || normalized.equals("SUV") ||
+                normalized.equals("PREMIUM_SUV") || normalized.equals("LUXURY") ||
+                normalized.equals("CAR") || normalized.equals("TAXI")) {
+            return "CAB";
         }
         return normalized;
     }

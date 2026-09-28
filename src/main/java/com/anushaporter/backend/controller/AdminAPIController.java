@@ -582,10 +582,12 @@ public class AdminAPIController {
         m.put("dob", d.getDob() != null ? d.getDob() : "");
         m.put("gender", d.getGender() != null ? d.getGender() : "");
 
-        String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType()
-                : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
-        String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle()
-                : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
+        String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() && !d.getVehicleType().equalsIgnoreCase("Vehicle")
+                ? d.getVehicleType()
+                : (d.getVehicle() != null && !d.getVehicle().isBlank() && !d.getVehicle().equalsIgnoreCase("Vehicle") ? d.getVehicle() : "");
+        String v = d.getVehicle() != null && !d.getVehicle().isBlank() && !d.getVehicle().equalsIgnoreCase("Vehicle")
+                ? d.getVehicle()
+                : (d.getVehicleType() != null && !d.getVehicleType().isBlank() && !d.getVehicleType().equalsIgnoreCase("Vehicle") ? d.getVehicleType() : "");
         m.put("vehicle", v);
         m.put("vehicleType", vType);
         m.put("vehicle_type", vType);

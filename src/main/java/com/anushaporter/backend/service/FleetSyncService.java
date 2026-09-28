@@ -412,9 +412,11 @@ public class FleetSyncService {
                 || n.equals("airport transfer") || n.equals("porter trucks & fleet")
                 || n.equals("2 wheeler / bike") || n.equals("scooter model")
                 || n.equals("scooty") || n.equals("vehicle")
+                || n.equals("sedan") || n.equals("suv") || n.equals("premium suv") || n.equals("luxury")
                 || i.equals("one_way") || i.equals("round_trip") || i.equals("rental")
                 || i.equals("airport_transfer") || i.equals("porter-trucks-fleet")
                 || i.equals("2-wheeler-bike") || i.equals("one-way") || i.equals("round-trip")
-                || i.equals("local-rental") || i.equals("airport-transfer");
+                || i.equals("local-rental") || i.equals("airport-transfer")
+                || i.equals("sedan") || i.equals("suv") || i.equals("premium_suv") || i.equals("luxury") || i.equals("vehicle");
     }
 }

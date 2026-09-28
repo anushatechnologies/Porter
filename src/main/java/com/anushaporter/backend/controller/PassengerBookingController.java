@@ -586,6 +586,11 @@ public class PassengerBookingController {
                             String sType = vt.getServiceType() != null ? vt.getServiceType().toUpperCase() : "";
                             String t = (vt.getType() != null ? vt.getType() : "").toLowerCase();
                             String n = (vt.getName() != null ? vt.getName() : "").toLowerCase();
+                            String id = (vt.getId() != null ? vt.getId() : "").toLowerCase();
+                            if (com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(n, id)
+                                    || com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(t, t)) {
+                                return false;
+                            }
                             return sType.contains("PASSENGER") || sType.contains("BOTH") || sType.contains("CAB")
                                     || t.contains("cab") || t.contains("taxi") || n.contains("cab") || n.contains("taxi");
                         })

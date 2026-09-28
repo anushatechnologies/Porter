@@ -41,8 +41,8 @@ public class DriverVehicleDataCorrectionRunner implements CommandLineRunner {
                 String vehicle = d.getVehicle();
                 String vehicleType = d.getVehicleType();
 
-                boolean vehicleEmpty = (vehicle == null || vehicle.trim().isEmpty());
-                boolean vehicleTypeEmpty = (vehicleType == null || vehicleType.trim().isEmpty());
+                boolean vehicleEmpty = (vehicle == null || vehicle.trim().isEmpty() || vehicle.trim().equalsIgnoreCase("Vehicle"));
+                boolean vehicleTypeEmpty = (vehicleType == null || vehicleType.trim().isEmpty() || vehicleType.trim().equalsIgnoreCase("Vehicle"));
 
                 if (vehicleEmpty && !vehicleTypeEmpty) {
                     d.setVehicle(vehicleType.trim());
@@ -51,8 +51,15 @@ public class DriverVehicleDataCorrectionRunner implements CommandLineRunner {
                     d.setVehicleType(vehicle.trim());
                     modified = true;
                 } else if (vehicleEmpty && vehicleTypeEmpty) {
-                    d.setVehicle("Scooter");
-                    d.setVehicleType("Scooter");
+                    String def = "PASSENGER".equalsIgnoreCase(d.getServiceType()) ? "Cab" : "Scooter";
+                    d.setVehicle(def);
+                    d.setVehicleType(def);
+                    modified = true;
+                }
+                if ("vehicle".equalsIgnoreCase(d.getVehicle()) || "vehicle".equalsIgnoreCase(d.getVehicleType())) {
+                    String def = "PASSENGER".equalsIgnoreCase(d.getServiceType()) ? "Cab" : "Scooter";
+                    d.setVehicle(def);
+                    d.setVehicleType(def);
                     modified = true;
                 }
 

@@ -102,17 +102,22 @@ public class PassengerPricingDataCorrectionRunner implements CommandLineRunner {
             log.info("[PricingDataMigration] Passenger pricing rules are clean. No duplicate rules found.");
         }
 
-        // Also remove obsolete rules for non-existent service types (ROUND_TRIP, RENTAL, AIRPORT_TRANSFER)
+        // Also remove obsolete rules for non-existent service types (ROUND_TRIP, RENTAL, AIRPORT_TRANSFER) or legacy seeded categories
         try {
-            List<PassengerPricingRule> nonOneWayRules = pricingRuleRepository.findAll().stream()
-                    .filter(r -> r.getServiceCode() != null && !"ONE_WAY".equalsIgnoreCase(r.getServiceCode()))
+            List<PassengerPricingRule> obsoleteRules = pricingRuleRepository.findAll().stream()
+                    .filter(r -> {
+                        String sCode = r.getServiceCode() != null ? r.getServiceCode().trim().toUpperCase() : "";
+                        String cCode = r.getVehicleCategoryCode() != null ? r.getVehicleCategoryCode().trim().toUpperCase() : "";
+                        return !"ONE_WAY".equalsIgnoreCase(sCode)
+                                || "SEDAN".equals(cCode) || "SUV".equals(cCode) || "PREMIUM_SUV".equals(cCode) || "LUXURY".equals(cCode) || "VEHICLE".equals(cCode);
+                    })
                     .toList();
-            if (!nonOneWayRules.isEmpty()) {
-                pricingRuleRepository.deleteAll(nonOneWayRules);
-                log.info("[PricingDataMigration] Successfully deleted {} non-ONE_WAY pricing rule(s).", nonOneWayRules.size());
+            if (!obsoleteRules.isEmpty()) {
+                pricingRuleRepository.deleteAll(obsoleteRules);
+                log.info("[PricingDataMigration] Successfully deleted {} non-ONE_WAY or legacy category pricing rule(s).", obsoleteRules.size());
             }
         } catch (Exception e) {
-            log.warn("[PricingDataMigration] Notice while cleaning non-ONE_WAY rules: {}", e.getMessage());
+            log.warn("[PricingDataMigration] Notice while cleaning non-ONE_WAY / legacy rules: {}", e.getMessage());
         }
         return toDelete.size();
     }
@@ -146,20 +151,21 @@ public class PassengerPricingDataCorrectionRunner implements CommandLineRunner {
             log.info("[PricingDataMigration] Successfully deleted {} duplicate passenger vehicle category record(s).", toDelete.size());
         }
 
-        // Also remove legacy inactive duplicates (e.g. BIKES, BIKE_TAXI, AUTO_TAXI)
+        // Also remove legacy seeded vehicles (SEDAN, SUV, PREMIUM_SUV, LUXURY, VEHICLE) and inactive/duplicate items
         try {
             List<PassengerVehicleCategory> obsoleteCategories = categoryRepository.findAll().stream()
                     .filter(c -> {
                         String code = (c.getCategoryCode() != null ? c.getCategoryCode() : "").trim().toUpperCase();
                         String name = (c.getDisplayName() != null ? c.getDisplayName() : "").trim().toLowerCase();
                         return "BIKES".equals(code) || "BIKE_TAXI".equals(code) || "AUTO_TAXI".equals(code)
+                                || "SEDAN".equals(code) || "SUV".equals(code) || "PREMIUM_SUV".equals(code) || "LUXURY".equals(code) || "VEHICLE".equals(code)
                                 || Boolean.FALSE.equals(c.getActive())
                                 || com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(name, code);
                     })
                     .toList();
             if (!obsoleteCategories.isEmpty()) {
                 categoryRepository.deleteAll(obsoleteCategories);
-                log.info("[PricingDataMigration] Successfully deleted {} obsolete/inactive passenger vehicle category record(s).", obsoleteCategories.size());
+                log.info("[PricingDataMigration] Successfully deleted {} obsolete/backend-seeded passenger vehicle category record(s).", obsoleteCategories.size());
             }
         } catch (Exception e) {
             log.warn("[PricingDataMigration] Notice while cleaning obsolete categories: {}", e.getMessage());
@@ -177,13 +183,16 @@ public class PassengerPricingDataCorrectionRunner implements CommandLineRunner {
                         String type = (v.getType() != null ? v.getType() : "").trim().toLowerCase();
                         String name = (v.getName() != null ? v.getName() : "").trim().toLowerCase();
                         return id.equals("bikes") || id.equals("pass_bike") || id.equals("pass_auto")
+                                || id.equals("sedan") || id.equals("suv") || id.equals("premium_suv") || id.equals("luxury") || id.equals("vehicle")
                                 || type.equals("bikes") || type.equals("auto_taxi")
+                                || type.equals("sedan") || type.equals("suv") || type.equals("premium_suv") || type.equals("luxury") || type.equals("vehicle")
+                                || name.equals("sedan") || name.equals("suv") || name.equals("premium suv") || name.equals("luxury") || name.equals("vehicle")
                                 || com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(name, id);
                     })
                     .toList();
             if (!toDelete.isEmpty()) {
                 vehicleTypeRepository.deleteAll(toDelete);
-                log.info("[PricingDataMigration] Successfully deleted {} obsolete vehicle_types record(s).", toDelete.size());
+                log.info("[PricingDataMigration] Successfully deleted {} obsolete/backend-seeded vehicle_types record(s).", toDelete.size());
             }
         } catch (Exception e) {
             log.warn("[PricingDataMigration] Notice while cleaning obsolete vehicle types: {}", e.getMessage());

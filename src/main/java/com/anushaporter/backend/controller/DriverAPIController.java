@@ -198,11 +198,14 @@ public class DriverAPIController {
         map.put("registrationStep", regStep);
         map.put("nextStep", regStep);
         map.put("rating", driver.getRating() != null ? driver.getRating() : "4.8");
-        String vType = driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType()
-                : (driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle() : "Vehicle");
-        String v = driver.getVehicle() != null && !driver.getVehicle().isBlank() ? driver.getVehicle()
-                : (driver.getVehicleType() != null && !driver.getVehicleType().isBlank() ? driver.getVehicleType()
-                        : "Vehicle");
+        String vType = driver.getVehicleType() != null && !driver.getVehicleType().isBlank() && !driver.getVehicleType().equalsIgnoreCase("Vehicle")
+                ? driver.getVehicleType()
+                : (driver.getVehicle() != null && !driver.getVehicle().isBlank() && !driver.getVehicle().equalsIgnoreCase("Vehicle") ? driver.getVehicle() : "");
+        String v = driver.getVehicle() != null && !driver.getVehicle().isBlank() && !driver.getVehicle().equalsIgnoreCase("Vehicle")
+                ? driver.getVehicle()
+                : (driver.getVehicleType() != null && !driver.getVehicleType().isBlank() && !driver.getVehicleType().equalsIgnoreCase("Vehicle")
+                        ? driver.getVehicleType()
+                        : "");
         map.put("vehicle", v);
         map.put("vehicleType", vType);
         map.put("vehicle_type", vType);
@@ -1589,12 +1592,13 @@ public class DriverAPIController {
             driver.setGender(text(payload, "gender"));
         }
 
-        if (resolvedVehicle != null) {
+        if (resolvedVehicle != null && !resolvedVehicle.trim().equalsIgnoreCase("Vehicle")) {
             driver.setVehicle(resolvedVehicle);
             driver.setVehicleType(resolvedVehicle);
-        } else if (driver.getVehicle() == null) {
-            driver.setVehicle("Vehicle");
-            driver.setVehicleType("Vehicle");
+        } else if (driver.getVehicle() == null || driver.getVehicle().isBlank() || driver.getVehicle().equalsIgnoreCase("Vehicle")) {
+            String defVeh = "PASSENGER".equalsIgnoreCase(driver.getServiceType()) ? "Cab" : "";
+            driver.setVehicle(defVeh);
+            driver.setVehicleType(defVeh);
         }
 
         String inputServiceType = text(payload, "serviceType");

@@ -243,8 +243,12 @@ public class DriverController {
             map.put("serviceCategory", serviceCategoryLabel);
             map.put("service_category", serviceCategoryLabel);
 
-            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
-            String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
+            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() && !d.getVehicleType().equalsIgnoreCase("Vehicle")
+                    ? d.getVehicleType()
+                    : (d.getVehicle() != null && !d.getVehicle().isBlank() && !d.getVehicle().equalsIgnoreCase("Vehicle") ? d.getVehicle() : "");
+            String v = d.getVehicle() != null && !d.getVehicle().isBlank() && !d.getVehicle().equalsIgnoreCase("Vehicle")
+                    ? d.getVehicle()
+                    : (d.getVehicleType() != null && !d.getVehicleType().isBlank() && !d.getVehicleType().equalsIgnoreCase("Vehicle") ? d.getVehicleType() : "");
             map.put("vehicle", v);
             map.put("vehicleType", vType);
             map.put("vehicle_type", vType);
@@ -339,7 +343,9 @@ public class DriverController {
 
         String veh = entity.getVehicle();
         String vehType = entity.getVehicleType();
-        String resolvedVeh = (veh != null && !veh.trim().isEmpty()) ? veh.trim() : ((vehType != null && !vehType.trim().isEmpty()) ? vehType.trim() : "Vehicle");
+        String resolvedVeh = (veh != null && !veh.trim().isEmpty() && !veh.trim().equalsIgnoreCase("Vehicle"))
+                ? veh.trim()
+                : ((vehType != null && !vehType.trim().isEmpty() && !vehType.trim().equalsIgnoreCase("Vehicle")) ? vehType.trim() : "");
         entity.setVehicle(resolvedVeh);
         entity.setVehicleType(resolvedVeh);
 
@@ -518,8 +524,12 @@ public class DriverController {
             map.put("serviceCategory", serviceCategoryLabel);
             map.put("service_category", serviceCategoryLabel);
 
-            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : (d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : "Vehicle");
-            String v = d.getVehicle() != null && !d.getVehicle().isBlank() ? d.getVehicle() : (d.getVehicleType() != null && !d.getVehicleType().isBlank() ? d.getVehicleType() : "Vehicle");
+            String vType = d.getVehicleType() != null && !d.getVehicleType().isBlank() && !d.getVehicleType().equalsIgnoreCase("Vehicle")
+                    ? d.getVehicleType()
+                    : (d.getVehicle() != null && !d.getVehicle().isBlank() && !d.getVehicle().equalsIgnoreCase("Vehicle") ? d.getVehicle() : "");
+            String v = d.getVehicle() != null && !d.getVehicle().isBlank() && !d.getVehicle().equalsIgnoreCase("Vehicle")
+                    ? d.getVehicle()
+                    : (d.getVehicleType() != null && !d.getVehicleType().isBlank() && !d.getVehicleType().equalsIgnoreCase("Vehicle") ? d.getVehicleType() : "");
             map.put("vehicle", v);
             map.put("vehicleType", vType);
             map.put("vehicle_type", vType);
