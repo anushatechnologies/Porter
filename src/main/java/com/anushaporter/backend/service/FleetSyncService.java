@@ -422,21 +422,13 @@ public class FleetSyncService {
             return true;
         }
 
-        // Test/dummy legacy vehicle models
+        // Test/dummy legacy vehicle models (only flag if both name and id are literal dummy placeholders)
         if (nClean.equals("scootermodel") || iClean.equals("scootermodel")
                 || nClean.equals("scooty") || iClean.equals("scooty")
-                || nClean.equals("vehicle") || iClean.equals("vehicle")
+                || (nClean.equals("vehicle") && (iClean.equals("vehicle") || iClean.isEmpty()))
                 || nClean.equals("customvehicle1") || iClean.equals("customvehicle1")
                 || nClean.equals("customvehicle2") || iClean.equals("customvehicle2")
                 || nClean.equals("bikemodel") || iClean.equals("bikemodel")) {
-            return true;
-        }
-
-        // Obsolete passenger models hardcoded before dynamic admin vehicle management
-        if (nClean.equals("sedan") || iClean.equals("sedan")
-                || nClean.equals("suv") || iClean.equals("suv")
-                || nClean.equals("premiumsuv") || iClean.equals("premiumsuv")
-                || nClean.equals("luxury") || iClean.equals("luxury")) {
             return true;
         }
 

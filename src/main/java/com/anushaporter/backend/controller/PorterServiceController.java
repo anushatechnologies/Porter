@@ -159,8 +159,7 @@ public class PorterServiceController {
         }
 
         List<Map<String, Object>> vehicles = services.stream()
-                .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId())
-                        && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getLabel(), s.getCategory()))
+                .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId()))
                 .filter(s -> {
                     if (s.getCategory() == null) return true;
                     String c = s.getCategory().toLowerCase();

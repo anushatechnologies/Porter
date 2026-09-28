@@ -75,8 +75,7 @@ public class HomeFeedController {
         // ── Dynamic "Our Services" & Fleet ─────────────────────────────────────
         List<com.anushaporter.backend.model.PorterService> dynamicServices = (porterServiceRepository != null)
                 ? porterServiceRepository.findByIsActiveTrueOrderByDisplayOrderAsc().stream()
-                        .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId())
-                                && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getLabel(), s.getCategory()))
+                        .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId()))
                         .collect(Collectors.toList())
                 : Collections.emptyList();
         List<Map<String, Object>> featuredServices = new ArrayList<>();

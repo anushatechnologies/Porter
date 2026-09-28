@@ -53,6 +53,7 @@ public class GoodsFleetDataCorrectionRunner implements CommandLineRunner {
             cleanupLegacyPorterServices();
             cleanupLegacyVehicleTypes();
             sanitizeDriverVehicles();
+            restoreGoodsServices();
         } catch (Exception e) {
             log.warn("[GoodsDataMigration] Goods fleet cleanup completed with notice: {}", e.getMessage());
         }
@@ -135,7 +136,6 @@ public class GoodsFleetDataCorrectionRunner implements CommandLineRunner {
             List<PorterService> all = porterServiceRepository.findAll();
             List<PorterService> toDelete = all.stream().filter(s ->
                     FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId())
-                            || FleetSyncService.isNonVehicleArtifact(s.getLabel(), s.getCategory())
             ).toList();
 
             if (!toDelete.isEmpty()) {
@@ -156,7 +156,6 @@ public class GoodsFleetDataCorrectionRunner implements CommandLineRunner {
             List<VehicleType> all = vehicleTypeRepository.findAll();
             List<VehicleType> toDelete = all.stream().filter(vt ->
                     FleetSyncService.isNonVehicleArtifact(vt.getName(), vt.getId())
-                            || FleetSyncService.isNonVehicleArtifact(vt.getDisplayName(), vt.getType())
             ).toList();
 
             if (!toDelete.isEmpty()) {
@@ -166,6 +165,92 @@ public class GoodsFleetDataCorrectionRunner implements CommandLineRunner {
         } catch (Exception e) {
             log.warn("[GoodsDataMigration] Notice while purging vehicle types: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Restore delivery trucks into services table from vehicle_types / defaults
+     * so that Admin Fleet Management and Customers have the full fleet available.
+     */
+    public void restoreGoodsServices() {
+        if (porterServiceRepository == null) return;
+        try {
+            long goodsTrucksCount = porterServiceRepository.findAll().stream()
+                    .filter(s -> "vehicle".equalsIgnoreCase(s.getCategory()) || "1".equals(s.getCategoryId()))
+                    .count();
+
+            if (goodsTrucksCount == 0) {
+                log.info("[GoodsDataMigration] Goods delivery trucks missing from services table. Restoring delivery fleet...");
+                List<PorterService> defaults = com.anushaporter.backend.controller.PorterServiceController.getDefaultFallbackServices();
+                for (PorterService s : defaults) {
+                    if (s.getServiceId() != null && porterServiceRepository.findByServiceId(s.getServiceId()).isEmpty()) {
+                        porterServiceRepository.save(s);
+                        log.info("[GoodsDataMigration] Restored goods service: {} ({})", s.getName(), s.getServiceId());
+                    }
+                }
+            }
+
+            // Also ensure any goods vehicles present in vehicle_types table are synchronized into services
+            if (vehicleTypeRepository != null) {
+                List<VehicleType> vts = vehicleTypeRepository.findAll();
+                for (VehicleType vt : vts) {
+                    String sType = vt.getServiceType() != null ? vt.getServiceType().toUpperCase() : "";
+                    if ("OUR_SERVICES".equals(sType) || "GOODS".equals(sType) || "BOTH".equals(sType)) {
+                        String name = vt.getName() != null ? vt.getName() : "";
+                        String type = vt.getType() != null ? vt.getType() : "";
+                        if (!FleetSyncService.isNonVehicleArtifact(name, vt.getId())) {
+                            String slug = resolvePorterServiceSlug(vt.getId(), name);
+                            if (slug != null && porterServiceRepository.findByServiceId(slug).isEmpty()
+                                    && porterServiceRepository.findFirstByServiceIdIgnoreCase(slug).isEmpty()) {
+                                PorterService ps = new PorterService();
+                                ps.setServiceId(slug);
+                                ps.setName(vt.getName() != null ? vt.getName() : vt.getDisplayName());
+                                ps.setLabel(vt.getDisplayName() != null ? vt.getDisplayName() : vt.getName());
+                                String cat = (type.toLowerCase().contains("two_wheel") || type.toLowerCase().contains("scooter") || type.toLowerCase().contains("bike")) ? "two_wheeler" : "vehicle";
+                                ps.setCategory(cat);
+                                ps.setCategoryId(cat.equals("two_wheeler") ? "2" : "1");
+                                ps.setCategoryName(cat.equals("two_wheeler") ? "2 Wheeler / Bike" : "Porter Trucks & Fleet");
+                                ps.setDescription(vt.getDescription());
+                                ps.setSubtitle(vt.getDescription());
+                                ps.setBaseFare(vt.getBaseFare() != null ? vt.getBaseFare() : 50.0);
+                                ps.setBaseKm(vt.getBaseKm() != null ? vt.getBaseKm() : 1.0);
+                                ps.setPerKmRate(vt.getPerKmRate() != null ? vt.getPerKmRate() : 12.0);
+                                ps.setHelperRate(vt.getHelperRate() != null ? vt.getHelperRate() : 0.0);
+                                ps.setCapacityKg(vt.getCapacityKg() != null ? vt.getCapacityKg() : 20);
+                                ps.setCapacityLabel(vt.getCapacity() != null && !vt.getCapacity().isBlank() ? vt.getCapacity() : (vt.getCapacityKg() != null ? vt.getCapacityKg() + " Kg" : ""));
+                                ps.setDimensions(vt.getDimensions());
+                                ps.setIconUrl(vt.getImageUrl());
+                                ps.setCustomerAppVisible(vt.getCustomerAppVisible() != null ? vt.getCustomerAppVisible() : true);
+                                ps.setIsActive("active".equalsIgnoreCase(vt.getStatus()));
+                                ps.setDisplayOrder(vt.getPriority() != null ? vt.getPriority() : 1);
+                                ps.setAvailableCities(vt.getAvailableCities() != null ? vt.getAvailableCities() : "ALL");
+                                porterServiceRepository.save(ps);
+                                log.info("[GoodsDataMigration] Synchronized vehicle_type into services table: {} ({})", ps.getName(), ps.getServiceId());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[GoodsDataMigration] Notice during restoreGoodsServices: {}", e.getMessage());
+        }
+    }
+
+    private String resolvePorterServiceSlug(String id, String name) {
+        if (id == null && name == null) return "vehicle";
+        String s = (id != null ? id : "").trim().toLowerCase();
+        if (s.equals("veh_tataace_06") || s.contains("tataace") || s.contains("tata-ace")) return "tata-ace";
+        if (s.equals("veh_minitruck_05") || s.contains("minitruck") || s.contains("mini3w")) return "mini-3w";
+        if (s.equals("veh_pickup_04") || s.contains("pickup")) return "pickup-8ft";
+        if (s.equals("veh_407_07") || s.contains("407") || s.equals("14ft")) return "14ft";
+        if (s.equals("veh_lpt1109_08") || s.contains("1109") || s.equals("17ft")) return "17ft";
+        if (s.equals("veh_auto_03") || s.contains("auto")) return "3-wheeler";
+        if (s.equals("veh_scooter_02") || s.contains("scooter")) return "scooter";
+        if (s.equals("2-wheeler") || s.contains("two_wheel")) return "2-wheeler";
+        if (s.startsWith("veh_")) {
+            String cleanName = (name != null ? name : id).toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+            return cleanName.isEmpty() ? s : cleanName;
+        }
+        return s.replaceAll("[^a-z0-9-]+", "-").replaceAll("^-+|-+$", "");
     }
 
     /**

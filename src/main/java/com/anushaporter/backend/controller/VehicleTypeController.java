@@ -53,6 +53,9 @@ public class VehicleTypeController {
     @Autowired(required = false)
     private com.anushaporter.backend.service.FleetSyncService fleetSyncService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PorterServiceRepository porterServiceRepository;
+
     @PostConstruct
     public void initVehicleTypes() {
         // Baseline passenger vehicle seeding disabled: only admin-managed vehicles will show.
@@ -63,8 +66,7 @@ public class VehicleTypeController {
         // Purge non-vehicle artifacts (One-Way Ride, Porter Trucks & Fleet, Scooter Model, scooty, etc.)
         try {
             vehicleTypeRepository.findAll().forEach(vt -> {
-                if (com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getName(), vt.getId())
-                        || com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getDisplayName(), vt.getType())) {
+                if (com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getName(), vt.getId())) {
                     vehicleTypeRepository.delete(vt);
                 }
             });
@@ -172,8 +174,7 @@ public class VehicleTypeController {
 
         final String targetService = normalizedService;
         List<Map<String, Object>> vehicles = list.stream()
-                .filter(vt -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getName(), vt.getId())
-                        && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getDisplayName(), vt.getType()))
+                .filter(vt -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(vt.getName(), vt.getId()))
                 .map(this::formatVehicleType)
                 .filter(m -> {
                     if (targetService == null || "ALL".equalsIgnoreCase(targetService))
@@ -255,6 +256,7 @@ public class VehicleTypeController {
             populateVehicleTypeFields(v, body);
             VehicleType saved = vehicleTypeRepository.save(v);
             syncToPassengerCategory(saved);
+            syncToPorterService(saved);
 
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("success", true);
@@ -371,6 +373,7 @@ public class VehicleTypeController {
         v.setStatus("inactive");
         vehicleTypeRepository.save(v);
         syncToPassengerCategory(v);
+        syncToPorterService(v);
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -423,6 +426,67 @@ public class VehicleTypeController {
                 cat.setActive(false);
                 passengerVehicleCategoryRepository.save(cat);
             }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void syncToPorterService(VehicleType v) {
+        if (porterServiceRepository == null || v == null)
+            return;
+        try {
+            String sType = v.getServiceType() != null ? v.getServiceType().toUpperCase() : "";
+            if (sType.contains("PASSENGER"))
+                return; // Only sync goods/delivery to PorterService
+
+            String svcId = (v.getId() != null && !v.getId().isBlank()) ? v.getId().trim() : "";
+            if (svcId.startsWith("veh_") && v.getName() != null && !v.getName().isBlank()) {
+                String clean = v.getName().toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+                if (!clean.isEmpty()) {
+                    svcId = clean;
+                }
+            }
+
+            final String lookupId = svcId;
+            Optional<com.anushaporter.backend.model.PorterService> existingOpt = porterServiceRepository.findByServiceId(lookupId);
+            if (existingOpt.isEmpty()) {
+                existingOpt = porterServiceRepository.findFirstByServiceIdIgnoreCase(lookupId);
+            }
+            if (existingOpt.isEmpty() && v.getName() != null && !v.getName().isBlank()) {
+                final String vName = v.getName().trim();
+                existingOpt = porterServiceRepository.findAll().stream()
+                        .filter(s -> s.getName() != null && s.getName().trim().equalsIgnoreCase(vName))
+                        .findFirst();
+            }
+
+            com.anushaporter.backend.model.PorterService s = existingOpt.orElse(new com.anushaporter.backend.model.PorterService());
+            s.setServiceId(lookupId);
+            s.setName(v.getName() != null && !v.getName().isBlank() ? v.getName() : v.getDisplayName());
+            s.setLabel(v.getDisplayName() != null && !v.getDisplayName().isBlank() ? v.getDisplayName() : v.getName());
+
+            String typeStr = (v.getType() != null ? v.getType() : "").toLowerCase();
+            String cat = (typeStr.contains("two_wheel") || typeStr.contains("scooter") || typeStr.contains("bike")) ? "two_wheeler" : "vehicle";
+            s.setCategory(cat);
+            s.setCategoryId(cat.equals("two_wheeler") ? "2" : "1");
+            s.setCategoryName(cat.equals("two_wheeler") ? "2 Wheeler / Bike" : "Porter Trucks & Fleet");
+
+            s.setDescription(v.getDescription() != null ? v.getDescription() : "");
+            s.setSubtitle(v.getDescription() != null ? v.getDescription() : "");
+            s.setBaseFare(v.getBaseFare() != null ? v.getBaseFare() : 50.0);
+            s.setBaseKm(v.getBaseKm() != null ? v.getBaseKm() : 1.0);
+            s.setPerKmRate(v.getPerKmRate() != null ? v.getPerKmRate() : 12.0);
+            s.setHelperRate(v.getHelperRate() != null ? v.getHelperRate() : 0.0);
+            s.setCapacityKg(v.getCapacityKg() != null ? v.getCapacityKg() : 20);
+            s.setCapacityLabel(v.getCapacity() != null && !v.getCapacity().isBlank() ? v.getCapacity() : (v.getCapacityKg() != null ? v.getCapacityKg() + " Kg" : ""));
+            s.setDimensions(v.getDimensions() != null ? v.getDimensions() : "");
+            if (v.getImageUrl() != null && !v.getImageUrl().isBlank()) {
+                s.setIconUrl(v.getImageUrl());
+            }
+            s.setCustomerAppVisible(v.getCustomerAppVisible() != null ? v.getCustomerAppVisible() : true);
+            s.setIsActive("active".equalsIgnoreCase(v.getStatus()));
+            s.setDisplayOrder(v.getPriority() != null ? v.getPriority() : 1);
+            s.setAvailableCities(v.getAvailableCities() != null ? v.getAvailableCities() : "ALL");
+
+            porterServiceRepository.save(s);
         } catch (Exception ignored) {
         }
     }

@@ -56,8 +56,7 @@ public class PricingController {
     @GetMapping("/vehicles")
     public ResponseEntity<?> getActiveVehicles() {
         List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepo.findByIsActiveTrueOrderByDisplayOrderAsc().stream()
-                .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId())
-                        && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getLabel(), s.getCategory()))
+                .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId()))
                 .collect(Collectors.toList());
         if (!dynamicServices.isEmpty()) {
             List<Map<String, Object>> items = new ArrayList<>();
