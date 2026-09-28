@@ -73,7 +73,12 @@ public class HomeFeedController {
         }
 
         // ── Dynamic "Our Services" & Fleet ─────────────────────────────────────
-        List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
+        List<com.anushaporter.backend.model.PorterService> dynamicServices = (porterServiceRepository != null)
+                ? porterServiceRepository.findByIsActiveTrueOrderByDisplayOrderAsc().stream()
+                        .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId())
+                                && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getLabel(), s.getCategory()))
+                        .collect(Collectors.toList())
+                : Collections.emptyList();
         List<Map<String, Object>> featuredServices = new ArrayList<>();
 
         if (!dynamicServices.isEmpty()) {
@@ -114,7 +119,9 @@ public class HomeFeedController {
             }
         } else {
             // Fallback to PricingVehicle or default list
-            List<PricingVehicle> vehicles = vehicleRepository.findByStatus(true);
+            List<PricingVehicle> vehicles = vehicleRepository.findByStatus(true).stream()
+                    .filter(v -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(v.getName(), v.getVehicleId()))
+                    .collect(Collectors.toList());
             if (!vehicles.isEmpty()) {
                 int order = 1;
                 for (PricingVehicle v : vehicles) {

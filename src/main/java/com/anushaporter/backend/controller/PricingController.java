@@ -55,7 +55,10 @@ public class PricingController {
      */
     @GetMapping("/vehicles")
     public ResponseEntity<?> getActiveVehicles() {
-        List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepo.findByIsActiveTrueOrderByDisplayOrderAsc();
+        List<com.anushaporter.backend.model.PorterService> dynamicServices = porterServiceRepo.findByIsActiveTrueOrderByDisplayOrderAsc().stream()
+                .filter(s -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getName(), s.getServiceId())
+                        && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(s.getLabel(), s.getCategory()))
+                .collect(Collectors.toList());
         if (!dynamicServices.isEmpty()) {
             List<Map<String, Object>> items = new ArrayList<>();
             for (var s : dynamicServices) {
@@ -79,7 +82,9 @@ public class PricingController {
             return ResponseEntity.ok(Map.of("success", true, "vehicles", items));
         }
 
-        List<PricingVehicle> vehicles = vehicleRepo.findByStatus(true);
+        List<PricingVehicle> vehicles = vehicleRepo.findByStatus(true).stream()
+                .filter(v -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(v.getName(), v.getVehicleId()))
+                .collect(Collectors.toList());
         List<Map<String, Object>> items = vehicles.stream().map(v -> {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", v.getVehicleId());

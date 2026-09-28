@@ -408,15 +408,38 @@ public class FleetSyncService {
         if (name == null && id == null) return false;
         String n = (name != null ? name : "").toLowerCase().trim();
         String i = (id != null ? id : "").toLowerCase().trim();
-        return n.equals("one-way ride") || n.equals("round trip") || n.equals("local rental")
-                || n.equals("airport transfer") || n.equals("porter trucks & fleet")
-                || n.equals("2 wheeler / bike") || n.equals("scooter model")
-                || n.equals("scooty") || n.equals("vehicle")
-                || n.equals("sedan") || n.equals("suv") || n.equals("premium suv") || n.equals("luxury")
-                || i.equals("one_way") || i.equals("round_trip") || i.equals("rental")
-                || i.equals("airport_transfer") || i.equals("porter-trucks-fleet")
-                || i.equals("2-wheeler-bike") || i.equals("one-way") || i.equals("round-trip")
-                || i.equals("local-rental") || i.equals("airport-transfer")
-                || i.equals("sedan") || i.equals("suv") || i.equals("premium_suv") || i.equals("luxury") || i.equals("vehicle");
+        String nClean = n.replaceAll("[^a-z0-9]", "");
+        String iClean = i.replaceAll("[^a-z0-9]", "");
+
+        // Category headers / non-vehicle groupings
+        if (nClean.equals("portertrucksfleet") || iClean.equals("portertrucksfleet")
+                || nClean.equals("2wheelerbike") || iClean.equals("2wheelerbike")
+                || nClean.equals("packersmovers") || iClean.equals("packersmovers")
+                || nClean.equals("onewayride") || iClean.equals("onewayride") || iClean.equals("oneway")
+                || nClean.equals("roundtrip") || iClean.equals("roundtrip")
+                || nClean.equals("localrental") || iClean.equals("localrental") || iClean.equals("rental")
+                || nClean.equals("airporttransfer") || iClean.equals("airporttransfer")) {
+            return true;
+        }
+
+        // Test/dummy legacy vehicle models
+        if (nClean.equals("scootermodel") || iClean.equals("scootermodel")
+                || nClean.equals("scooty") || iClean.equals("scooty")
+                || nClean.equals("vehicle") || iClean.equals("vehicle")
+                || nClean.equals("customvehicle1") || iClean.equals("customvehicle1")
+                || nClean.equals("customvehicle2") || iClean.equals("customvehicle2")
+                || nClean.equals("bikemodel") || iClean.equals("bikemodel")) {
+            return true;
+        }
+
+        // Obsolete passenger models hardcoded before dynamic admin vehicle management
+        if (nClean.equals("sedan") || iClean.equals("sedan")
+                || nClean.equals("suv") || iClean.equals("suv")
+                || nClean.equals("premiumsuv") || iClean.equals("premiumsuv")
+                || nClean.equals("luxury") || iClean.equals("luxury")) {
+            return true;
+        }
+
+        return false;
     }
 }

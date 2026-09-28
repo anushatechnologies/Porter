@@ -69,7 +69,10 @@ public class VehicleController {
                     ? vehicleTypeRepository.findByStatusOrderByPriorityAsc("active")
                     : Collections.emptyList();
 
-            List<Map<String, Object>> vehicles = list.stream().map(v -> {
+            List<Map<String, Object>> vehicles = list.stream()
+                    .filter(v -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(v.getName(), v.getId())
+                            && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(v.getDisplayName(), v.getType()))
+                    .map(v -> {
                 Map<String, Object> map = new LinkedHashMap<>();
                 map.put("id",          v.getId());
                 map.put("name",        v.getName());
@@ -99,8 +102,14 @@ public class VehicleController {
             response.put("count", vehicles.size());
             return ResponseEntity.ok(response);
         }
-        List<Vehicle> vehicles = repository.findAll();
-        List<PricingVehicle> pricingList = pricingVehicleRepo.findAll();
+        List<Vehicle> vehicles = repository.findAll().stream()
+                .filter(v -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(v.getModel(), v.getType())
+                        && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(v.getModel(), v.getId() != null ? String.valueOf(v.getId()) : null)
+                        && !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(v.getType(), v.getId() != null ? String.valueOf(v.getId()) : null))
+                .collect(Collectors.toList());
+        List<PricingVehicle> pricingList = pricingVehicleRepo.findAll().stream()
+                .filter(pv -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(pv.getName(), pv.getVehicleId()))
+                .collect(Collectors.toList());
 
         Map<String, PricingVehicle> pricingBySlug = new LinkedHashMap<>();
         for (PricingVehicle pv : pricingList) {

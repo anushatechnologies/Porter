@@ -27,7 +27,9 @@ public class PricingAdminController {
     // --- VEHICLES ---
     @GetMapping("/vehicles")
     public List<PricingVehicle> getVehicles() {
-        return vehicleRepo.findAll();
+        return vehicleRepo.findAll().stream()
+                .filter(v -> !com.anushaporter.backend.service.FleetSyncService.isNonVehicleArtifact(v.getName(), v.getVehicleId()))
+                .toList();
     }
 
     @PostMapping("/vehicles")
