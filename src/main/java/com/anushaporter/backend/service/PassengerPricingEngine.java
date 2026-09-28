@@ -43,11 +43,6 @@ public class PassengerPricingEngine {
                 normalized.equals("MOTORCYCLE")) {
             return "BIKE";
         }
-        if (normalized.equals("SEDAN") || normalized.equals("SUV") ||
-                normalized.equals("PREMIUM_SUV") || normalized.equals("LUXURY") ||
-                normalized.equals("CAR") || normalized.equals("TAXI")) {
-            return "CAB";
-        }
         return normalized;
     }
 
@@ -60,6 +55,7 @@ public class PassengerPricingEngine {
 
         // 1. Validate Vehicle Category & Passenger Capacity
         PassengerVehicleCategory category = vehicleCategoryRepository.findFirstByCategoryCodeOrderByIdDesc(categoryCode)
+                .or(() -> vehicleCategoryRepository.findFirstByCategoryCodeOrderByIdDesc("CAB"))
                 .orElseGet(() -> resolveFromVehicleTypes(categoryCode));
 
         int passengers = req.getPassengerCount() != null ? req.getPassengerCount() : 1;
