@@ -37,9 +37,8 @@ public class PassengerDataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) {
         try {
-            seedServices();
+            purgeServicesAndRentalPackages();
             seedVehicleCategories();
-            seedRentalPackages();
             seedPricingVersionAndRules();
             seedSurgeRules();
             seedCancellationPolicy();
@@ -51,42 +50,18 @@ public class PassengerDataSeeder implements CommandLineRunner {
         }
     }
 
-    private void seedServices() {
-        if (serviceRepository.count() == 0) {
-            serviceRepository.saveAll(List.of(
-                    PassengerServiceEntity.builder()
-                            .serviceCode("ONE_WAY")
-                            .displayName("One-Way Ride")
-                            .description("Direct point-to-point passenger travel")
-                            .displayOrder(1)
-                            .active(true)
-                            .iconUrl("🚗")
-                            .build(),
-                    PassengerServiceEntity.builder()
-                            .serviceCode("ROUND_TRIP")
-                            .displayName("Round Trip")
-                            .description("Two-way trip with driver allowance and waiting")
-                            .displayOrder(2)
-                            .active(true)
-                            .iconUrl("🔁")
-                            .build(),
-                    PassengerServiceEntity.builder()
-                            .serviceCode("RENTAL")
-                            .displayName("Local Rental")
-                            .description("Hourly and kilometer fixed rental packages")
-                            .displayOrder(3)
-                            .active(true)
-                            .iconUrl("⏱️")
-                            .build(),
-                    PassengerServiceEntity.builder()
-                            .serviceCode("AIRPORT_TRANSFER")
-                            .displayName("Airport Transfer")
-                            .description("Dedicated airport pickup and drop services")
-                            .displayOrder(4)
-                            .active(true)
-                            .iconUrl("✈️")
-                            .build()
-            ));
+    private void purgeServicesAndRentalPackages() {
+        try {
+            if (serviceRepository.count() > 0) {
+                serviceRepository.deleteAll();
+                log.info("[PassengerDataSeeder] Purged non-vehicle passenger trip services (One-Way, Round Trip, Rental, Airport Transfer).");
+            }
+            if (rentalPackageRepository.count() > 0) {
+                rentalPackageRepository.deleteAll();
+                log.info("[PassengerDataSeeder] Purged rental packages.");
+            }
+        } catch (Exception e) {
+            log.warn("[PassengerDataSeeder] Notice while purging services/packages: {}", e.getMessage());
         }
     }
 
@@ -194,8 +169,8 @@ public class PassengerDataSeeder implements CommandLineRunner {
                     .build();
             versionRepository.save(version);
 
-            // Seed rules for each service and category
-            String[] services = {"ONE_WAY", "ROUND_TRIP", "RENTAL", "AIRPORT_TRANSFER"};
+            // Seed rules for standard ONE_WAY point-to-point passenger rides
+            String[] services = {"ONE_WAY"};
             List<PassengerVehicleCategory> categories = categoryRepository.findAll();
 
             for (String svc : services) {
@@ -209,7 +184,7 @@ public class PassengerDataSeeder implements CommandLineRunner {
             Optional<PassengerVehicleCategory> bikeOpt = categoryRepository.findByCategoryCode("BIKE");
             if (bikeOpt.isPresent()) {
                 PassengerVehicleCategory bike = bikeOpt.get();
-                String[] services = {"ONE_WAY", "ROUND_TRIP", "RENTAL", "AIRPORT_TRANSFER"};
+                String[] services = {"ONE_WAY"};
                 for (PassengerPricingVersion ver : allVersions) {
                     for (String svc : services) {
                         if (ruleRepository.findByPricingVersionIdAndServiceCodeAndVehicleCategoryCode(
@@ -228,16 +203,6 @@ public class PassengerDataSeeder implements CommandLineRunner {
         BigDecimal minKm = cat.getMinimumKm();
         BigDecimal minFare = cat.getMinimumFare();
         boolean isBike = "BIKE".equalsIgnoreCase(cat.getCategoryCode());
-
-        if ("AIRPORT_TRANSFER".equals(svc)) {
-            if (isBike) {
-                base = base.max(new BigDecimal("80.00"));
-                minKm = minKm.max(new BigDecimal("5.00"));
-            } else {
-                base = base.max(new BigDecimal("500.00"));
-                minKm = minKm.max(new BigDecimal("15.00"));
-            }
-        }
 
         int freeWaiting = isBike ? 10 : 15;
         BigDecimal waiting15Min = isBike ? new BigDecimal("20.00") : new BigDecimal("50.00");

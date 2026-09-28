@@ -354,7 +354,7 @@ public class PassengerBookingController {
     // --- Admin Management Endpoints for Passenger Vehicles ---
     @GetMapping({"/admin/vehicles", "/admin/categories", "/vehicles/all", "/categories/all"})
     public ResponseEntity<Map<String, Object>> getAdminVehicleCategories() {
-        List<PassengerVehicleCategory> categories = vehicleCategoryRepository.findAllByOrderByDisplayOrderAsc();
+        List<PassengerVehicleCategory> categories = vehicleCategoryRepository.findByActiveTrueOrderByDisplayOrderAsc();
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("success", true);
         resp.put("vehicles", categories);
