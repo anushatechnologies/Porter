@@ -6,6 +6,8 @@ public class PricingResponse {
     private String vehicleId;
     private String vehicleName;
     private Double distanceKm;
+    private Integer distanceMeters;
+    private Integer durationSeconds;
     private Integer helperCount;
     private Double helperChargePerHead;
     private Double gstRate;
@@ -32,6 +34,12 @@ public class PricingResponse {
 
     public Double getDistanceKm() { return distanceKm; }
     public void setDistanceKm(Double distanceKm) { this.distanceKm = distanceKm; }
+
+    public Integer getDistanceMeters() { return distanceMeters; }
+    public void setDistanceMeters(Integer distanceMeters) { this.distanceMeters = distanceMeters; }
+
+    public Integer getDurationSeconds() { return durationSeconds; }
+    public void setDurationSeconds(Integer durationSeconds) { this.durationSeconds = durationSeconds; }
 
     public Integer getHelperCount() { return helperCount; }
     public void setHelperCount(Integer helperCount) { this.helperCount = helperCount; }

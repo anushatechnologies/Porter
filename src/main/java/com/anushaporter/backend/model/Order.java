@@ -48,6 +48,10 @@ public class Order {
     private String driverVehicleNumber;
 
     private Double distanceKm;
+    @Column(name = "distance_meters")
+    private Integer distanceMeters;
+    @Column(name = "duration_seconds")
+    private Integer durationSeconds;
     private Double weightKg;
     private String dimensions;
     private LocalDateTime assignmentDeadline;

@@ -229,6 +229,10 @@ public class DriverAPIController {
         map.put("pincode", driver.getPincode() != null ? driver.getPincode() : "");
         map.put("pinCode", driver.getPincode() != null ? driver.getPincode() : "");
         String bName = driver.getBankName() != null ? driver.getBankName() : "";
+        if ((bName.isBlank() || "N/A".equalsIgnoreCase(bName.trim())) && driver.getBankIfscCode() != null) {
+            String resolved = com.anushaporter.backend.util.IfscBankResolver.resolveBankName(driver.getBankIfscCode());
+            if (resolved != null) bName = resolved;
+        }
         map.put("bankName", bName);
         map.put("bank_name", bName);
         String acctNum = driver.getBankAccountNumber() != null ? driver.getBankAccountNumber() : "";
@@ -448,21 +452,23 @@ public class DriverAPIController {
             if (pin == null) pin = text(payload, "postalCode");
             if (pin != null) driver.setPincode(pin.trim());
 
-            // Bank & UPI
+            String ifscCode = text(payload, "bankIfscCode");
+            if (ifscCode == null) ifscCode = text(payload, "ifscCode");
+            if (ifscCode == null) ifscCode = text(payload, "ifsc");
+            if (ifscCode == null) ifscCode = text(payload, "ifsc_code");
+            if (ifscCode != null) driver.setBankIfscCode(ifscCode.trim().toUpperCase());
+
             String bName = text(payload, "bankName");
             if (bName == null) bName = text(payload, "bank_name");
+            if ((bName == null || bName.isBlank() || "N/A".equalsIgnoreCase(bName.trim())) && (ifscCode != null || driver.getBankIfscCode() != null)) {
+                bName = com.anushaporter.backend.util.IfscBankResolver.resolveBankName(ifscCode != null ? ifscCode : driver.getBankIfscCode());
+            }
             if (bName != null) driver.setBankName(bName.trim());
 
             String acctNum = text(payload, "bankAccountNumber");
             if (acctNum == null) acctNum = text(payload, "accountNumber");
             if (acctNum == null) acctNum = text(payload, "account_number");
             if (acctNum != null) driver.setBankAccountNumber(acctNum.trim());
-
-            String ifscCode = text(payload, "bankIfscCode");
-            if (ifscCode == null) ifscCode = text(payload, "ifscCode");
-            if (ifscCode == null) ifscCode = text(payload, "ifsc");
-            if (ifscCode == null) ifscCode = text(payload, "ifsc_code");
-            if (ifscCode != null) driver.setBankIfscCode(ifscCode.trim().toUpperCase());
 
             String acctName = text(payload, "bankAccountName");
             if (acctName == null) acctName = text(payload, "accountHolderName");
@@ -627,6 +633,8 @@ public class DriverAPIController {
                 ? String.format("%.1f", order.getDistanceKm())
                 : null);
         result.put("distanceKm", order.getDistanceKm());
+        result.put("distanceMeters", order.getDistanceMeters());
+        result.put("durationSeconds", order.getDurationSeconds());
         result.put("pickupLat", order.getPickupLat());
         result.put("pickupLng", order.getPickupLng());
         result.put("dropLat", order.getDropLat());
@@ -1678,6 +1686,9 @@ public class DriverAPIController {
 
         String bName = text(payload, "bankName");
         if (bName == null) bName = text(payload, "bank_name");
+        if ((bName == null || bName.isBlank() || "N/A".equalsIgnoreCase(bName.trim())) && (ifsc != null || driver.getBankIfscCode() != null)) {
+            bName = com.anushaporter.backend.util.IfscBankResolver.resolveBankName(ifsc != null ? ifsc : driver.getBankIfscCode());
+        }
         if (bName != null) driver.setBankName(bName.trim());
 
         String holder = text(payload, "accountHolderName");
@@ -1919,6 +1930,10 @@ public class DriverAPIController {
         data.put("pincode", driver.getPincode() != null ? driver.getPincode() : "");
         data.put("pinCode", driver.getPincode() != null ? driver.getPincode() : "");
         String bName = driver.getBankName() != null ? driver.getBankName() : "";
+        if ((bName.isBlank() || "N/A".equalsIgnoreCase(bName.trim())) && driver.getBankIfscCode() != null) {
+            String resolved = com.anushaporter.backend.util.IfscBankResolver.resolveBankName(driver.getBankIfscCode());
+            if (resolved != null) bName = resolved;
+        }
         data.put("bankName", bName);
         data.put("bank_name", bName);
         String acctNum = driver.getBankAccountNumber() != null ? driver.getBankAccountNumber() : "";
@@ -2040,6 +2055,8 @@ public class DriverAPIController {
             map.put("dropAddress", o.getDropAddress());
             map.put("serviceName", o.getServiceName());
             map.put("distanceKm", o.getDistanceKm() != null ? o.getDistanceKm() : 0.0);
+            map.put("distanceMeters", o.getDistanceMeters());
+            map.put("durationSeconds", o.getDurationSeconds());
             map.put("paymentMethod", o.getPaymentMethod());
             map.put("createdAt", o.getCreatedAt());
             return map;
@@ -2192,6 +2209,8 @@ public class DriverAPIController {
             map.put("amount", o.getAmount() != null ? o.getAmount() : 250.0);
             map.put("fare", o.getAmount() != null ? o.getAmount() : 250.0);
             map.put("distanceKm", o.getDistanceKm() != null ? o.getDistanceKm() : 5.0);
+            map.put("distanceMeters", o.getDistanceMeters());
+            map.put("durationSeconds", o.getDurationSeconds());
 
             if (driverLat != null && driverLng != null && o.getPickupLat() != null && o.getPickupLng() != null && driverRankingService != null) {
                 double pickupDist = driverRankingService.calculateHaversineDistanceKm(driverLat, driverLng, o.getPickupLat(), o.getPickupLng());

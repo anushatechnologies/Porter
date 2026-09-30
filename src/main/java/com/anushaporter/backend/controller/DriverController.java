@@ -378,6 +378,11 @@ public class DriverController {
             entity.setBankPassbookUri(s3ImageService.processAndUploadImageUri(entity.getBankPassbookUri(), "bank-passbook"));
         }
 
+        if ((entity.getBankName() == null || entity.getBankName().isBlank() || "N/A".equalsIgnoreCase(entity.getBankName().trim()))
+                && entity.getIfscCode() != null && !entity.getIfscCode().isBlank()) {
+            entity.setBankName(com.anushaporter.backend.util.IfscBankResolver.resolveBankName(entity.getIfscCode()));
+        }
+
         Driver savedDriver = repository.save(entity);
 
         if (entity.getVehicleNumber() != null && !entity.getVehicleNumber().trim().isEmpty()) {
@@ -418,10 +423,15 @@ public class DriverController {
             if (updated.getCity() != null) existing.setCity(updated.getCity());
             if (updated.getState() != null) existing.setState(updated.getState());
             if (updated.getPincode() != null) existing.setPincode(updated.getPincode());
-            if (updated.getBankName() != null) existing.setBankName(updated.getBankName());
+            if (updated.getIfscCode() != null) existing.setIfscCode(updated.getIfscCode());
+            if (updated.getBankName() != null && !updated.getBankName().isBlank()) {
+                existing.setBankName(updated.getBankName());
+            } else if ((existing.getBankName() == null || existing.getBankName().isBlank() || "N/A".equalsIgnoreCase(existing.getBankName().trim()))
+                    && existing.getIfscCode() != null) {
+                existing.setBankName(com.anushaporter.backend.util.IfscBankResolver.resolveBankName(existing.getIfscCode()));
+            }
             if (updated.getAccountHolderName() != null) existing.setAccountHolderName(updated.getAccountHolderName());
             if (updated.getAccountNumber() != null) existing.setAccountNumber(updated.getAccountNumber());
-            if (updated.getIfscCode() != null) existing.setIfscCode(updated.getIfscCode());
             if (updated.getStatus() != null) existing.setStatus(driverAuthService.normalizeStatus(updated.getStatus()));
             if (updated.getKyc() != null) existing.setKyc(updated.getKyc());
             if (updated.getRegistrationStep() != null) {

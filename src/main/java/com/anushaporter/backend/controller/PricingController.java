@@ -45,6 +45,9 @@ public class PricingController {
     @Autowired
     private com.anushaporter.backend.service.AdminAuthService adminAuthService;
 
+    @Autowired
+    private com.anushaporter.backend.service.OsrmRoutingService osrmRoutingService;
+
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     // ─── Customer-facing ─────────────────────────────────────────────────────
@@ -129,15 +132,28 @@ public class PricingController {
     @PostMapping({"/calculate", "/preview"})
     public ResponseEntity<?> calculatePricing(@RequestBody PricingRequest request) {
         try {
-            if ((request.getDistanceKm() == null || request.getDistanceKm() <= 0.0)
-                    && request.getPickupLat() != null && request.getPickupLng() != null
+            Integer distanceMeters = null;
+            Integer durationSeconds = null;
+            if (request.getPickupLat() != null && request.getPickupLng() != null
                     && request.getDropLat() != null && request.getDropLng() != null) {
-                request.setDistanceKm(calculateHaversineDistanceKm(
-                        request.getPickupLat(), request.getPickupLng(),
-                        request.getDropLat(), request.getDropLng()
-                ));
+                com.anushaporter.backend.service.OsrmRoutingService.RouteDetails route =
+                        osrmRoutingService.calculateRoute(
+                                request.getPickupLat(), request.getPickupLng(),
+                                request.getDropLat(), request.getDropLng()
+                        );
+                if (route != null) {
+                    if (request.getDistanceKm() == null || request.getDistanceKm() <= 0.0) {
+                        request.setDistanceKm(route.getDistanceKm());
+                    }
+                    distanceMeters = route.getDistanceMeters();
+                    durationSeconds = route.getDurationSeconds();
+                }
+            } else if (request.getDistanceKm() == null || request.getDistanceKm() <= 0.0) {
+                request.setDistanceKm(5.0);
             }
             PricingResponse response = pricingService.calculatePricing(request);
+            if (distanceMeters != null) response.setDistanceMeters(distanceMeters);
+            if (durationSeconds != null) response.setDurationSeconds(durationSeconds);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -187,18 +203,32 @@ public class PricingController {
         if (req.getDropLat() == null && dropLat != null) req.setDropLat(dropLat);
         if (req.getDropLng() == null && dropLng != null) req.setDropLng(dropLng);
 
-        if ((req.getDistanceKm() == null || req.getDistanceKm() <= 0.0)
-                && req.getPickupLat() != null && req.getPickupLng() != null
+        Integer distanceMeters = null;
+        Integer durationSeconds = null;
+        if (req.getPickupLat() != null && req.getPickupLng() != null
                 && req.getDropLat() != null && req.getDropLng() != null) {
-            req.setDistanceKm(calculateHaversineDistanceKm(
-                    req.getPickupLat(), req.getPickupLng(),
-                    req.getDropLat(), req.getDropLng()
-            ));
+            com.anushaporter.backend.service.OsrmRoutingService.RouteDetails route =
+                    osrmRoutingService.calculateRoute(
+                            req.getPickupLat(), req.getPickupLng(),
+                            req.getDropLat(), req.getDropLng()
+                    );
+            if (route != null) {
+                if (req.getDistanceKm() == null || req.getDistanceKm() <= 0.0) {
+                    req.setDistanceKm(route.getDistanceKm());
+                }
+                distanceMeters = route.getDistanceMeters();
+                durationSeconds = route.getDurationSeconds();
+            }
+        } else if (req.getDistanceKm() == null || req.getDistanceKm() <= 0.0) {
+            req.setDistanceKm(5.0);
         }
 
         if (req.getVehicleId() != null && !req.getVehicleId().isBlank()) {
             try {
                 PricingResponse response = pricingService.calculatePricing(req);
+                if (distanceMeters != null) response.setDistanceMeters(distanceMeters);
+                if (durationSeconds != null) response.setDurationSeconds(durationSeconds);
+
                 Map<String, Object> map = new LinkedHashMap<>();
                 map.put("success", true);
                 map.put("fare", response.getTotalFare());
@@ -208,6 +238,8 @@ public class PricingController {
                 map.put("baseFare", response.getBaseFare());
                 map.put("distanceFare", response.getDistanceFare());
                 map.put("distanceKm", response.getDistanceKm());
+                if (distanceMeters != null) map.put("distanceMeters", distanceMeters);
+                if (durationSeconds != null) map.put("durationSeconds", durationSeconds);
                 map.put("vehicleId", response.getVehicleId());
                 map.put("vehicleName", response.getVehicleName());
                 map.put("breakdown", response);
@@ -259,13 +291,26 @@ public class PricingController {
     public ResponseEntity<Map<String, Object>> estimateAll(@RequestBody PricingRequest request) {
         try {
             double distanceKm = request.getDistanceKm() != null ? request.getDistanceKm() : 0.0;
-            if (distanceKm <= 0.0 && request.getPickupLat() != null && request.getPickupLng() != null
+            Integer distanceMeters = null;
+            Integer durationSeconds = null;
+            if (request.getPickupLat() != null && request.getPickupLng() != null
                     && request.getDropLat() != null && request.getDropLng() != null) {
-                distanceKm = calculateHaversineDistanceKm(
-                        request.getPickupLat(), request.getPickupLng(),
-                        request.getDropLat(), request.getDropLng()
-                );
-                request.setDistanceKm(distanceKm);
+                com.anushaporter.backend.service.OsrmRoutingService.RouteDetails route =
+                        osrmRoutingService.calculateRoute(
+                                request.getPickupLat(), request.getPickupLng(),
+                                request.getDropLat(), request.getDropLng()
+                        );
+                if (route != null) {
+                    if (distanceKm <= 0.0) {
+                        distanceKm = route.getDistanceKm();
+                        request.setDistanceKm(distanceKm);
+                    }
+                    distanceMeters = route.getDistanceMeters();
+                    durationSeconds = route.getDurationSeconds();
+                }
+            } else if (distanceKm <= 0.0) {
+                distanceKm = 5.0;
+                request.setDistanceKm(5.0);
             }
             int helperCount = request.getHelperCount() != null ? request.getHelperCount() : 0;
             List<Map<String, Object>> vehiclesList = new ArrayList<>();
@@ -350,6 +395,9 @@ public class PricingController {
                     item.put("estimatedFare", totalFare);
                     item.put("estimatedPrice", totalFare);
                     item.put("distanceFare", distanceFare);
+                    item.put("distanceKm", distanceKm);
+                    if (distanceMeters != null) item.put("distanceMeters", distanceMeters);
+                    if (durationSeconds != null) item.put("durationSeconds", durationSeconds);
                     item.put("helperCharge", helperCharge);
                     item.put("gst", gst);
                     item.put("gstRate", gstRate);
@@ -374,6 +422,8 @@ public class PricingController {
                 Map<String, Object> resp = new LinkedHashMap<>();
                 resp.put("success", true);
                 resp.put("distanceKm", distanceKm);
+                if (distanceMeters != null) resp.put("distanceMeters", distanceMeters);
+                if (durationSeconds != null) resp.put("durationSeconds", durationSeconds);
                 resp.put("vehicles", vehiclesList);
                 resp.put("estimates", vehiclesList);
                 return ResponseEntity.ok(resp);
@@ -406,6 +456,9 @@ public class PricingController {
                 item.put("estimatedFare",  calc.getTotalFare());
                 item.put("estimatedPrice", calc.getTotalFare());
                 item.put("distanceFare",   calc.getDistanceFare());
+                item.put("distanceKm",     distanceKm);
+                if (distanceMeters != null) item.put("distanceMeters", distanceMeters);
+                if (durationSeconds != null) item.put("durationSeconds", durationSeconds);
                 item.put("helperCharge",   calc.getHelperCharge());
                 item.put("gst",            calc.getGst());
                 item.put("gstRate",        calc.getGstRate());
@@ -423,6 +476,8 @@ public class PricingController {
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("success", true);
             resp.put("distanceKm", distanceKm);
+            if (distanceMeters != null) resp.put("distanceMeters", distanceMeters);
+            if (durationSeconds != null) resp.put("durationSeconds", durationSeconds);
             resp.put("vehicles", vehiclesList);
             resp.put("estimates", vehiclesList);
             return ResponseEntity.ok(resp);

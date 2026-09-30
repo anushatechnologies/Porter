@@ -13,6 +13,8 @@ public class DriverOfferResponse {
     private DriverOfferStatus status;
     private Double radiusTierKm;
     private Double distanceKm;
+    private Integer distanceMeters;
+    private Integer durationSeconds;
     private Double pickupDistanceKm;
     private Double offeredFare;
     private String pickupAddress;

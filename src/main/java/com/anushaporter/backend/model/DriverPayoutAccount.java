@@ -80,7 +80,16 @@ public class DriverPayoutAccount {
     public String getAccountHolderName() { return accountHolderName; }
     public void setAccountHolderName(String accountHolderName) { this.accountHolderName = accountHolderName; }
 
-    public String getBankName() { return bankName; }
+    public String getBankName() {
+        if ((bankName == null || bankName.isBlank() || "N/A".equalsIgnoreCase(bankName.trim()))
+                && ifscCode != null && !ifscCode.isBlank()) {
+            String resolved = com.anushaporter.backend.util.IfscBankResolver.resolveBankName(ifscCode);
+            if (resolved != null) {
+                return resolved;
+            }
+        }
+        return bankName;
+    }
     public void setBankName(String bankName) { this.bankName = bankName; }
 
     public String getAccountNumber() { return accountNumber; }

@@ -72,6 +72,8 @@ public class DriverOfferService {
             offer.setStatus(DriverOfferStatus.OFFERED);
             offer.setRadiusTierKm(radiusTierKm);
             offer.setDistanceKm(order.getDistanceKm() != null ? order.getDistanceKm() : 5.0);
+            offer.setDistanceMeters(order.getDistanceMeters());
+            offer.setDurationSeconds(order.getDurationSeconds());
             offer.setPickupDistanceKm(rd.getDistanceKm());
             offer.setOfferedFare(order.getAmount() != null ? order.getAmount() : 250.0);
             offer.setOfferedAt(now);
@@ -144,6 +146,8 @@ public class DriverOfferService {
             offer.setStatus(DriverOfferStatus.OFFERED);
             offer.setRadiusTierKm(radiusTierKm > 0 ? radiusTierKm : pickupDist);
             offer.setDistanceKm(order.getDistanceKm() != null ? order.getDistanceKm() : 5.0);
+            offer.setDistanceMeters(order.getDistanceMeters());
+            offer.setDurationSeconds(order.getDurationSeconds());
             offer.setPickupDistanceKm(pickupDist);
             offer.setOfferedFare(order.getAmount() != null ? order.getAmount() : 250.0);
             offer.setOfferedAt(now);
@@ -200,6 +204,8 @@ public class DriverOfferService {
                 payloadMap.put("offeredFare", order.getAmount() != null ? order.getAmount() : 0.0);
                 payloadMap.put("fare", order.getAmount() != null ? order.getAmount() : 0.0);
                 payloadMap.put("distanceKm", order.getDistanceKm() != null ? order.getDistanceKm() : 0.0);
+                payloadMap.put("distanceMeters", order.getDistanceMeters() != null ? order.getDistanceMeters() : 0);
+                payloadMap.put("durationSeconds", order.getDurationSeconds() != null ? order.getDurationSeconds() : 0);
                 payloadMap.put("serviceType", sType);
                 payloadMap.put("serviceLabel", sLabel);
                 payloadMap.put("serviceName", order.getServiceName());
@@ -318,6 +324,8 @@ public class DriverOfferService {
             dto.setStatus(offer.getStatus());
             dto.setRadiusTierKm(offer.getRadiusTierKm());
             dto.setDistanceKm(offer.getDistanceKm());
+            dto.setDistanceMeters(offer.getDistanceMeters());
+            dto.setDurationSeconds(offer.getDurationSeconds());
             dto.setPickupDistanceKm(offer.getPickupDistanceKm());
             dto.setOfferedFare(offer.getOfferedFare());
             dto.setOfferedAt(offer.getOfferedAt());
@@ -356,6 +364,12 @@ public class DriverOfferService {
                     dto.setServiceName(o.getServiceName());
                     dto.setGoodsCategory(o.getGoodsCategory());
                     dto.setHelpersCount(o.getHelpersCount());
+                    if (dto.getDistanceMeters() == null && o.getDistanceMeters() != null) {
+                        dto.setDistanceMeters(o.getDistanceMeters());
+                    }
+                    if (dto.getDurationSeconds() == null && o.getDurationSeconds() != null) {
+                        dto.setDurationSeconds(o.getDurationSeconds());
+                    }
 
                     String sType = o.getServiceType() != null ? o.getServiceType().toUpperCase() : "GOODS";
                     dto.setServiceType(sType);

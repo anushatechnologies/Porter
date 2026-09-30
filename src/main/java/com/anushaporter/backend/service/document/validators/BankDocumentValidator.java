@@ -138,6 +138,9 @@ public class BankDocumentValidator implements DocumentValidator {
                 break;
             }
         }
+        if (matchedBankName == null && matchedIfsc != null) {
+            matchedBankName = com.anushaporter.backend.util.IfscBankResolver.resolveBankName(matchedIfsc);
+        }
 
         // 4. Search for Banking Keywords
         List<String> matchedKeywords = new ArrayList<>();

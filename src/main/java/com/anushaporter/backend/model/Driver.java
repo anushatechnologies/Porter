@@ -141,7 +141,18 @@ public class Driver {
     public void setState(String state) { this.state = state; }
     public String getPincode() { return pincode; }
     public void setPincode(String pincode) { this.pincode = pincode; }
-    public String getBankName() { return bankName; }
+    public String getBank_name() { return getBankName(); }
+    public void setBank_name(String bank_name) { this.bankName = bank_name; }
+    public String getBankName() {
+        if ((bankName == null || bankName.isBlank() || "N/A".equalsIgnoreCase(bankName.trim()))
+                && ifscCode != null && !ifscCode.isBlank()) {
+            String resolved = com.anushaporter.backend.util.IfscBankResolver.resolveBankName(ifscCode);
+            if (resolved != null) {
+                return resolved;
+            }
+        }
+        return bankName;
+    }
     public void setBankName(String bankName) { this.bankName = bankName; }
     public String getAccountHolderName() { return accountHolderName; }
     public void setAccountHolderName(String accountHolderName) { this.accountHolderName = accountHolderName; }

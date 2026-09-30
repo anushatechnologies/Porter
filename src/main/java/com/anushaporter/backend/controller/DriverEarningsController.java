@@ -20,6 +20,9 @@ public class DriverEarningsController {
     @Autowired
     private DriverAuthService driverAuthService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.DriverRepository driverRepository;
+
     private Driver getAuthenticatedDriver(HttpServletRequest request) {
         return driverAuthService.resolveAuthenticatedDriver(request);
     }
@@ -167,13 +170,22 @@ public class DriverEarningsController {
         }
 
         String accountHolder = payload.get("accountHolderName");
+        if (accountHolder == null) accountHolder = payload.get("account_holder_name");
         String bankName = payload.get("bankName");
+        if (bankName == null) bankName = payload.get("bank_name");
         String accountNumber = payload.get("accountNumber");
+        if (accountNumber == null) accountNumber = payload.get("account_number");
         String ifscCode = payload.get("ifscCode");
+        if (ifscCode == null) ifscCode = payload.get("ifsc");
         String upiId = payload.get("upiId");
+        if (upiId == null) upiId = payload.get("upi_id");
 
         if ((accountNumber == null || accountNumber.isBlank()) && (upiId == null || upiId.isBlank())) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Either bank accountNumber or upiId is required"));
+        }
+
+        if ((bankName == null || bankName.isBlank() || "N/A".equalsIgnoreCase(bankName.trim())) && ifscCode != null) {
+            bankName = com.anushaporter.backend.util.IfscBankResolver.resolveBankName(ifscCode);
         }
 
         DriverPayoutAccount acc = payoutService.savePayoutAccount(
@@ -184,6 +196,15 @@ public class DriverEarningsController {
                 ifscCode,
                 upiId
         );
+
+        if (driverRepository != null) {
+            if (bankName != null && !bankName.isBlank()) driver.setBankName(bankName);
+            if (accountNumber != null && !accountNumber.isBlank()) driver.setBankAccountNumber(accountNumber);
+            if (ifscCode != null && !ifscCode.isBlank()) driver.setBankIfscCode(ifscCode.toUpperCase());
+            if (accountHolder != null && !accountHolder.isBlank()) driver.setBankAccountName(accountHolder);
+            if (upiId != null && !upiId.isBlank()) driver.setUpiId(upiId);
+            driverRepository.save(driver);
+        }
 
         return ResponseEntity.ok(Map.of(
                 "success", true,

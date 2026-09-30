@@ -62,6 +62,9 @@ public class BookingController {
     @Autowired(required = false)
     private com.anushaporter.backend.repository.VehicleTypeRepository vehicleTypeRepository;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.service.OsrmRoutingService osrmRoutingService;
+
     /**
      * Recommend optimal vehicle type based on weight, dimensions, and category.
      * POST /api/vehicles/recommend
@@ -317,6 +320,30 @@ public class BookingController {
                 if (prMap.get("gst") != null) order.setGstAmount(parseDoubleValue(prMap.get("gst")));
             }
 
+            // Resolve real road distance and duration via OSRM if coordinates exist
+            if (pLat != null && pLng != null && dLat != null && dLng != null && osrmRoutingService != null) {
+                com.anushaporter.backend.service.OsrmRoutingService.RouteDetails route =
+                        osrmRoutingService.calculateRoute(pLat, pLng, dLat, dLng);
+                if (route != null) {
+                    order.setDistanceMeters(route.getDistanceMeters());
+                    order.setDurationSeconds(route.getDurationSeconds());
+                    if (order.getDistanceKm() == null || order.getDistanceKm() <= 0) {
+                        order.setDistanceKm(route.getDistanceKm());
+                    }
+                }
+            }
+
+            if (body.get("distanceMeters") != null) {
+                try {
+                    order.setDistanceMeters(((Number) body.get("distanceMeters")).intValue());
+                } catch (Exception ignored) {}
+            }
+            if (body.get("durationSeconds") != null) {
+                try {
+                    order.setDurationSeconds(((Number) body.get("durationSeconds")).intValue());
+                } catch (Exception ignored) {}
+            }
+
             // If client didn't supply amount, compute fallback fare using vehicle pricing & coordinates
             if (totalAmount == null || totalAmount <= 0) {
                 if (order.getDistanceKm() == null || order.getDistanceKm() <= 0) {
@@ -372,6 +399,12 @@ public class BookingController {
             if (body.get("distanceKm") != null) {
                 Double dist = parseDoubleValue(body.get("distanceKm"));
                 if (dist != null) order.setDistanceKm(dist);
+            }
+            if (order.getDistanceMeters() == null && order.getDistanceKm() != null && order.getDistanceKm() > 0) {
+                order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+            }
+            if (order.getDurationSeconds() == null && order.getDistanceKm() != null && order.getDistanceKm() > 0) {
+                order.setDurationSeconds((int) Math.round(order.getDistanceKm() * 144.0));
             }
 
             // Update or create Customer details dynamically
@@ -765,6 +798,8 @@ public class BookingController {
             response.put("goodsCategory", order.getGoodsCategory());
             response.put("helpersCount", order.getHelpersCount() != null ? order.getHelpersCount() : 0);
             response.put("distanceKm", order.getDistanceKm());
+            response.put("distanceMeters", order.getDistanceMeters());
+            response.put("durationSeconds", order.getDurationSeconds());
 
             Map<String, Object> pickup = new HashMap<>();
             pickup.put("addressLine", order.getPickupAddress() != null ? order.getPickupAddress() : "");
