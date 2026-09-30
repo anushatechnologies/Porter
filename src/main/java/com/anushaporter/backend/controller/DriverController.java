@@ -37,6 +37,9 @@ public class DriverController {
     @Autowired
     private com.anushaporter.backend.service.DriverAuthService driverAuthService;
 
+    @Autowired(required = false)
+    private com.anushaporter.backend.repository.PassengerBookingRepository passengerBookingRepository;
+
     @GetMapping({"/me/orders/active", "/active-order", "/{email}/orders/active"})
     public ResponseEntity<?> getActiveOrder(@PathVariable(required = false) String email) {
         List<String> activeStatuses = Arrays.asList("assigned", "accepted", "picked_up", "transit", "driver_assigned", "in_transit");
@@ -58,6 +61,48 @@ public class DriverController {
                 orderRepository.save(o);
             }
 
+            boolean orderNeedsSave = false;
+            if (o.getBookingId() != null && passengerBookingRepository != null) {
+                try {
+                    var pbOpt = passengerBookingRepository.findByBookingNumber(o.getBookingId());
+                    if (pbOpt.isPresent()) {
+                        var pb = pbOpt.get();
+                        if (o.getPickupLat() == null && pb.getPickupLatitude() != null) { o.setPickupLat(pb.getPickupLatitude()); orderNeedsSave = true; }
+                        if (o.getPickupLng() == null && pb.getPickupLongitude() != null) { o.setPickupLng(pb.getPickupLongitude()); orderNeedsSave = true; }
+                        if (o.getDropLat() == null && pb.getDropLatitude() != null) { o.setDropLat(pb.getDropLatitude()); orderNeedsSave = true; }
+                        if (o.getDropLng() == null && pb.getDropLongitude() != null) { o.setDropLng(pb.getDropLongitude()); orderNeedsSave = true; }
+                        if ((o.getDistanceKm() == null || o.getDistanceKm() <= 0) && pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                            o.setDistanceKm(pb.getDistanceKm().doubleValue());
+                            o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                            orderNeedsSave = true;
+                        }
+                        if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0 && o.getDurationSeconds() == null) {
+                            o.setDurationSeconds(pb.getDurationMinutes() * 60);
+                            orderNeedsSave = true;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+            if ((o.getDistanceKm() == null || o.getDistanceKm() <= 0) && o.getPickupLat() != null && o.getDropLat() != null) {
+                double estDist = calculateHaversineKm(o.getPickupLat(), o.getPickupLng(), o.getDropLat(), o.getDropLng());
+                if (estDist > 0) {
+                    o.setDistanceKm(Math.round(estDist * 10.0) / 10.0);
+                    o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                    if (o.getDurationSeconds() == null) {
+                        o.setDurationSeconds((int) Math.round(o.getDistanceKm() * 144.0));
+                    }
+                    orderNeedsSave = true;
+                }
+            } else if (o.getDistanceKm() != null && o.getDistanceKm() > 0 && o.getDistanceMeters() == null) {
+                o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                orderNeedsSave = true;
+            }
+            if (orderNeedsSave) {
+                try {
+                    o = orderRepository.save(o);
+                } catch (Exception ignored) {}
+            }
+
             String userEmail = o.getUserEmail() != null ? o.getUserEmail() : "";
             AppUser user = (appUserRepository != null && !userEmail.isBlank())
                     ? appUserRepository.findFirstByEmailOrderByIdDesc(userEmail).orElse(null)
@@ -70,6 +115,10 @@ public class DriverController {
             String custPhone = (user != null && user.getPhone() != null && !user.getPhone().isBlank())
                     ? user.getPhone()
                     : (o.getReceiverPhone() != null && !o.getReceiverPhone().isBlank() ? o.getReceiverPhone() : "9876543210");
+
+            double dKm = o.getDistanceKm() != null ? o.getDistanceKm() : 0.0;
+            int dMeters = o.getDistanceMeters() != null ? o.getDistanceMeters() : (int) Math.round(dKm * 1000.0);
+            int dSecs = o.getDurationSeconds() != null ? o.getDurationSeconds() : (int) Math.round(dKm * 144.0);
 
             Map<String, Object> orderMap = new LinkedHashMap<>();
             orderMap.put("id", o.getBookingId() != null ? o.getBookingId() : "BK_" + o.getId());
@@ -93,11 +142,24 @@ public class DriverController {
             orderMap.put("serviceType", o.getServiceType());
             orderMap.put("serviceName", o.getServiceName());
             orderMap.put("passengerCount", o.getPassengerCount());
+            orderMap.put("distance", dKm > 0 ? String.format("%.1f", dKm) : "0.0");
+            orderMap.put("distanceKm", dKm);
+            orderMap.put("distanceMeters", dMeters);
+            orderMap.put("durationSeconds", dSecs);
+            orderMap.put("pickupLat", o.getPickupLat());
+            orderMap.put("pickupLng", o.getPickupLng());
+            orderMap.put("dropLat", o.getDropLat());
+            orderMap.put("dropLng", o.getDropLng());
+            orderMap.put("pickupLatitude", o.getPickupLat());
+            orderMap.put("pickupLongitude", o.getPickupLng());
+            orderMap.put("dropLatitude", o.getDropLat());
+            orderMap.put("dropLongitude", o.getDropLng());
+
             boolean isPass = "PASSENGER".equalsIgnoreCase(o.getServiceType());
             int cnt = o.getPassengerCount() != null ? o.getPassengerCount() : 1;
             orderMap.put("serviceLabel", isPass ? ("Passenger Ride (" + cnt + " Rider" + (cnt > 1 ? "s" : "") + ")") : "Goods Delivery");
 
-            Map<String, Object> response = new LinkedHashMap<>();
+            Map<String, Object> response = new LinkedHashMap<>(orderMap);
             response.put("success", true);
             response.put("hasActiveOrder", true);
             response.put("order", orderMap);
@@ -111,9 +173,62 @@ public class DriverController {
         return ResponseEntity.ok(emptyResponse);
     }
 
+    private double calculateHaversineKm(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371;
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
     @GetMapping("/{email}/orders/history")
     public List<Order> getOrderHistory(@PathVariable String email) {
-        return orderRepository.findAllByDriverEmailOrderByCreatedAtDesc(email);
+        List<Order> list = orderRepository.findAllByDriverEmailOrderByCreatedAtDesc(email);
+        for (Order o : list) {
+            if ((o.getDistanceKm() == null || o.getDistanceKm() <= 0 || o.getDistanceMeters() == null) && o.getBookingId() != null) {
+                boolean healed = false;
+                if (passengerBookingRepository != null) {
+                    try {
+                        var pbOpt = passengerBookingRepository.findByBookingNumber(o.getBookingId());
+                        if (pbOpt.isPresent()) {
+                            var pb = pbOpt.get();
+                            if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                                o.setDistanceKm(pb.getDistanceKm().doubleValue());
+                                o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                                healed = true;
+                            }
+                            if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0 && o.getDurationSeconds() == null) {
+                                o.setDurationSeconds(pb.getDurationMinutes() * 60);
+                                healed = true;
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+                if ((o.getDistanceKm() == null || o.getDistanceKm() <= 0) && o.getPickupLat() != null && o.getDropLat() != null) {
+                    double dist = calculateHaversineKm(o.getPickupLat(), o.getPickupLng(), o.getDropLat(), o.getDropLng());
+                    if (dist > 0) {
+                        o.setDistanceKm(Math.round(dist * 10.0) / 10.0);
+                        o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                        if (o.getDurationSeconds() == null) {
+                            o.setDurationSeconds((int) Math.round(o.getDistanceKm() * 144.0));
+                        }
+                        healed = true;
+                    }
+                } else if (o.getDistanceKm() != null && o.getDistanceKm() > 0 && o.getDistanceMeters() == null) {
+                    o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                    healed = true;
+                }
+                if (healed) {
+                    try {
+                        orderRepository.save(o);
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        return list;
     }
 
     @Autowired

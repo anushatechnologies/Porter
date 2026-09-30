@@ -162,13 +162,24 @@ public class DeliveryCompletionService {
      * @param driver         authenticated driver
      * @return result map suitable for returning directly as a JSON response
      */
-    @Transactional
     public Map<String, Object> confirmPaymentAndComplete(
             String orderId,
             String paymentMethod,
             Double amount,
             String idempotencyKey,
             Driver driver
+    ) {
+        return confirmPaymentAndComplete(orderId, paymentMethod, amount, idempotencyKey, driver, null);
+    }
+
+    @Transactional
+    public Map<String, Object> confirmPaymentAndComplete(
+            String orderId,
+            String paymentMethod,
+            Double amount,
+            String idempotencyKey,
+            Driver driver,
+            Double distanceKm
     ) {
         // ── 1. Idempotency Check: check if key was already processed ─────────
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -248,7 +259,7 @@ public class DeliveryCompletionService {
         String driverId = driver != null && driver.getId() != null ? driver.getId().toString()
                 : (order.getDriverId() != null ? order.getDriverId() : "");
 
-        // ── 9. Update order fields ───────────────────────────────────────────
+        // ── 9. Update order fields & ensure distance is persisted ───────────
         order.setStatus("completed");
         order.setPaymentStatus("PAID");
         order.setPaymentConfirmed(true);
@@ -262,6 +273,39 @@ public class DeliveryCompletionService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             order.setIdempotencyKey(idempotencyKey);
         }
+
+        // Populate distance from GPS telemetry, PassengerBooking, or coordinates
+        if (distanceKm != null && distanceKm > 0) {
+            order.setDistanceKm(distanceKm);
+            order.setDistanceMeters((int) Math.round(distanceKm * 1000.0));
+        } else if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && isPassenger && passengerBookingRepository != null) {
+            try {
+                var pbOpt = passengerBookingRepository.findByBookingNumber(bookingId);
+                if (pbOpt.isPresent()) {
+                    var pb = pbOpt.get();
+                    if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                        order.setDistanceKm(pb.getDistanceKm().doubleValue());
+                        order.setDistanceMeters((int) Math.round(pb.getDistanceKm().doubleValue() * 1000.0));
+                    }
+                    if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0 && order.getDurationSeconds() == null) {
+                        order.setDurationSeconds(pb.getDurationMinutes() * 60);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && order.getPickupLat() != null && order.getDropLat() != null) {
+            double estDist = calculateHaversineKm(order.getPickupLat(), order.getPickupLng(), order.getDropLat(), order.getDropLng());
+            if (estDist > 0) {
+                order.setDistanceKm(Math.round(estDist * 10.0) / 10.0);
+                order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+            }
+        } else if (order.getDistanceKm() != null && order.getDistanceKm() > 0 && order.getDistanceMeters() == null) {
+            order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+        }
+        if (order.getDurationSeconds() == null && order.getDistanceKm() != null && order.getDistanceKm() > 0) {
+            order.setDurationSeconds((int) Math.round(order.getDistanceKm() * 144.0));
+        }
+
         order = orderRepository.save(order);
 
         // ── 9b. Sync with PassengerBooking entity if applicable ───────────────
@@ -471,6 +515,20 @@ public class DeliveryCompletionService {
             if (e.getDriverNetEarning() != null) driverNetEarning = e.getDriverNetEarning();
         }
 
+        if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && "PASSENGER".equalsIgnoreCase(order.getServiceType()) && passengerBookingRepository != null) {
+            try {
+                var pbOpt = passengerBookingRepository.findByBookingNumber(bookingId);
+                if (pbOpt.isPresent()) {
+                    var pb = pbOpt.get();
+                    if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                        order.setDistanceKm(pb.getDistanceKm().doubleValue());
+                        order.setDistanceMeters((int) Math.round(pb.getDistanceKm().doubleValue() * 1000.0));
+                        order = orderRepository.save(order);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("success", true);
         m.put("message", "Payment confirmed and order completed successfully.");
@@ -488,5 +546,16 @@ public class DeliveryCompletionService {
                 "completedAt", order.getCompletedAt() != null ? order.getCompletedAt().toString() : ""
         ));
         return m;
+    }
+
+    private double calculateHaversineKm(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371;
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return Math.max(1.0, Math.round((R * c * 1.40) * 10.0) / 10.0);
     }
 }

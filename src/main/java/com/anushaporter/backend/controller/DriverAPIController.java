@@ -602,16 +602,48 @@ public class DriverAPIController {
         }
 
         Order order = orders.get(0);
-        if ((order.getPickupLat() == null || order.getPickupLng() == null) && order.getBookingId() != null && passengerBookingRepository != null) {
+        boolean orderNeedsSave = false;
+        if (order.getBookingId() != null && passengerBookingRepository != null) {
             try {
-                passengerBookingRepository.findByBookingNumber(order.getBookingId()).ifPresent(pb -> {
-                    if (order.getPickupLat() == null && pb.getPickupLatitude() != null) order.setPickupLat(pb.getPickupLatitude());
-                    if (order.getPickupLng() == null && pb.getPickupLongitude() != null) order.setPickupLng(pb.getPickupLongitude());
-                    if (order.getDropLat() == null && pb.getDropLatitude() != null) order.setDropLat(pb.getDropLatitude());
-                    if (order.getDropLng() == null && pb.getDropLongitude() != null) order.setDropLng(pb.getDropLongitude());
-                });
+                var pbOpt = passengerBookingRepository.findByBookingNumber(order.getBookingId());
+                if (pbOpt.isPresent()) {
+                    var pb = pbOpt.get();
+                    if (order.getPickupLat() == null && pb.getPickupLatitude() != null) { order.setPickupLat(pb.getPickupLatitude()); orderNeedsSave = true; }
+                    if (order.getPickupLng() == null && pb.getPickupLongitude() != null) { order.setPickupLng(pb.getPickupLongitude()); orderNeedsSave = true; }
+                    if (order.getDropLat() == null && pb.getDropLatitude() != null) { order.setDropLat(pb.getDropLatitude()); orderNeedsSave = true; }
+                    if (order.getDropLng() == null && pb.getDropLongitude() != null) { order.setDropLng(pb.getDropLongitude()); orderNeedsSave = true; }
+                    if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                        order.setDistanceKm(pb.getDistanceKm().doubleValue());
+                        order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+                        orderNeedsSave = true;
+                    }
+                    if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0 && order.getDurationSeconds() == null) {
+                        order.setDurationSeconds(pb.getDurationMinutes() * 60);
+                        orderNeedsSave = true;
+                    }
+                }
             } catch (Exception ignored) {}
         }
+        if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && order.getPickupLat() != null && order.getDropLat() != null) {
+            double estDist = calculateHaversineKm(order.getPickupLat(), order.getPickupLng(), order.getDropLat(), order.getDropLng());
+            if (estDist > 0) {
+                order.setDistanceKm(Math.round(estDist * 10.0) / 10.0);
+                order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+                if (order.getDurationSeconds() == null) {
+                    order.setDurationSeconds((int) Math.round(order.getDistanceKm() * 144.0));
+                }
+                orderNeedsSave = true;
+            }
+        } else if (order.getDistanceKm() != null && order.getDistanceKm() > 0 && order.getDistanceMeters() == null) {
+            order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+            orderNeedsSave = true;
+        }
+        if (orderNeedsSave) {
+            try {
+                order = orderRepository.save(order);
+            } catch (Exception ignored) {}
+        }
+
         AppUser customer = appUserRepository.findFirstByEmailOrderByIdDesc(order.getUserEmail()).orElse(null);
         String customerName = customer != null ? customer.getName() : order.getReceiverName();
         String customerPhone = customer != null ? customer.getPhone() : order.getReceiverPhone();
@@ -628,13 +660,16 @@ public class DriverAPIController {
         result.put("pickupAddress", order.getPickupAddress());
         result.put("dropAddress", order.getDropAddress());
         result.put("amount", order.getAmount());
+
+        double activeDistanceKm = order.getDistanceKm() != null ? order.getDistanceKm() : 0.0;
+        int activeDistanceMeters = order.getDistanceMeters() != null ? order.getDistanceMeters() : (int) Math.round(activeDistanceKm * 1000.0);
+        int activeDurationSecs = order.getDurationSeconds() != null ? order.getDurationSeconds() : (int) Math.round(activeDistanceKm * 144.0);
+
         // Include distance and coordinates so the driver app uses the actual route distance
-        result.put("distance", order.getDistanceKm() != null
-                ? String.format("%.1f", order.getDistanceKm())
-                : null);
-        result.put("distanceKm", order.getDistanceKm());
-        result.put("distanceMeters", order.getDistanceMeters());
-        result.put("durationSeconds", order.getDurationSeconds());
+        result.put("distance", activeDistanceKm > 0 ? String.format("%.1f", activeDistanceKm) : "0.0");
+        result.put("distanceKm", activeDistanceKm);
+        result.put("distanceMeters", activeDistanceMeters);
+        result.put("durationSeconds", activeDurationSecs);
         result.put("pickupLat", order.getPickupLat());
         result.put("pickupLng", order.getPickupLng());
         result.put("dropLat", order.getDropLat());
@@ -650,8 +685,11 @@ public class DriverAPIController {
         result.put("passengerCount", order.getPassengerCount());
         boolean isPassOrder = "PASSENGER".equalsIgnoreCase(order.getServiceType());
         int pCnt = order.getPassengerCount() != null ? order.getPassengerCount() : 1;
-        result.put("serviceLabel", isPassOrder ? ("Passenger Ride (" + pCnt + " Rider" + (pCnt > 1 ? "s" : "") + ")") : "Goods Delivery");
-        return ResponseEntity.ok(Map.of("success", true, "order", result));
+        Map<String, Object> response = new LinkedHashMap<>(result);
+        response.put("success", true);
+        response.put("hasActiveOrder", true);
+        response.put("order", result);
+        return ResponseEntity.ok(response);
     }
 
     private String coordinateOrAddress(Double latitude, Double longitude, String address) {
@@ -735,6 +773,14 @@ public class DriverAPIController {
                     syncd.setPickupLng(pb.getPickupLongitude());
                     syncd.setDropLat(pb.getDropLatitude());
                     syncd.setDropLng(pb.getDropLongitude());
+                    if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                        double dKm = pb.getDistanceKm().doubleValue();
+                        syncd.setDistanceKm(dKm);
+                        syncd.setDistanceMeters((int) Math.round(dKm * 1000.0));
+                    }
+                    if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0) {
+                        syncd.setDurationSeconds(pb.getDurationMinutes() * 60);
+                    }
                     syncd.setCreatedAt(pb.getCreatedAt() != null ? pb.getCreatedAt() : java.time.LocalDateTime.now());
                     orderOpt = Optional.of(orderRepository.save(syncd));
                 }
@@ -846,6 +892,34 @@ public class DriverAPIController {
         order.setDriverVehicleNumber(driverVehicle);
         order.setStatus("accepted");
         order.setAcceptedAt(now);
+
+        if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && order.getBookingId() != null && passengerBookingRepository != null) {
+            try {
+                var pbOpt = passengerBookingRepository.findByBookingNumber(order.getBookingId());
+                if (pbOpt.isPresent()) {
+                    var pb = pbOpt.get();
+                    if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                        order.setDistanceKm(pb.getDistanceKm().doubleValue());
+                        order.setDistanceMeters((int) Math.round(pb.getDistanceKm().doubleValue() * 1000.0));
+                    }
+                    if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0 && order.getDurationSeconds() == null) {
+                        order.setDurationSeconds(pb.getDurationMinutes() * 60);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && order.getPickupLat() != null && order.getDropLat() != null) {
+            double estDist = calculateHaversineKm(order.getPickupLat(), order.getPickupLng(), order.getDropLat(), order.getDropLng());
+            if (estDist > 0) {
+                order.setDistanceKm(Math.round(estDist * 10.0) / 10.0);
+                order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+                if (order.getDurationSeconds() == null) {
+                    order.setDurationSeconds((int) Math.round(order.getDistanceKm() * 144.0));
+                }
+            }
+        } else if (order.getDistanceKm() != null && order.getDistanceKm() > 0 && order.getDistanceMeters() == null) {
+            order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+        }
 
         Order saved = orderRepository.save(order);
         if (pushNotificationService != null) {
@@ -1135,11 +1209,27 @@ public class DriverAPIController {
                 Order syncd = new Order();
                 syncd.setBookingId(pb.getBookingNumber());
                 syncd.setUserEmail(pb.getCustomerEmail());
+                syncd.setReceiverName(pb.getCustomerName());
+                syncd.setReceiverPhone(pb.getCustomerPhone());
                 syncd.setStartOtp(pb.getStartOtp());
                 syncd.setDeliveryOtp(pb.getStartOtp());
                 syncd.setStatus("accepted");
                 syncd.setServiceName(pb.getVehicleCategoryCode());
                 syncd.setServiceType("PASSENGER");
+                syncd.setPickupAddress(pb.getPickupAddress());
+                syncd.setDropAddress(pb.getDropAddress());
+                syncd.setPickupLat(pb.getPickupLatitude());
+                syncd.setPickupLng(pb.getPickupLongitude());
+                syncd.setDropLat(pb.getDropLatitude());
+                syncd.setDropLng(pb.getDropLongitude());
+                if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                    double dKm = pb.getDistanceKm().doubleValue();
+                    syncd.setDistanceKm(dKm);
+                    syncd.setDistanceMeters((int) Math.round(dKm * 1000.0));
+                }
+                if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0) {
+                    syncd.setDurationSeconds(pb.getDurationMinutes() * 60);
+                }
                 syncd.setCreatedAt(pb.getCreatedAt() != null ? pb.getCreatedAt() : java.time.LocalDateTime.now());
                 orderOpt = Optional.of(orderRepository.save(syncd));
             }
@@ -1186,6 +1276,35 @@ public class DriverAPIController {
 
         order.setStatus("in_transit");
         order.setOtpVerified(true);
+
+        if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && order.getBookingId() != null && passengerBookingRepository != null) {
+            try {
+                var pbOpt = passengerBookingRepository.findByBookingNumber(order.getBookingId());
+                if (pbOpt.isPresent()) {
+                    var pb = pbOpt.get();
+                    if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                        order.setDistanceKm(pb.getDistanceKm().doubleValue());
+                        order.setDistanceMeters((int) Math.round(pb.getDistanceKm().doubleValue() * 1000.0));
+                    }
+                    if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0 && order.getDurationSeconds() == null) {
+                        order.setDurationSeconds(pb.getDurationMinutes() * 60);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && order.getPickupLat() != null && order.getDropLat() != null) {
+            double estDist = calculateHaversineKm(order.getPickupLat(), order.getPickupLng(), order.getDropLat(), order.getDropLng());
+            if (estDist > 0) {
+                order.setDistanceKm(Math.round(estDist * 10.0) / 10.0);
+                order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+                if (order.getDurationSeconds() == null) {
+                    order.setDurationSeconds((int) Math.round(order.getDistanceKm() * 144.0));
+                }
+            }
+        } else if (order.getDistanceKm() != null && order.getDistanceKm() > 0 && order.getDistanceMeters() == null) {
+            order.setDistanceMeters((int) Math.round(order.getDistanceKm() * 1000.0));
+        }
+
         Order savedOrder = orderRepository.save(order);
 
         if (passengerBookingRepository != null && order.getBookingId() != null) {
@@ -1305,6 +1424,7 @@ public class DriverAPIController {
 
         String paymentMethod = null;
         Double amount = null;
+        Double distanceKm = null;
         if (payload != null) {
             paymentMethod = payload.get("paymentMethod") != null ? String.valueOf(payload.get("paymentMethod"))
                     : payload.get("method") != null ? String.valueOf(payload.get("method")) : null;
@@ -1319,13 +1439,24 @@ public class DriverAPIController {
                 }
             }
 
+            Object rawDist = payload.get("distanceKm");
+            if (rawDist == null) rawDist = payload.get("actualDistanceKm");
+            if (rawDist == null) rawDist = payload.get("distance");
+            if (rawDist instanceof Number) {
+                distanceKm = ((Number) rawDist).doubleValue();
+            } else if (rawDist != null) {
+                try {
+                    distanceKm = Double.parseDouble(rawDist.toString());
+                } catch (Exception ignored) {}
+            }
+
             if (idempotencyKey == null && payload.get("idempotencyKey") != null) {
                 idempotencyKey = String.valueOf(payload.get("idempotencyKey"));
             }
         }
 
         Map<String, Object> result = deliveryCompletionService.confirmPaymentAndComplete(
-                bookingId, paymentMethod, amount, idempotencyKey, driver);
+                bookingId, paymentMethod, amount, idempotencyKey, driver, distanceKm);
 
         if (passengerBookingRepository != null) {
             try {
@@ -2043,6 +2174,51 @@ public class DriverAPIController {
                 .collect(Collectors.toList());
 
         List<Map<String, Object>> orderList = orders.stream().map(o -> {
+            // Lazy self-healing for past trips (e.g. #BK_AP-CAR-...) with missing distance
+            if ((o.getDistanceKm() == null || o.getDistanceKm() <= 0.0 || o.getDistanceMeters() == null) && o.getBookingId() != null) {
+                boolean healed = false;
+                if (passengerBookingRepository != null) {
+                    try {
+                        var pbOpt = passengerBookingRepository.findByBookingNumber(o.getBookingId());
+                        if (pbOpt.isPresent()) {
+                            var pb = pbOpt.get();
+                            if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                                o.setDistanceKm(pb.getDistanceKm().doubleValue());
+                                o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                                healed = true;
+                            }
+                            if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0 && o.getDurationSeconds() == null) {
+                                o.setDurationSeconds(pb.getDurationMinutes() * 60);
+                                healed = true;
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+                if ((o.getDistanceKm() == null || o.getDistanceKm() <= 0.0) && o.getPickupLat() != null && o.getDropLat() != null) {
+                    double dist = calculateHaversineKm(o.getPickupLat(), o.getPickupLng(), o.getDropLat(), o.getDropLng());
+                    if (dist > 0) {
+                        o.setDistanceKm(Math.round(dist * 10.0) / 10.0);
+                        o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                        if (o.getDurationSeconds() == null) {
+                            o.setDurationSeconds((int) Math.round(o.getDistanceKm() * 144.0));
+                        }
+                        healed = true;
+                    }
+                } else if (o.getDistanceKm() != null && o.getDistanceKm() > 0.0 && o.getDistanceMeters() == null) {
+                    o.setDistanceMeters((int) Math.round(o.getDistanceKm() * 1000.0));
+                    healed = true;
+                }
+                if (healed) {
+                    try {
+                        o = orderRepository.save(o);
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            double dKm = o.getDistanceKm() != null ? o.getDistanceKm() : 0.0;
+            int dMeters = o.getDistanceMeters() != null ? o.getDistanceMeters() : (int) Math.round(dKm * 1000.0);
+            int dSecs = o.getDurationSeconds() != null ? o.getDurationSeconds() : (int) Math.round(dKm * 144.0);
+
             Map<String, Object> map = new java.util.LinkedHashMap<>();
             map.put("orderId", o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
             map.put("bookingId", o.getBookingId() != null ? o.getBookingId() : o.getId().toString());
@@ -2054,9 +2230,10 @@ public class DriverAPIController {
             map.put("dropoff", o.getDropAddress());
             map.put("dropAddress", o.getDropAddress());
             map.put("serviceName", o.getServiceName());
-            map.put("distanceKm", o.getDistanceKm() != null ? o.getDistanceKm() : 0.0);
-            map.put("distanceMeters", o.getDistanceMeters());
-            map.put("durationSeconds", o.getDurationSeconds());
+            map.put("distance", dKm > 0 ? String.format("%.1f", dKm) : "0.0");
+            map.put("distanceKm", dKm);
+            map.put("distanceMeters", dMeters);
+            map.put("durationSeconds", dSecs);
             map.put("paymentMethod", o.getPaymentMethod());
             map.put("createdAt", o.getCreatedAt());
             return map;
@@ -2364,5 +2541,14 @@ public class DriverAPIController {
             }
         }
         return null;
+    }
+
+    private double calculateHaversineKm(Double lat1, Double lon1, Double lat2, Double lon2) {
+        if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 5.0;
+        if (driverRankingService != null) {
+            double d = driverRankingService.calculateHaversineDistanceKm(lat1, lon1, lat2, lon2);
+            if (d > 0) return d;
+        }
+        return com.anushaporter.backend.service.OsrmRoutingService.calculateHaversineDistanceKm(lat1, lon1, lat2, lon2);
     }
 }

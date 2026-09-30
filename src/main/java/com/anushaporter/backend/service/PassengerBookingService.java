@@ -172,6 +172,21 @@ public class PassengerBookingService {
                 order.setStatus("searching");
                 order.setDeliveryOtp(startOtp);
                 order.setStartOtp(startOtp);
+
+                double distKm = (estimate.getDistanceKm() != null && estimate.getDistanceKm().doubleValue() > 0)
+                        ? estimate.getDistanceKm().doubleValue()
+                        : (savedBooking.getDistanceKm() != null && savedBooking.getDistanceKm().doubleValue() > 0
+                                ? savedBooking.getDistanceKm().doubleValue()
+                                : 5.0);
+                order.setDistanceKm(distKm);
+                order.setDistanceMeters((int) Math.round(distKm * 1000.0));
+                int durSecs = estimate.getDurationMinutes() != null && estimate.getDurationMinutes() > 0
+                        ? estimate.getDurationMinutes() * 60
+                        : (savedBooking.getDurationMinutes() != null && savedBooking.getDurationMinutes() > 0
+                                ? savedBooking.getDurationMinutes() * 60
+                                : (int) Math.round(distKm * 144.0));
+                order.setDurationSeconds(durSecs);
+
                 order.setCreatedAt(LocalDateTime.now());
                 orderRepository.save(order);
 

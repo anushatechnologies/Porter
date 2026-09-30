@@ -793,13 +793,33 @@ public class BookingController {
                 order.setOtpExpiresAt(LocalDateTime.now().plusHours(48));
                 order = orderRepository.save(order);
             }
+            if ((order.getDistanceKm() == null || order.getDistanceKm() <= 0) && order.getBookingId() != null && passengerBookingRepository != null) {
+                try {
+                    var pbOpt = passengerBookingRepository.findByBookingNumber(order.getBookingId());
+                    if (pbOpt.isPresent()) {
+                        var pb = pbOpt.get();
+                        if (pb.getDistanceKm() != null && pb.getDistanceKm().doubleValue() > 0) {
+                            order.setDistanceKm(pb.getDistanceKm().doubleValue());
+                            order.setDistanceMeters((int) Math.round(pb.getDistanceKm().doubleValue() * 1000.0));
+                            if (pb.getDurationMinutes() != null && pb.getDurationMinutes() > 0 && order.getDurationSeconds() == null) {
+                                order.setDurationSeconds(pb.getDurationMinutes() * 60);
+                            }
+                            order = orderRepository.save(order);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+            double dKm = order.getDistanceKm() != null ? order.getDistanceKm() : 0.0;
+            int dMeters = order.getDistanceMeters() != null ? order.getDistanceMeters() : (int) Math.round(dKm * 1000.0);
+            int dSecs = order.getDurationSeconds() != null ? order.getDurationSeconds() : (int) Math.round(dKm * 144.0);
+
             response.put("deliveryOtp", otp);
             response.put("otp", otp);
             response.put("goodsCategory", order.getGoodsCategory());
             response.put("helpersCount", order.getHelpersCount() != null ? order.getHelpersCount() : 0);
-            response.put("distanceKm", order.getDistanceKm());
-            response.put("distanceMeters", order.getDistanceMeters());
-            response.put("durationSeconds", order.getDurationSeconds());
+            response.put("distanceKm", dKm);
+            response.put("distanceMeters", dMeters);
+            response.put("durationSeconds", dSecs);
 
             Map<String, Object> pickup = new HashMap<>();
             pickup.put("addressLine", order.getPickupAddress() != null ? order.getPickupAddress() : "");
