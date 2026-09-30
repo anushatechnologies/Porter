@@ -162,6 +162,7 @@ public class DeliveryCompletionService {
      * @param driver         authenticated driver
      * @return result map suitable for returning directly as a JSON response
      */
+    @Transactional
     public Map<String, Object> confirmPaymentAndComplete(
             String orderId,
             String paymentMethod,
